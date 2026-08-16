@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { FileUp, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { ItineraryItem } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, EmptyState, Field, Input, Label, Modal, Spinner, Textarea } from "@/components/ui";
+import { ImportItinerary } from "@/components/ImportItinerary";
 import { useToast } from "@/hooks/use-toast";
 import { generateContent } from "@/lib/ai";
 import { daysBetween, formatDayHeb, ITINERARY_CATEGORIES, itineraryCategory } from "@/lib/trip-options";
@@ -26,6 +27,7 @@ export default function ItineraryTab() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [editing, setEditing] = useState<Draft | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const load = async () => {
     const { data } = await supabase
@@ -111,10 +113,15 @@ export default function ItineraryTab() {
       <ScreenTitle
         title="מסלול"
         action={
-          <Button size="sm" variant="soft" loading={generating} onClick={generate}>
-            <Sparkles className="size-4" />
-            AI
-          </Button>
+          <div className="flex gap-1.5">
+            <Button size="sm" variant="outline" onClick={() => setImporting(true)} aria-label="ייבוא מסלול">
+              <FileUp className="size-4" />
+            </Button>
+            <Button size="sm" variant="soft" loading={generating} onClick={generate}>
+              <Sparkles className="size-4" />
+              AI
+            </Button>
+          </div>
         }
       />
 
@@ -128,9 +135,14 @@ export default function ItineraryTab() {
           title="עדיין אין מסלול"
           description="הוסף תאריכים לטיול או פריט ראשון, או תן ל-AI להציע מסלול יומי."
           action={
-            <Button onClick={() => setEditing({ day_date: defaultDay, start_time: "", title: "", description: "", category: "activity", location: "" })}>
-              <Plus className="size-4" /> הוספת פריט
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button onClick={() => setEditing({ day_date: defaultDay, start_time: "", title: "", description: "", category: "activity", location: "" })}>
+                <Plus className="size-4" /> הוספת פריט
+              </Button>
+              <Button variant="outline" onClick={() => setImporting(true)}>
+                <FileUp className="size-4" /> ייבוא מסלול
+              </Button>
+            </div>
           }
         />
       ) : (
@@ -179,6 +191,13 @@ export default function ItineraryTab() {
           ))}
         </div>
       )}
+
+      <ImportItinerary
+        trip={trip}
+        open={importing}
+        onClose={() => setImporting(false)}
+        onImported={load}
+      />
 
       <Modal
         open={!!editing}
