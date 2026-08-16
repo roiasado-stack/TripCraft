@@ -164,7 +164,9 @@ export default function HomeTab() {
 
       {/* quick stats */}
       <div className="mt-4 grid grid-cols-3 gap-3">
-        <Stat icon={<Users className="size-5" />} value={participants.length} label="משתתפים" />
+        <Link to="people">
+          <Stat icon={<Users className="size-5" />} value={participants.length} label="משתתפים" actionable />
+        </Link>
         <Stat icon={<Plane className="size-5" />} value={flights.length} label="טיסות" />
         <Stat icon={<CalendarDays className="size-5" />} value={duration ?? "—"} label="ימים" />
       </div>
@@ -265,12 +267,27 @@ export default function HomeTab() {
   );
 }
 
-function Stat({ icon, value, label }: { icon: React.ReactNode; value: React.ReactNode; label: string }) {
+function Stat({
+  icon,
+  value,
+  label,
+  actionable,
+}: {
+  icon: React.ReactNode;
+  value: React.ReactNode;
+  label: string;
+  actionable?: boolean;
+}) {
   return (
-    <Card className="flex flex-col items-center gap-1 p-3">
+    <Card
+      className={`flex h-full flex-col items-center gap-1 p-3 ${actionable ? "border-primary/40 transition active:scale-[0.98]" : ""}`}
+    >
       <div className="text-primary">{icon}</div>
       <div className="text-xl font-extrabold leading-none">{value}</div>
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-xs text-muted-foreground">
+        {label}
+        {actionable && " ›"}
+      </div>
     </Card>
   );
 }

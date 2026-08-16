@@ -1,18 +1,37 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Settings, Sparkles } from "lucide-react";
+import { Plus, Settings, Sparkles, Wand2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { createDemoTrip } from "@/lib/demo-trip";
 import type { Trip } from "@/lib/types";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button, EmptyState, FullSpinner } from "@/components/ui";
 import { TripCard } from "@/components/TripCard";
 
 export default function TripsListPage() {
-  const { profile, isAgent } = useAuth();
+  const { profile, isAgent, user } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [seeding, setSeeding] = useState(false);
+
+  const seedDemo = async () => {
+    if (!user) return;
+    setSeeding(true);
+    try {
+      const id = await createDemoTrip(user.id);
+      toast.success("נוצר טיול לדוגמה 🏝️");
+      navigate(`/trip/${id}`);
+    } catch (e) {
+      console.error(e);
+      toast.error("יצירת הדוגמה נכשלה. נסה שוב.");
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -60,10 +79,16 @@ export default function TripsListPage() {
             title="עדיין אין טיולים"
             description="בוא ניצור את הטיול הראשון שלך — האשף החכם ידריך אותך שלב-אחר-שלב."
             action={
-              <Button size="lg" onClick={() => navigate("/new")}>
-                <Sparkles className="size-5" />
-                יצירת טיול חדש
-              </Button>
+              <div className="flex flex-col items-center gap-2">
+                <Button size="lg" onClick={() => navigate("/new")}>
+                  <Sparkles className="size-5" />
+                  יצירת טיול חדש
+                </Button>
+                <Button variant="ghost" loading={seeding} onClick={seedDemo}>
+                  <Wand2 className="size-4" />
+                  צור טיול לדוגמה (להתרשמות)
+                </Button>
+              </div>
             }
           />
         </div>

@@ -1,10 +1,11 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Plus, Trash2, Users, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { Button, Card, Chip, Field, Input, Label, Segmented, Textarea } from "@/components/ui";
+import { Button, Card, Chip, Field, Input, Label, Segmented } from "@/components/ui";
+import { ImportParticipants } from "@/components/ImportParticipants";
 import {
   AGE_RANGES,
   BUDGET_LEVELS,
@@ -40,6 +41,7 @@ export default function WizardPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // step 0
   const [destination, setDestination] = useState("");
@@ -200,7 +202,13 @@ export default function WizardPage() {
           {...{ destination, setDestination, title, setTitle, startDate, setStartDate, endDate, setEndDate, tripType, setTripType, budget, setBudget, emoji, setEmoji, duration }}
         />
       )}
-      {step === 1 && <StepParticipants participants={participants} setParticipants={setParticipants} />}
+      {step === 1 && (
+        <StepParticipants
+          participants={participants}
+          setParticipants={setParticipants}
+          onBulkOpen={() => setBulkOpen(true)}
+        />
+      )}
       {step === 2 && (
         <StepLogistics
           flights={flights}
@@ -224,6 +232,23 @@ export default function WizardPage() {
           transfers={transfers}
         />
       )}
+
+      <ImportParticipants
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onConfirm={(items) =>
+          setParticipants((prev) => [
+            ...prev,
+            ...items.map((p) => ({
+              name: p.name,
+              ageMode: (p.age != null ? "age" : "range") as "age" | "range",
+              age: p.age != null ? String(p.age) : "",
+              age_range: p.age_range ?? AGE_RANGES[5],
+              preferences: p.preferences,
+            })),
+          ])
+        }
+      />
 
       {/* bottom action */}
       <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 px-4 py-3 backdrop-blur">
@@ -337,9 +362,11 @@ function StepBasics(p: {
 function StepParticipants({
   participants,
   setParticipants,
+  onBulkOpen,
 }: {
   participants: PartDraft[];
   setParticipants: Dispatch<SetStateAction<PartDraft[]>>;
+  onBulkOpen: () => void;
 }) {
   // Functional updates throughout: several chips can be toggled within one tick,
   // and reading `participants` from the closure would drop all but the last.
@@ -371,6 +398,22 @@ function StepParticipants({
           הגילאים וההעדפות עוזרים ל-AI להתאים המלצות. אפשר גם לדלג ולהוסיף אחר כך.
         </p>
       </div>
+
+      {/* Bulk add first — typing a large group by hand is the slow path. */}
+      <button
+        onClick={onBulkOpen}
+        className="flex items-center gap-3 rounded-3xl border-2 border-dashed border-primary bg-primary-soft/50 p-4 text-right transition active:scale-[0.99]"
+      >
+        <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary text-xl text-primary-foreground">
+          <Users className="size-5" />
+        </div>
+        <div className="flex-1">
+          <div className="font-bold">הוספת קבוצה בבת אחת</div>
+          <div className="text-xs text-muted-foreground">
+            הדבק רשימת שמות, טבלת Excel, או סרוק דרכונים
+          </div>
+        </div>
+      </button>
 
       {participants.map((p, i) => (
         <Card key={i} className="p-4">

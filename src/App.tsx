@@ -1,5 +1,6 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/hooks/use-auth";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { ToastProvider } from "@/hooks/use-toast";
 import { isSupabaseConfigured } from "@/lib/supabase";
@@ -12,18 +13,33 @@ import SettingsPage from "@/routes/SettingsPage";
 import SharePage from "@/routes/SharePage";
 import TripLayout from "@/routes/trip/TripLayout";
 import HomeTab from "@/routes/trip/HomeTab";
+import PeopleTab from "@/routes/trip/PeopleTab";
 import ItineraryTab from "@/routes/trip/ItineraryTab";
 import SuggestionsTab from "@/routes/trip/SuggestionsTab";
 import DocumentsTab from "@/routes/trip/DocumentsTab";
 import ChecklistTab from "@/routes/trip/ChecklistTab";
+
+function NotFound() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+      <div className="text-6xl">🧭</div>
+      <h1 className="text-xl font-extrabold">הדף לא נמצא</h1>
+      <p className="text-sm text-muted-foreground">ייתכן שהקישור שגוי או שהדף הוסר.</p>
+      <Link to="/" className="mt-2 h-12 rounded-2xl bg-primary px-5 leading-[3rem] font-semibold text-primary-foreground">
+        חזרה לטיולים
+      </Link>
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <ThemeProvider>
       <ToastProvider>
         {isSupabaseConfigured ? (
-          <AuthProvider>
-            <BrowserRouter>
+          <ErrorBoundary>
+            <AuthProvider>
+              <BrowserRouter>
               <Routes>
                 <Route path="/auth" element={<AuthPage />} />
                 <Route path="/share/:slug" element={<SharePage />} />
@@ -62,16 +78,18 @@ export default function App() {
                   }
                 >
                   <Route index element={<HomeTab />} />
+                  <Route path="people" element={<PeopleTab />} />
                   <Route path="itinerary" element={<ItineraryTab />} />
                   <Route path="suggestions" element={<SuggestionsTab />} />
                   <Route path="documents" element={<DocumentsTab />} />
                   <Route path="checklist" element={<ChecklistTab />} />
                 </Route>
 
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </BrowserRouter>
-          </AuthProvider>
+                <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+            </AuthProvider>
+          </ErrorBoundary>
         ) : (
           <SetupNeeded />
         )}

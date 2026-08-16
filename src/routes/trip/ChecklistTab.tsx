@@ -17,6 +17,9 @@ export default function ChecklistTab() {
   const [tab, setTab] = useState<"shared" | "personal">("shared");
   const [newTitle, setNewTitle] = useState("");
   const [seeding, setSeeding] = useState(false);
+  const [owner, setOwner] = useState<string>("");
+
+  const ownerName = (id: string | null) => participants.find((p) => p.id === id)?.name;
 
   const load = async () => {
     const { data } = await supabase.from("checklist_items").select("*").eq("trip_id", trip.id).order("sort_order").order("created_at");
@@ -43,7 +46,12 @@ export default function ChecklistTab() {
     if (!newTitle.trim()) return;
     const { data } = await supabase
       .from("checklist_items")
-      .insert({ trip_id: trip.id, title: newTitle.trim(), is_shared: tab === "shared" })
+      .insert({
+        trip_id: trip.id,
+        title: newTitle.trim(),
+        is_shared: tab === "shared",
+        participant_id: tab === "personal" && owner ? owner : null,
+      })
       .select()
       .single();
     if (data) setItems((x) => [...x, data as ChecklistItem]);
@@ -103,11 +111,27 @@ export default function ChecklistTab() {
       )}
 
       {/* add row */}
-      <div className="mb-4 flex gap-2">
-        <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="הוספת פריט…" />
-        <Button size="icon" onClick={add} aria-label="הוספה">
-          <Plus className="size-5" />
-        </Button>
+      <div className="mb-4 flex flex-col gap-2">
+        <div className="flex gap-2">
+          <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="הוספת פריט…" />
+          <Button size="icon" onClick={add} aria-label="הוספה">
+            <Plus className="size-5" />
+          </Button>
+        </div>
+        {tab === "personal" && participants.length > 0 && (
+          <select
+            value={owner}
+            onChange={(e) => setOwner(e.target.value)}
+            className="h-11 w-full rounded-2xl border border-input bg-card px-3 text-sm"
+          >
+            <option value="">בלי שיוך לנוסע</option>
+            {participants.map((p) => (
+              <option key={p.id} value={p.id}>
+                עבור {p.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {loading ? (
@@ -132,7 +156,12 @@ export default function ChecklistTab() {
           {shown.map((item) => (
             <Card key={item.id} className={cn("flex items-center gap-3 p-3 transition", item.is_done && "opacity-60")}>
               <Checkbox checked={item.is_done} onChange={() => toggle(item)} />
-              <span className={cn("flex-1 font-medium", item.is_done && "line-through")}>{item.title}</span>
+              <div className="min-w-0 flex-1">
+                <div className={cn("font-medium", item.is_done && "line-through")}>{item.title}</div>
+                {ownerName(item.participant_id) && (
+                  <div className="text-xs text-muted-foreground">👤 {ownerName(item.participant_id)}</div>
+                )}
+              </div>
               <button onClick={() => remove(item.id)} className="text-destructive" aria-label="מחיקה">
                 <Trash2 className="size-4" />
               </button>

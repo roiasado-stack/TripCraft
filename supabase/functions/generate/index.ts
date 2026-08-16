@@ -28,9 +28,12 @@ type Participant = {
   preferences: string[];
 };
 
+type PassportImage = { media_type: string; data: string };
+
 type Body = {
   trip_id: string;
-  kind: "suggestions" | "itinerary" | "checklist";
+  kind: "suggestions" | "itinerary" | "checklist" | "passports";
+  images?: PassportImage[];
   tune?: string | null;
   trip: {
     destination: string;
@@ -160,6 +163,78 @@ Deno.serve(async (req) => {
     );
 
     const body = (await req.json()) as Body;
+
+    // Passport scanning returns parsed travellers to the client for review and
+    // writes nothing, so it needs no trip ownership check.
+    if (body.kind === "passports") {
+      const images = (body.images ?? []).slice(0, 8);
+      if (!images.length) {
+        return new Response(JSON.stringify({ error: "no_images", items: [] }), {
+          status: 400,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+
+      const content: unknown[] = images.map((img) => ({
+        type: "image",
+        source: { type: "base64", media_type: img.media_type, data: img.data },
+      }));
+      content.push({
+        type: "text",
+        text: `אלה תמונות של דרכונים. עבור כל דרכון, חלץ את שם בעל הדרכון ואת גילו הנוכחי (חשב מתאריך הלידה מול היום).
+
+החזר JSON בלבד, ללא טקסט נוסף:
+{"items":[{"name":"שם מלא בעברית אם אפשר, אחרת כפי שמופיע","age":34}]}
+
+כללים:
+- פריט אחד לכל דרכון, באותו סדר שבו הופיעו התמונות.
+- אם לא ניתן לקרוא את השם — דלג על אותו דרכון.
+- אם לא ניתן לחשב גיל — החזר age: null.
+- אל תמציא פרטים. אל תחזיר מספרי דרכון או כל מידע אחר.`,
+      });
+
+      const visionRes = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 1500,
+          messages: [{ role: "user", content }],
+        }),
+      });
+
+      if (!visionRes.ok) {
+        const detail = await visionRes.text();
+        return new Response(JSON.stringify({ error: "llm_failed", detail, items: [] }), {
+          status: 502,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+
+      const visionPayload = await visionRes.json();
+      const parsedVision = extractJson(visionPayload?.content?.[0]?.text ?? "");
+      const people = Array.isArray(parsedVision?.items) ? parsedVision!.items : [];
+      const items = people
+        .map((raw) => {
+          const p = raw as Record<string, unknown>;
+          const age = typeof p.age === "number" && p.age >= 0 && p.age <= 120 ? p.age : null;
+          return {
+            name: String(p.name ?? "").trim().slice(0, 120),
+            age,
+            age_range: null,
+            preferences: [] as string[],
+          };
+        })
+        .filter((p) => p.name);
+
+      return new Response(JSON.stringify({ ok: true, items }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
 
     // Verify the caller actually owns this trip before generating anything.
     const { data: trip, error: tripErr } = await supabase
