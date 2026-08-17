@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { mapsUrl } from "./maps";
 
 /**
  * Creates a fully populated example trip so every screen can be reviewed with
@@ -53,6 +54,7 @@ export async function createDemoTrip(userId: string): Promise<string> {
       budget_level: "mid",
       cover_emoji: "🏝️",
       notes: "טיול לדוגמה — אפשר לערוך או למחוק הכל.",
+      photos_album_url: "https://photos.app.goo.gl/example-shared-album",
     })
     .select()
     .single();
@@ -94,6 +96,8 @@ export async function createDemoTrip(userId: string): Promise<string> {
     to_airport: string,
     depart_at: string,
     arrive_at: string,
+    from_terminal: string,
+    to_terminal: string,
   ): Row => ({
     trip_id: tripId,
     direction,
@@ -104,6 +108,11 @@ export async function createDemoTrip(userId: string): Promise<string> {
     depart_at,
     arrive_at,
     booking_ref: "ABC123",
+    from_terminal,
+    to_terminal,
+    seats: "12A-12D",
+    baggage: "2×23 ק\"ג",
+    notes: direction === "outbound" ? "צ'ק-אין נפתח 48 שעות לפני." : null,
   });
 
   const item = (
@@ -122,6 +131,7 @@ export async function createDemoTrip(userId: string): Promise<string> {
     description,
     category,
     location,
+    map_url: mapsUrl(location, category === "flight" ? null : "רודוס, יוון"),
     sort_order,
   });
 
@@ -134,6 +144,7 @@ export async function createDemoTrip(userId: string): Promise<string> {
     age_max: number | null = null,
     price_level: string | null = null,
     liked = false,
+    location: string | null = null,
   ): Row => ({
     trip_id: tripId,
     kind,
@@ -144,6 +155,8 @@ export async function createDemoTrip(userId: string): Promise<string> {
     age_max,
     price_level,
     liked,
+    location,
+    map_url: location ? mapsUrl(location, "רודוס, יוון") : null,
   });
 
   const check = (
@@ -162,8 +175,8 @@ export async function createDemoTrip(userId: string): Promise<string> {
   ): Row => ({ trip_id: tripId, name, category, external_url, storage_path: null, participant_id });
 
   await insertAll("flights", [
-    flight("outbound", "LY381", "TLV", "RHO", at(0, "06:40"), at(0, "09:15")),
-    flight("inbound", "LY382", "RHO", "TLV", at(5, "20:10"), at(5, "22:35")),
+    flight("outbound", "LY381", "TLV", "RHO", at(0, "06:40"), at(0, "09:15"), "3", "1"),
+    flight("inbound", "LY382", "RHO", "TLV", at(5, "20:10"), at(5, "22:35"), "1", "3"),
   ]);
 
   await insertAll("stays", [
@@ -175,6 +188,9 @@ export async function createDemoTrip(userId: string): Promise<string> {
       check_out: iso(end),
       booking_ref: "BK-778213",
       notes: "ארוחת בוקר כלולה. בריכה לילדים.",
+      phone: "+302241000000",
+      url: "https://example.com/rodos-palace",
+      map_url: null,
     },
   ]);
 
@@ -189,6 +205,8 @@ export async function createDemoTrip(userId: string): Promise<string> {
       return_at: at(5, "18:00"),
       booking_ref: "HZ-99120",
       notes: "רכב משפחתי, כיסא בטיחות לילד.",
+      phone: "+302241111111",
+      url: "https://example.com/hertz-booking",
     },
   ]);
 
@@ -206,13 +224,13 @@ export async function createDemoTrip(userId: string): Promise<string> {
   ]);
 
   await insertAll("suggestions", [
-    suggestion("attraction", "האקרופוליס של לינדוס", "אתר מרשים עם נוף לים. מומלץ בבוקר לפני החום.", ["היסטוריה", "נוף"], 5, 99, "mid", true),
-    suggestion("attraction", "עמק הפרפרים", "שביל מוצל לאורך נחל — מושלם עם ילדים קטנים.", ["טבע", "משפחות"], 2, 99, "low"),
-    suggestion("attraction", "אקווריום רודוס", "קטן אבל מקסים, פתרון מצוין ליום גשום.", ["ילדים"], 1, 12, "low"),
-    suggestion("attraction", "מפרץ אנתוני קווין", "מים צלולים לשנרקול, סלעי — נעלי ים מומלצות.", ["חוף", "שנרקול"], 6, 99, "low"),
-    suggestion("restaurant", "Marco Polo Mansion", "חצר קסומה בעיר העתיקה. יש אפשרויות צמחוניות.", ["רומנטי", "צמחוני"], null, null, "high"),
-    suggestion("restaurant", "Tamam", "מטבח יווני מודרני, ידידותי למשפחות.", ["משפחות"], null, null, "mid", true),
-    suggestion("restaurant", "To Steno", "טברנה מקומית אותנטית, מנות לשיתוף.", ["אותנטי"], null, null, "low"),
+    suggestion("attraction", "האקרופוליס של לינדוס", "אתר מרשים עם נוף לים. מומלץ בבוקר לפני החום.", ["היסטוריה", "נוף"], 5, 99, "mid", true, "Lindos Acropolis"),
+    suggestion("attraction", "עמק הפרפרים", "שביל מוצל לאורך נחל — מושלם עם ילדים קטנים.", ["טבע", "משפחות"], 2, 99, "low", false, "Petaloudes Valley of the Butterflies"),
+    suggestion("attraction", "אקווריום רודוס", "קטן אבל מקסים, פתרון מצוין ליום גשום.", ["ילדים"], 1, 12, "low", false, "Rhodes Aquarium"),
+    suggestion("attraction", "מפרץ אנתוני קווין", "מים צלולים לשנרקול, סלעי — נעלי ים מומלצות.", ["חוף", "שנרקול"], 6, 99, "low", false, "Anthony Quinn Bay"),
+    suggestion("restaurant", "Marco Polo Mansion", "חצר קסומה בעיר העתיקה. יש אפשרויות צמחוניות.", ["רומנטי", "צמחוני"], null, null, "high", false, "Marco Polo Mansion Rhodes"),
+    suggestion("restaurant", "Tamam", "מטבח יווני מודרני, ידידותי למשפחות.", ["משפחות"], null, null, "mid", true, "Tamam Restaurant Rhodes"),
+    suggestion("restaurant", "To Steno", "טברנה מקומית אותנטית, מנות לשיתוף.", ["אותנטי"], null, null, "low", false, "To Steno Tavern Rhodes"),
     suggestion("tip", "שכירת רכב משתלמת", "המרחקים ברודוס גדולים — רכב חוסך זמן וכסף מול מוניות."),
     suggestion("tip", "שעות החום", "בין 13:00–16:00 חם מאוד. תכננו בריכה או מנוחה."),
     suggestion("gear", "נעלי ים", "חלק מהחופים סלעיים — שווה להביא."),
@@ -229,6 +247,30 @@ export async function createDemoTrip(userId: string): Promise<string> {
     check("חיתולים ומגבונים", 7, false, false, id["איתי כהן"] ?? null),
     check("צעצועים לטיסה", 8, false, false, id["יעל כהן"] ?? null),
     check("נעלי הליכה", 9, false, false, id["דני כהן"] ?? null),
+  ]);
+
+  await insertAll("trip_updates", [
+    {
+      trip_id: tripId,
+      title: "מפגש בשדה ב-03:40",
+      body: "נפגשים בטרמינל 3, ליד דלפק אל על. אל תשכחו דרכונים!",
+      kind: "urgent",
+      is_pinned: true,
+    },
+    {
+      trip_id: tripId,
+      title: "הרכב השכור שודרג",
+      body: "קיבלנו רכב 7 מקומות במקום 5 — בלי תוספת תשלום.",
+      kind: "info",
+      is_pinned: false,
+    },
+    {
+      trip_id: tripId,
+      title: "צפי לגשם ביום רביעי",
+      body: "שקלו להחליף את יום החוף עם האקווריום.",
+      kind: "warning",
+      is_pinned: false,
+    },
   ]);
 
   await insertAll("documents", [

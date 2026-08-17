@@ -6,9 +6,20 @@ import { useTrip } from "./TripLayout";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, EmptyState, Field, Input, Label, Modal, Spinner, Textarea } from "@/components/ui";
 import { ImportItinerary } from "@/components/ImportItinerary";
+import { DirectionsLink, MapLink } from "@/components/MapLink";
+import { mapsUrl, resolveMapUrl } from "@/lib/maps";
 import { useToast } from "@/hooks/use-toast";
 import { generateContent } from "@/lib/ai";
 import { daysBetween, formatDayHeb, ITINERARY_CATEGORIES, itineraryCategory } from "@/lib/trip-options";
+
+/**
+ * Departure-day flights leave from the origin airport, so scoping them to the
+ * destination would point the map at the wrong country. Everything else is
+ * at the destination and benefits from the extra context.
+ */
+function scopeFor(category: string, destination: string): string | null {
+  return category === "flight" ? null : destination;
+}
 
 type Draft = {
   id?: string;
@@ -77,6 +88,9 @@ export default function ItineraryTab() {
       description: editing.description || null,
       category: editing.category,
       location: editing.location || null,
+      map_url: editing.location
+        ? mapsUrl(editing.location, scopeFor(editing.category, trip.destination))
+        : null,
     };
     if (editing.id) {
       await supabase.from("itinerary_items").update(payload).eq("id", editing.id);
@@ -168,6 +182,12 @@ export default function ItineraryTab() {
                         </div>
                         {it.location && <div className="text-xs text-muted-foreground">📍 {it.location}</div>}
                         {it.description && <p className="mt-0.5 text-sm text-muted-foreground">{it.description}</p>}
+                        {it.location && (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            <MapLink url={resolveMapUrl(it.map_url, it.location, scopeFor(it.category, trip.destination))} />
+                            <DirectionsLink place={it.location} near={scopeFor(it.category, trip.destination)} />
+                          </div>
+                        )}
                       </div>
                       <div className="flex shrink-0 flex-col gap-1">
                         <button onClick={() => setEditing({ id: it.id, day_date: it.day_date, start_time: it.start_time ?? "", title: it.title, description: it.description ?? "", category: it.category, location: it.location ?? "" })} className="text-muted-foreground" aria-label="עריכה">

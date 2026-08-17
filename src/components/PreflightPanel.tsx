@@ -41,14 +41,18 @@ export function PreflightPanel({
 
   const existingTitles = useMemo(() => new Set(existing.map((i) => i.title)), [existing]);
 
+  // Group by the human label, not the raw hours: several buckets share a
+  // label ("on the day"), and splitting them would repeat the heading.
   const groups = useMemo(() => {
-    const map = new Map<number, PreflightItem[]>();
+    const map = new Map<string, { order: number; items: PreflightItem[] }>();
     items.forEach((i) => {
-      const list = map.get(i.hours_before) ?? [];
-      list.push(i);
-      map.set(i.hours_before, list);
+      const label = hoursLabel(i.hours_before);
+      const entry = map.get(label) ?? { order: i.hours_before, items: [] };
+      entry.order = Math.max(entry.order, i.hours_before);
+      entry.items.push(i);
+      map.set(label, entry);
     });
-    return [...map.entries()].sort((a, b) => b[0] - a[0]);
+    return [...map.entries()].sort((a, b) => b[1].order - a[1].order);
   }, [items]);
 
   const missing = items.filter((i) => !existingTitles.has(i.title));
@@ -119,15 +123,15 @@ export function PreflightPanel({
         </Button>
       )}
 
-      {groups.map(([hours, list]) => (
-        <div key={hours}>
+      {groups.map(([label, group]) => (
+        <div key={label}>
           <h3 className="mb-2 flex items-center gap-2 font-bold">
             <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs text-secondary-foreground">
-              {hoursLabel(hours)}
+              {label}
             </span>
           </h3>
           <div className="flex flex-col gap-1.5">
-            {list.map((i) => {
+            {group.items.map((i) => {
               const added = existingTitles.has(i.title);
               return (
                 <Card

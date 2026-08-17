@@ -3,6 +3,10 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import type { Flight, ItineraryItem, Stay, Suggestion, Trip } from "@/lib/types";
 import { Card, FullSpinner } from "@/components/ui";
+import { TripUpdates } from "@/components/TripUpdates";
+import { PhotoAlbumCard } from "@/components/PhotoAlbumCard";
+import { MapLink } from "@/components/MapLink";
+import { resolveMapUrl } from "@/lib/maps";
 import {
   daysBetween,
   formatDateTimeHeb,
@@ -89,6 +93,11 @@ export default function SharePage() {
         )}
       </div>
 
+      {/* Read-only announcements and the shared album: what a client most
+          wants from a link an agent sent them. */}
+      <TripUpdates tripId={trip.id} editable={false} />
+      <PhotoAlbumCard trip={trip} editable={false} />
+
       {/* flights */}
       {flights.length > 0 && (
         <Section title="✈️ טיסות">
@@ -114,6 +123,9 @@ export default function SharePage() {
               {(s.check_in || s.check_out) && (
                 <div className="text-xs text-muted-foreground">{formatHeb(s.check_in)} – {formatHeb(s.check_out)}</div>
               )}
+              <div className="mt-1.5">
+                <MapLink url={resolveMapUrl(s.map_url, s.address || s.hotel_name, trip.destination)} />
+              </div>
             </Card>
           ))}
         </Section>
@@ -139,6 +151,11 @@ export default function SharePage() {
                           {it.title}
                         </div>
                         {it.description && <div className="text-xs text-muted-foreground">{it.description}</div>}
+                        {(it.map_url || it.location) && (
+                          <div className="mt-1">
+                            <MapLink url={resolveMapUrl(it.map_url, it.location, trip.destination)} />
+                          </div>
+                        )}
                       </div>
                     </Card>
                   );
@@ -160,6 +177,11 @@ export default function SharePage() {
                 <div>
                   <div className="font-semibold">{s.title}</div>
                   {s.description && <div className="text-xs text-muted-foreground">{s.description}</div>}
+                  {(s.map_url || s.location) && (
+                    <div className="mt-1">
+                      <MapLink url={resolveMapUrl(s.map_url, s.location ?? s.title, trip.destination)} />
+                    </div>
+                  )}
                 </div>
               </Card>
             );
