@@ -7,6 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { Flight, ItineraryItem, Stay } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { TripHeader } from "@/components/TripHeader";
+import { TripUpdates } from "@/components/TripUpdates";
+import { PhotoAlbumCard } from "@/components/PhotoAlbumCard";
 import { Button, Card, Spinner } from "@/components/ui";
 import {
   daysUntil,
@@ -167,9 +169,15 @@ export default function HomeTab() {
         <Link to="people">
           <Stat icon={<Users className="size-5" />} value={participants.length} label="משתתפים" actionable />
         </Link>
-        <Stat icon={<Plane className="size-5" />} value={flights.length} label="טיסות" />
+        <Link to="transport">
+          <Stat icon={<Plane className="size-5" />} value={flights.length} label="נסיעה" actionable />
+        </Link>
         <Stat icon={<CalendarDays className="size-5" />} value={duration ?? "—"} label="ימים" />
       </div>
+
+      <TripUpdates tripId={trip.id} />
+
+      <PhotoAlbumCard trip={trip} />
 
       {loading ? (
         <div className="flex justify-center py-10">

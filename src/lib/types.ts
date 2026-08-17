@@ -29,8 +29,19 @@ export interface Trip {
   is_shared: boolean;
   share_slug: string | null;
   is_template: boolean;
+  photos_album_url: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface TripUpdate {
+  id: string;
+  trip_id: string;
+  title: string;
+  body: string | null;
+  kind: string; // info | warning | urgent
+  is_pinned: boolean;
+  created_at: string;
 }
 
 export interface Participant {
@@ -55,6 +66,11 @@ export interface Flight {
   depart_at: string | null;
   arrive_at: string | null;
   booking_ref: string | null;
+  from_terminal: string | null;
+  to_terminal: string | null;
+  seats: string | null;
+  baggage: string | null;
+  notes: string | null;
   created_at: string;
 }
 
@@ -67,6 +83,9 @@ export interface Stay {
   check_out: string | null;
   booking_ref: string | null;
   notes: string | null;
+  phone: string | null;
+  url: string | null;
+  map_url: string | null;
   created_at: string;
 }
 
@@ -81,6 +100,8 @@ export interface Transfer {
   return_at: string | null;
   booking_ref: string | null;
   notes: string | null;
+  phone: string | null;
+  url: string | null;
   created_at: string;
 }
 
@@ -93,6 +114,7 @@ export interface ItineraryItem {
   description: string | null;
   category: string;
   location: string | null;
+  map_url: string | null;
   sort_order: number;
   created_at: string;
 }
@@ -108,6 +130,8 @@ export interface Suggestion {
   age_max: number | null;
   price_level: string | null;
   liked: boolean;
+  location: string | null;
+  map_url: string | null;
   created_at: string;
 }
 

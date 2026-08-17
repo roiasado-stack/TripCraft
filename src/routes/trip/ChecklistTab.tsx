@@ -7,6 +7,7 @@ import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, Checkbox, EmptyState, Input, Segmented, Spinner } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
 import { starterChecklist } from "@/lib/starter";
+import { PreflightPanel } from "@/components/PreflightPanel";
 import { cn } from "@/lib/utils";
 
 export default function ChecklistTab() {
@@ -14,7 +15,7 @@ export default function ChecklistTab() {
   const toast = useToast();
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"shared" | "personal">("shared");
+  const [tab, setTab] = useState<"shared" | "personal" | "preflight">("shared");
   const [newTitle, setNewTitle] = useState("");
   const [seeding, setSeeding] = useState(false);
   const [owner, setOwner] = useState<string>("");
@@ -31,7 +32,10 @@ export default function ChecklistTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.id]);
 
-  const shown = useMemo(() => items.filter((i) => (tab === "shared" ? i.is_shared : !i.is_shared)), [items, tab]);
+  const shown = useMemo(
+    () => (tab === "preflight" ? [] : items.filter((i) => (tab === "shared" ? i.is_shared : !i.is_shared))),
+    [items, tab],
+  );
   const doneCount = shown.filter((i) => i.is_done).length;
 
   const toggle = async (item: ChecklistItem) => {
@@ -94,12 +98,17 @@ export default function ChecklistTab() {
         options={[
           { value: "shared", label: "משותף 👥" },
           { value: "personal", label: "אישי 🧍" },
+          { value: "preflight", label: "לפני טיסה ✈️" },
         ]}
         value={tab}
         onChange={(v) => setTab(v)}
       />
 
-      {shown.length > 0 && (
+      {tab === "preflight" && (
+        <PreflightPanel trip={trip} participants={participants} existing={items} onAdded={load} />
+      )}
+
+      {tab !== "preflight" && shown.length > 0 && (
         <div className="mb-3 flex items-center gap-2">
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(doneCount / shown.length) * 100}%` }} />
@@ -111,7 +120,7 @@ export default function ChecklistTab() {
       )}
 
       {/* add row */}
-      <div className="mb-4 flex flex-col gap-2">
+      <div className={cn("mb-4 flex-col gap-2", tab === "preflight" ? "hidden" : "flex")}>
         <div className="flex gap-2">
           <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="הוספת פריט…" />
           <Button size="icon" onClick={add} aria-label="הוספה">
@@ -134,7 +143,7 @@ export default function ChecklistTab() {
         )}
       </div>
 
-      {loading ? (
+      {tab === "preflight" ? null : loading ? (
         <div className="flex justify-center py-10">
           <Spinner />
         </div>

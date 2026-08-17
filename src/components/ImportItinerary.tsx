@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Trip } from "@/lib/types";
 import { Button, Card, Modal, Textarea } from "@/components/ui";
 import { parseItinerary, type ParsedItem } from "@/lib/import-itinerary";
+import { fileToParsableText, TABULAR_ACCEPT } from "@/lib/read-tabular";
 import { formatDayHeb, itineraryCategory } from "@/lib/trip-options";
 
 const SAMPLE = `תאריך,שעה,כותרת,מיקום,קטגוריה
@@ -52,11 +53,16 @@ export function ImportItinerary({
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const content = await file.text();
-    setText(content);
-    analyse(content);
     if (fileRef.current) fileRef.current.value = "";
+    if (!file) return;
+    try {
+      const content = await fileToParsableText(file);
+      setText(content);
+      analyse(content);
+    } catch (err) {
+      console.error(err);
+      toast.error("לא הצלחנו לקרוא את הקובץ. נסה CSV או Excel תקין.");
+    }
   };
 
   const confirmImport = async () => {
@@ -87,8 +93,8 @@ export function ImportItinerary({
       {!preview ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
-            הדבק מסלול מ-Excel / Google Sheets (CSV), או קובץ JSON. אפשר כותרות בעברית או באנגלית —
-            נזהה אותן אוטומטית.
+            הדבק מסלול מ-Excel / Google Sheets, או העלה קובץ ‎.xlsx‎ / CSV / JSON. אפשר כותרות
+            בעברית או באנגלית — נזהה אותן אוטומטית.
           </p>
 
           <Textarea
@@ -109,7 +115,7 @@ export function ImportItinerary({
               קובץ
             </Button>
           </div>
-          <input ref={fileRef} type="file" accept=".csv,.tsv,.json,.txt" hidden onChange={onFile} />
+          <input ref={fileRef} type="file" accept={TABULAR_ACCEPT} hidden onChange={onFile} />
 
           <button
             onClick={() => {

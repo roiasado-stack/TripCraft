@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Button, Modal, Textarea } from "@/components/ui";
 import { parseParticipants, type ParsedParticipant } from "@/lib/import-participants";
+import { fileToParsableText, TABULAR_ACCEPT } from "@/lib/read-tabular";
 import { prefLabel } from "@/lib/trip-options";
 
 const SAMPLE = `יעל כהן, 7, חוף
@@ -63,11 +64,16 @@ export function ImportParticipants({
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const content = await file.text();
-    setText(content);
-    analyse(content);
     if (fileRef.current) fileRef.current.value = "";
+    if (!file) return;
+    try {
+      const content = await fileToParsableText(file);
+      setText(content);
+      analyse(content);
+    } catch (err) {
+      console.error(err);
+      toast.error("לא הצלחנו לקרוא את הקובץ. נסה CSV או Excel תקין.");
+    }
   };
 
   /** Passport photos → names/ages via the vision edge function. */
@@ -129,8 +135,8 @@ export function ImportParticipants({
       {!preview ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
-            הדבק רשימת שמות — שורה לכל נוסע. אפשר גם טבלת Excel, CSV או JSON. גיל והעדפות אחרי פסיק
-            (אופציונלי).
+            הדבק רשימת שמות — שורה לכל נוסע. אפשר גם להעלות קובץ Excel‏ (.xlsx), CSV או JSON. גיל
+            והעדפות אחרי פסיק (אופציונלי).
           </p>
 
           <Textarea
@@ -149,7 +155,7 @@ export function ImportParticipants({
               <FileUp className="size-4" />
             </Button>
           </div>
-          <input ref={fileRef} type="file" accept=".csv,.tsv,.json,.txt" hidden onChange={onFile} />
+          <input ref={fileRef} type="file" accept={TABULAR_ACCEPT} hidden onChange={onFile} />
 
           <div className="my-1 flex items-center gap-3 text-xs text-muted-foreground">
             <div className="h-px flex-1 bg-border" />

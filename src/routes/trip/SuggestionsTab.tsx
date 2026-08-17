@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarPlus, Heart, Plus, Sparkles, Trash2 } from "lucide-react";
+import { CalendarPlus, Compass, Heart, Plus, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Suggestion } from "@/lib/types";
 import { useTrip } from "./TripLayout";
@@ -9,6 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 import { generateContent, type TuneOption } from "@/lib/ai";
 import { cn } from "@/lib/utils";
 import { SUGGESTION_KINDS } from "@/lib/trip-options";
+import { destinationPicks, pickToRow } from "@/lib/destinations";
+import { DirectionsLink, LinkChip, MapLink } from "@/components/MapLink";
+import { chabadSearchUrl, kosherSearchUrl, resolveMapUrl, vegetarianSearchUrl } from "@/lib/maps";
 
 const TUNE: { value: TuneOption; label: string }[] = [
   { value: "more_kids", label: "יותר ידידותי לילדים" },
@@ -28,6 +31,37 @@ export default function SuggestionsTab() {
   const [showGen, setShowGen] = useState(false);
   const [tune, setTune] = useState<TuneOption | null>(null);
   const [manual, setManual] = useState<{ kind: string; title: string; description: string } | null>(null);
+  const [picking, setPicking] = useState(false);
+
+  /** Curated + generic highlights for the destination, matched to the group. */
+  const addDestinationPicks = async () => {
+    setPicking(true);
+    try {
+      const ages = participants
+        .map((p) => p.age ?? (p.age_range ? Number(p.age_range.match(/^(\d+)/)?.[1]) : null))
+        .filter((n): n is number => n != null && !isNaN(n));
+      const prefs = [...new Set(participants.flatMap((p) => p.preferences ?? []))];
+      const picks = destinationPicks(trip.destination, { style: trip.trip_type, ages, prefs });
+
+      const existing = new Set(items.map((i) => i.title));
+      const rows = picks
+        .filter((p) => !existing.has(p.title))
+        .map((p) => pickToRow(p, trip.id, trip.destination));
+      if (!rows.length) {
+        toast.toast("כל ההמלצות המובילות כבר קיימות");
+        return;
+      }
+      const { error } = await supabase.from("suggestions").insert(rows);
+      if (error) {
+        toast.error("ההוספה נכשלה. ודא שהרצת את מיגרציה 002.");
+        return;
+      }
+      toast.success(`נוספו ${rows.length} המלצות מובילות 🧭`);
+      load();
+    } finally {
+      setPicking(false);
+    }
+  };
 
   const load = async () => {
     const { data } = await supabase.from("suggestions").select("*").eq("trip_id", trip.id).order("created_at", { ascending: false });
@@ -38,6 +72,9 @@ export default function SuggestionsTab() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.id]);
+
+  const needsKosher = participants.some((p) => p.preferences?.includes("kosher"));
+  const needsVeg = participants.some((p) => p.preferences?.includes("vegetarian"));
 
   const filtered = useMemo(
     () => items.filter((i) => (filter === "all" || i.kind === filter) && (!onlyLiked || i.liked)),
@@ -105,12 +142,33 @@ export default function SuggestionsTab() {
             <Button size="sm" variant="outline" onClick={() => setManual({ kind: "attraction", title: "", description: "" })}>
               <Plus className="size-4" />
             </Button>
+            <Button size="sm" variant="outline" loading={picking} onClick={addDestinationPicks}>
+              <Compass className="size-4" /> מובילים
+            </Button>
             <Button size="sm" variant="soft" onClick={() => setShowGen(true)}>
               <Sparkles className="size-4" /> AI
             </Button>
           </div>
         }
       />
+
+      {/* Dietary needs: live searches, because kosher venues change often. */}
+      {(needsKosher || needsVeg) && (
+        <Card className="mb-3 p-3">
+          <div className="mb-1.5 text-sm font-bold">
+            {needsKosher ? "🍽️ אוכל כשר ב" : "🥗 אוכל צמחוני ב"}
+            {trip.destination}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {needsKosher && <LinkChip url={kosherSearchUrl(trip.destination)} label="מסעדות כשרות" />}
+            {needsKosher && <LinkChip url={chabadSearchUrl(trip.destination)} label="בית חב״ד" />}
+            {needsVeg && <LinkChip url={vegetarianSearchUrl(trip.destination)} label="צמחוני / טבעוני" />}
+          </div>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            חיפוש חי — תמיד מעודכן. כדאי לאמת כשרות מול בית חב״ד המקומי לפני הנסיעה.
+          </p>
+        </Card>
+      )}
 
       {/* filters */}
       <div className="mb-3 flex flex-wrap gap-1.5">
@@ -172,6 +230,12 @@ export default function SuggestionsTab() {
                     )}
                   </div>
                 </div>
+                {(s.map_url || s.location) && (
+                  <div className="mt-2 flex flex-wrap gap-1.5 pr-14">
+                    <MapLink url={resolveMapUrl(s.map_url, s.location ?? s.title, trip.destination)} />
+                    <DirectionsLink place={s.location ?? s.title} near={trip.destination} />
+                  </div>
+                )}
                 <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
                   <button onClick={() => toggleLike(s)} className={cn("flex items-center gap-1 text-sm font-semibold", s.liked ? "text-accent" : "text-muted-foreground")}>
                     <Heart className={cn("size-4", s.liked && "fill-current")} /> אהבתי

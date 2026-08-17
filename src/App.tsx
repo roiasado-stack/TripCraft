@@ -14,6 +14,7 @@ import SharePage from "@/routes/SharePage";
 import TripLayout from "@/routes/trip/TripLayout";
 import HomeTab from "@/routes/trip/HomeTab";
 import PeopleTab from "@/routes/trip/PeopleTab";
+import TransportTab from "@/routes/trip/TransportTab";
 import ItineraryTab from "@/routes/trip/ItineraryTab";
 import SuggestionsTab from "@/routes/trip/SuggestionsTab";
 import DocumentsTab from "@/routes/trip/DocumentsTab";
@@ -79,6 +80,7 @@ export default function App() {
                 >
                   <Route index element={<HomeTab />} />
                   <Route path="people" element={<PeopleTab />} />
+                  <Route path="transport" element={<TransportTab />} />
                   <Route path="itinerary" element={<ItineraryTab />} />
                   <Route path="suggestions" element={<SuggestionsTab />} />
                   <Route path="documents" element={<DocumentsTab />} />
