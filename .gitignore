@@ -9,3 +9,6 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# Generated bundle for sharing the source — rebuildable, so not tracked.
+tripcraft-codebase.zip

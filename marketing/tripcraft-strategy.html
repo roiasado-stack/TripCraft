@@ -1,0 +1,659 @@
+<title>TripCraft — קרקע ובידול</title>
+<style>
+  /* ---- Tokens: complete light palette on bare :root ---- */
+  :root {
+    --paper:        #F2F5F6;
+    --surface:      #FFFFFF;
+    --surface-sunk: #E9EEF0;
+    --ink:          #15222A;
+    --ink-soft:     #48606C;
+    --ink-faint:    #7A8F99;
+    --rule:         #D3DDE1;
+    --rule-strong:  #B4C4CA;
+
+    --accent:       #0C6E78;   /* deep teal — sibling of the app's turquoise */
+    --accent-ink:   #FFFFFF;
+    --accent-wash:  #DCEBEC;
+
+    --loss:         #9E2B2B;
+    --loss-wash:    #F6E2E1;
+    --win:          #1F6B47;
+    --win-wash:     #DEEDE4;
+    --warn:         #8A5410;
+    --warn-wash:    #F6EBD8;
+
+    --shadow: 0 1px 2px rgba(21,34,42,.06), 0 8px 24px -18px rgba(21,34,42,.5);
+
+    --step--1: clamp(.78rem, .76rem + .1vw, .84rem);
+    --step-0:  clamp(.98rem, .95rem + .16vw, 1.06rem);
+    --step-1:  clamp(1.15rem, 1.08rem + .34vw, 1.35rem);
+    --step-2:  clamp(1.4rem, 1.26rem + .66vw, 1.85rem);
+    --step-3:  clamp(1.8rem, 1.5rem + 1.4vw, 2.7rem);
+
+    --sans: "Segoe UI", "Heebo", "Assistant", system-ui, -apple-system, "Noto Sans Hebrew", sans-serif;
+    --mono: "Cascadia Mono", ui-monospace, "SF Mono", Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:        #10191E;
+      --surface:      #17232A;
+      --surface-sunk: #1D2C34;
+      --ink:          #E7EEF0;
+      --ink-soft:     #A7BAC2;
+      --ink-faint:    #7B929C;
+      --rule:         #293B44;
+      --rule-strong:  #3B525D;
+
+      --accent:       #46B6BE;
+      --accent-ink:   #0A2226;
+      --accent-wash:  #16333A;
+
+      --loss:         #E88C86;
+      --loss-wash:    #34211F;
+      --win:          #74C79B;
+      --win-wash:     #162C22;
+      --warn:         #DDA94F;
+      --warn-wash:    #2E2415;
+
+      --shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 30px -20px rgba(0,0,0,.9);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:        #10191E;
+    --surface:      #17232A;
+    --surface-sunk: #1D2C34;
+    --ink:          #E7EEF0;
+    --ink-soft:     #A7BAC2;
+    --ink-faint:    #7B929C;
+    --rule:         #293B44;
+    --rule-strong:  #3B525D;
+
+    --accent:       #46B6BE;
+    --accent-ink:   #0A2226;
+    --accent-wash:  #16333A;
+
+    --loss:         #E88C86;
+    --loss-wash:    #34211F;
+    --win:          #74C79B;
+    --win-wash:     #162C22;
+    --warn:         #DDA94F;
+    --warn-wash:    #2E2415;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 30px -20px rgba(0,0,0,.9);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: var(--step-0);
+    line-height: 1.65;
+    direction: rtl;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 60rem;
+    margin-inline: auto;
+    padding: clamp(1.5rem, 1rem + 3vw, 4rem) clamp(1rem, .6rem + 2.4vw, 2.5rem) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2.5rem, 2rem + 2vw, 4rem);
+  }
+
+  /* ---- Masthead ---- */
+  .masthead { display: flex; flex-direction: column; gap: .9rem; }
+  .kicker {
+    font-size: var(--step--1);
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  h1 {
+    margin: 0;
+    font-size: var(--step-3);
+    line-height: 1.08;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    text-wrap: balance;
+  }
+  .standfirst {
+    margin: 0;
+    max-width: 46ch;
+    font-size: var(--step-1);
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: .5rem 1.25rem;
+    padding-top: .9rem; border-top: 2px solid var(--rule-strong);
+    font-size: var(--step--1); color: var(--ink-faint);
+    font-family: var(--mono);
+  }
+
+  /* ---- Sections ---- */
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+  .sec-head { display: flex; flex-direction: column; gap: .35rem; }
+  .sec-num {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    color: var(--ink-faint);
+    letter-spacing: .1em;
+  }
+  h2 {
+    margin: 0;
+    font-size: var(--step-2);
+    font-weight: 800;
+    letter-spacing: -.015em;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+  h3 {
+    margin: 0;
+    font-size: var(--step-1);
+    font-weight: 700;
+    letter-spacing: -.01em;
+    text-wrap: balance;
+  }
+  p { margin: 0; max-width: 68ch; }
+  .lede { color: var(--ink-soft); max-width: 66ch; }
+
+  /* ---- Table ---- */
+  .scroller {
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    background: var(--surface);
+  }
+  table { border-collapse: collapse; width: 100%; min-width: 46rem; font-size: var(--step--1); }
+  caption { text-align: right; padding: .75rem 1rem; color: var(--ink-faint); font-size: var(--step--1); }
+  th, td { text-align: right; padding: .7rem .9rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th {
+    position: sticky; top: 0;
+    background: var(--surface-sunk);
+    font-weight: 700;
+    font-size: var(--step--1);
+    letter-spacing: .04em;
+    border-bottom: 2px solid var(--rule-strong);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.name { font-weight: 700; color: var(--ink); white-space: nowrap; }
+  td.price { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-soft); }
+  .flag {
+    display: inline-block; margin-inline-start: .4rem;
+    font-size: .7rem; font-weight: 700; padding: .05rem .4rem;
+    border-radius: 2px; background: var(--warn-wash); color: var(--warn);
+    letter-spacing: .04em; vertical-align: middle;
+  }
+
+  /* ---- Finding list ---- */
+  .findings { display: flex; flex-direction: column; gap: .75rem; list-style: none; margin: 0; padding: 0; }
+  .finding {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .3rem .8rem;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: .85rem 1rem;
+    box-shadow: var(--shadow);
+  }
+  .sev {
+    font-family: var(--mono);
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    padding: .18rem .45rem;
+    border-radius: 2px;
+    height: fit-content;
+    white-space: nowrap;
+  }
+  .sev.crit { background: var(--loss-wash); color: var(--loss); }
+  .sev.high { background: var(--warn-wash); color: var(--warn); }
+  .sev.med  { background: var(--surface-sunk); color: var(--ink-soft); }
+  .sev.win  { background: var(--win-wash); color: var(--win); }
+  .finding h4 { margin: 0; font-size: var(--step-0); font-weight: 700; align-self: center; }
+  .finding p { grid-column: 2; margin: 0; font-size: var(--step--1); color: var(--ink-soft); max-width: 62ch; }
+  .who { color: var(--ink-faint); font-style: normal; }
+
+  /* ---- Thesis block ---- */
+  .thesis {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-radius: 4px;
+    padding: clamp(1.25rem, 1rem + 1.6vw, 2.25rem);
+    display: flex; flex-direction: column; gap: .8rem;
+  }
+  .thesis .kicker { color: var(--accent-ink); opacity: .8; }
+  .thesis p { color: var(--accent-ink); max-width: 54ch; }
+  .thesis .big { font-size: var(--step-1); font-weight: 700; line-height: 1.4; }
+
+  /* ---- Steps ---- */
+  .steps { display: flex; flex-direction: column; gap: 0; counter-reset: step; }
+  .step {
+    display: grid;
+    grid-template-columns: 3.2rem 1fr;
+    gap: 0 1rem;
+    padding: 1.3rem 0;
+    border-top: 1px solid var(--rule);
+  }
+  .step:first-child { border-top: 2px solid var(--rule-strong); }
+  .step-n {
+    font-family: var(--mono);
+    font-size: var(--step-1);
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .step-body { display: flex; flex-direction: column; gap: .55rem; }
+  .step-body p { font-size: var(--step--1); color: var(--ink-soft); }
+  .tasks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .3rem; }
+  .tasks li {
+    font-size: var(--step--1);
+    padding-inline-start: 1.1rem;
+    position: relative;
+    color: var(--ink-soft);
+  }
+  .tasks li::before {
+    content: "";
+    position: absolute; inset-inline-start: 0; top: .62em;
+    width: .38rem; height: .38rem; border-radius: 50%;
+    background: var(--rule-strong);
+  }
+  .tasks li.mine::before { background: var(--accent); }
+  .tasks li b { color: var(--ink); font-weight: 700; }
+  .gate {
+    margin-top: .3rem;
+    background: var(--warn-wash);
+    color: var(--warn);
+    border-radius: 3px;
+    padding: .6rem .8rem;
+    font-size: var(--step--1);
+    font-weight: 700;
+  }
+  .owner {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .06em;
+    padding: .1rem .4rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 2px;
+    color: var(--ink-faint);
+    margin-inline-start: .4rem;
+    vertical-align: middle;
+  }
+
+  .note {
+    background: var(--surface-sunk);
+    border-radius: 4px;
+    padding: 1rem 1.15rem;
+    font-size: var(--step--1);
+    color: var(--ink-soft);
+  }
+  .note b { color: var(--ink); }
+
+  a { color: var(--accent); text-underline-offset: .18em; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  .sources { font-size: var(--step--1); color: var(--ink-faint); }
+  .sources ul { margin: .5rem 0 0; padding-inline-start: 1.1rem; display: flex; flex-direction: column; gap: .25rem; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="kicker">ניתוח שוק ותוכנית השקה</div>
+    <h1>קרקע ובידול</h1>
+    <p class="standfirst">איפה TripCraft עומד מול השוק בפועל, מה חסר לו כדי להיות מוצר אמיתי, ומה הדבר היחיד שאף אחד אחר לא עושה.</p>
+    <div class="meta">
+      <span>17 באוגוסט 2026</span>
+      <span>מבוסס על 6 חיפושי שוק</span>
+      <span>סטטוס: לפני עלייה לאוויר</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">01</span>
+      <h2>מי כבר נמצא בזירה</h2>
+    </div>
+    <p class="lede">השוק מחולק לשלושה מחנות שכמעט לא נפגשים: מתכננים לצרכן, מחוללי AI, וכלים לסוכנים. TripCraft מנסה לשבת בשניים מהם בו-זמנית — וזו גם ההזדמנות וגם הסיכון.</p>
+
+    <div class="scroller">
+      <table>
+        <caption>מחירים כפי שפורסמו נכון לאוגוסט 2026.</caption>
+        <thead>
+          <tr>
+            <th>מוצר</th><th>קהל</th><th>מחיר</th><th>החוזק שלו</th><th>מה זה אומר עליי</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="name">Wanderlog</td><td>צרכן</td><td class="price">$39.99 / שנה</td>
+            <td>מפה ומסלול במסך אחד, עריכה משותפת חיה, סריקת Gmail ו-offline בגרסת Pro</td>
+            <td>המתחרה הישיר החזק ביותר. עושה כמעט הכל שאני עושה, טוב יותר, כבר שנים</td>
+          </tr>
+          <tr>
+            <td class="name">TripIt</td><td>צרכן</td><td class="price">$49 / שנה</td>
+            <td>שולחים מייל אישור הזמנה — הוא בונה מסלול לבד. התראות טיסה בזמן אמת</td>
+            <td>הפיצ'ר שאין לי בכלל, ושחוסך למשתמש את כל ההקלדה</td>
+          </tr>
+          <tr>
+            <td class="name">Layla</td><td>צרכן / AI</td><td class="price">$49 / שנה</td>
+            <td>מחירים חיים והזמנה דרך Skyscanner, Booking ו-GetYourGuide</td>
+            <td>מרוויח מעמלות. אני לא מרוויח כלום</td>
+          </tr>
+          <tr>
+            <td class="name">Mindtrip</td><td>צרכן / AI</td><td class="price">—</td>
+            <td>הזמנת טיסות בתוך הצ'אט (מאי 2026). זוכר גיל ילדים ומציע עצירות מותאמות</td>
+            <td>עושה כבר את ההתאמה-לפי-גיל שחשבתי שהיא הבידול שלי <span class="flag">שים לב</span></td>
+          </tr>
+          <tr>
+            <td class="name">Triplan</td><td>צרכן ישראלי</td><td class="price">חינם</td>
+            <td>150 יעדים, 8 שפות, הזמנה ישירה. הוקם בידי מדריכי טיולים ישראלים</td>
+            <td>המתחרה הישראלי. חינמי, עם קטלוג יעדים שאין לי ואין לי סיכוי להדביק</td>
+          </tr>
+          <tr>
+            <td class="name">Travefy</td><td>סוכנים</td><td class="price">$25–35 / חודש</td>
+            <td>מסלולים ממותגים, CRM, אפליקציה בלייבל לבן, בונה אתרים</td>
+            <td>מה שאני מכוון אליו בצד הסוכן — כבר קיים ובוגר</td>
+          </tr>
+          <tr>
+            <td class="name">Vamoos</td><td>סוכנים</td><td class="price">מ-$13.60 / חודש</td>
+            <td>אפליקציה ממותגת ללקוח, ספירה לאחור, אלבום תמונות עם 10% עמלה לסוכן</td>
+            <td>זול, ממוקד, ועם מודל הכנסה לסוכן שאין לי</td>
+          </tr>
+          <tr>
+            <td class="name">goKosher / Kosher GPS / YeahThatsKosher</td><td>כשרות</td><td class="price">חינם ברובם</td>
+            <td>מאגרי כשרות עולמיים — 50+ מדינות, 3,000+ עסקים, חצי מיליון משתמשים</td>
+            <td>כולם <b>מדריכים נפרדים</b> שצריך לפתוח בנפרד. אף אחד לא בתוך המסלול</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>גודל השוק:</b> 9.42 מיליון יציאות של ישראלים לחו״ל ב-2025, מעל רמות טרום-קורונה, למעלה מ-90% מהן בטיסה. 2026 נפתחה בשיא — ואז מרץ–מאי נחתכו בגלל המלחמה עם איראן. שוק גדול, אבל תנודתי בצורה קיצונית. תוכנית עסקית שמניחה צמיחה חלקה תישבר.
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">02</span>
+      <h2>איפה אני מפסיד</h2>
+    </div>
+    <p class="lede">ביקורת אמיתית, מסודרת לפי חומרה. חלק מזה מתקן בשבועות, וחלק מזה החלטה אסטרטגית לא להיכנס לקרב.</p>
+
+    <ul class="findings">
+      <li class="finding">
+        <span class="sev crit">חוסם</span>
+        <h4>לא עובד בלי אינטרנט</h4>
+        <p>אפליקציית טיולים שלא נפתחת כשנוחתים בלי דאטה מפספסת בדיוק את הרגע שבשבילו נבנתה. ב-Wanderlog זה פיצ'ר בתשלום — אצלי זה לא קיים בכלל. <span class="who">אין Service Worker, אין manifest.</span></p>
+      </li>
+      <li class="finding">
+        <span class="sev crit">חוסם</span>
+        <h4>הכל מוקלד ביד</h4>
+        <p>TripIt קיים כמעט רק בשביל זה: מעבירים מייל אישור והמסלול נבנה לבד. Wanderlog Pro סורק Gmail. אצלי המשתמש מקליד כל טיסה, מלון ואסמכתה. זו החיכוך היומיומי הכי גדול שלי, והוא זה שיגרום לנטישה אחרי טיול אחד.</p>
+      </li>
+      <li class="finding">
+        <span class="sev high">גבוה</span>
+        <h4>ה-AI שלי ייוולד מיושן</h4>
+        <p>סקירות השוק מציינות במפורש שכלים המבוססים על ידע סטטי «מפספסים באופן קבוע סגירות ושינויי מחיר». Layla ו-Mindtrip מחוברים לחיפוש חי. אם אפעיל יצירת AI בלי מקור נתונים חי — שיווקתי בדיוק את הגרסה שהשוק כבר יודע שהיא לא אמינה.</p>
+      </li>
+      <li class="finding">
+        <span class="sev high">גבוה</span>
+        <h4>אין הזמנה ואין עמלות</h4>
+        <p>Layla, Mindtrip ו-Triplan מזמינים בתוך המוצר ומרוויחים מעמלה. Vamoos נותן לסוכן 10% על אלבומי תמונות. אצלי אין שום נתיב הכנסה — וגם אין תשובה לשאלה למה מישהו ישלם.</p>
+      </li>
+      <li class="finding">
+        <span class="sev high">גבוה</span>
+        <h4>אין עבודה משותפת</h4>
+        <p>תכנון טיול משפחתי הוא מטבעו רב-משתתפים. Wanderlog נותן עריכה משותפת חיה; אני נותן קישור לצפייה בלבד. בן/בת הזוג לא יכולים לערוך, וזה מרגיש שבור.</p>
+      </li>
+      <li class="finding">
+        <span class="sev med">בינוני</span>
+        <h4>ההתאמה לפי גיל כבר לא ייחודית</h4>
+        <p>חשבתי שהיא הבידול. Mindtrip כבר זוכר גיל ילדים ומציע מוזיאונים אינטראקטיביים בהתאם. אני עדיין עושה זאת מדויק יותר — גיל לכל נוסע ולא הקשר כללי — אבל זה הפרש של דרגה, לא של סוג.</p>
+      </li>
+      <li class="finding">
+        <span class="sev med">בינוני</span>
+        <h4>עומק תוכן זניח</h4>
+        <p>15 ערים מתוקננות מול 150 של Triplan ומאגרי POI עולמיים עם תמונות ודירוגים. את הפער הזה לא סוגרים בעבודה ידנית, וגם לא כדאי לנסות.</p>
+      </li>
+      <li class="finding">
+        <span class="sev med">בינוני</span>
+        <h4>אין מפה בתוך האפליקציה</h4>
+        <p>הליבה של Wanderlog היא מפה ורשימה יחד. אני מקשר החוצה ל-Google Maps, כלומר מוציא את המשתמש מהמוצר בכל לחיצה.</p>
+      </li>
+      <li class="finding">
+        <span class="sev med">בינוני</span>
+        <h4>אין התראות סטטוס טיסה</h4>
+        <p>הפיצ'ר האהוב ביותר ב-TripIt Pro. אצלי יש קישור לחיפוש — שימושי, אבל לא מודיע לך שהטיסה התעכבה.</p>
+      </li>
+      <li class="finding">
+        <span class="sev high">גבוה</span>
+        <h4>תשתית לא מוכנה לשיווק</h4>
+        <p>תוכנית חינמית שנרדמת אחרי שבוע ללא פעילות, בלי גיבויים, בלי תמיכה, מפתח אחד. ברגע שיש לקוח משלם — זו חשיפה אמיתית ולא הערת שוליים.</p>
+      </li>
+      <li class="finding">
+        <span class="sev med">בינוני</span>
+        <h4>אפס נוכחות</h4>
+        <p>אפס משתמשים, אפס ביקורות, אפס SEO, אפס מותג. המתחרים צברו את זה על פני שנים.</p>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">03</span>
+      <h2>איפה אני באמת מנצח</h2>
+    </div>
+    <p class="lede">קצר יותר מהרשימה הקודמת, וזה בסדר. יתרון אמיתי אחד ששווה משהו עדיף על עשרה מדומים.</p>
+
+    <ul class="findings">
+      <li class="finding">
+        <span class="sev win">אמיתי</span>
+        <h4>עברית כהנחת יסוד, לא כתרגום</h4>
+        <p>הכלים העולמיים אנגלית-תחילה, ו-RTL מודבק עליהם בדיעבד אם בכלל. Triplan תומך ב-8 שפות אבל הוא קטלוג יעדים, לא מלווה טיול. אף אחד לא בנה חוויית ניהול-טיול שלמה שעברית היא ברירת המחדל שלה.</p>
+      </li>
+      <li class="finding">
+        <span class="sev win">אמיתי</span>
+        <h4>כשרות ושבת בתוך המסלול</h4>
+        <p>זה הפער הכי חד שמצאתי. goKosher, Kosher GPS ו-YeahThatsKosher הם מאגרים מצוינים — וכולם <b>נפרדים</b>. אף אחד לא יודע שיום שלישי שלך מתחיל ב-09:00 בלינדוס וששבת נכנסת ב-19:12. השילוב הזה לא קיים בשוק.</p>
+      </li>
+      <li class="finding">
+        <span class="sev win">אמיתי</span>
+        <h4>שני הקהלים במוצר אחד</h4>
+        <p>כלי הסוכנים ב-$25–35 לחודש לא משרתים מטייל פרטי; כלי הצרכן לא יודעים מיתוג סוכנות. בישראל אף אחד לא עושה את שניהם בעברית — וסוכן ישראלי קטן לא ישלם $35 לחודש בשביל ממשק באנגלית.</p>
+      </li>
+      <li class="finding">
+        <span class="sev win">אמיתי</span>
+        <h4>קבוצות גדולות ורב-משפחתיות</h4>
+        <p>הכלים הצרכניים בנויים ל«אני», והסוכנים ל«לקוח». המרחב שבאמצע — 12 נפשות משלוש משפחות, מסבתא עד פעוט, כל אחד עם דרכון וצרכים — הוא בדיוק אופי הטיול הישראלי, והוא לא מטופל. ייבוא בכמות וצ'קליסט לפי נוסע כבר עובדים.</p>
+      </li>
+      <li class="finding">
+        <span class="sev win">אמיתי</span>
+        <h4>מבנה עלויות</h4>
+        <p>הקוד והתשתית שלך. אין עלות רישוי לכל מושב, ואפשר לתמחר מתחת לכל כלי סוכנים בשוק בלי להפסיד.</p>
+      </li>
+    </ul>
+  </section>
+
+  <div class="thesis">
+    <div class="kicker">הבידול</div>
+    <p class="big">אל תתחרה על יצירת מסלולים. את הקרב הזה כבר הפסדת למי שמחובר למחירים חיים ולמנועי הזמנה.</p>
+    <p>הדבר שאף אחד לא עושה הוא <b>הלוגיסטיקה של הקבוצה</b>: מי נוסע, מה כל אחד צריך, אצל מי הדרכון, מה כשר, ומה קורה כששבת נכנסת באמצע הטיול. זה לא זוהר, זה לא AI — וזה בדיוק מה שמשפחה ישראלית וסוכן ישראלי מתמודדים איתו בפועל, היום, באקסל ובקבוצת וואטסאפ.</p>
+    <p class="big">מערכת ההפעלה של הטיול הקבוצתי הישראלי — ועובדת גם בלי קליטה.</p>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">04</span>
+      <h2>ארבעה דברים שיהפכו את זה לאמיתי</h2>
+    </div>
+    <p class="lede">נגזרים ישירות מהבידול. אף אחד מהם לא קיים באף מוצר שבדקתי.</p>
+
+    <ul class="findings">
+      <li class="finding">
+        <span class="sev win">ייחודי</span>
+        <h4>מנוע שבת וחג</h4>
+        <p>זמני כניסת ויציאת שבת לפי יעד ותאריך, בתוך המסלול. התרעה כשמתוכננת פעילות בשבת לקבוצה שומרת מסורת, ואיתור בית חב״ד ומניין קרוב ליום הרלוונטי. שום מתכנן טיולים בעולם לא עושה את זה.</p>
+      </li>
+      <li class="finding">
+        <span class="sev win">ייחודי</span>
+        <h4>כשרות ברמת היום, לא ברמת היעד</h4>
+        <p>לא «מסעדות כשרות ברודוס» אלא «ביום שלישי אתם בלינדוס — הנה מה שכשר בטווח הליכה מהאתר, ומה לקחת אם אין».</p>
+      </li>
+      <li class="finding">
+        <span class="sev win">ייחודי</span>
+        <h4>פיצול רב-משפחתי</h4>
+        <p>מי בכל חדר, מי בכל רכב, מי משלם על מה. קבוצה של 12 היא לא «נוסע אחד כפול 12», ואף כלי לא מתייחס לזה ברצינות.</p>
+      </li>
+      <li class="finding">
+        <span class="sev win">ייחודי</span>
+        <h4>קריאת שוברים של סוכנויות ישראליות</h4>
+        <p>במקום לחקות את סריקת ה-Gmail של TripIt — לקרוא את ה-PDF בעברית שסוכן ישראלי שולח, ולהפוך אותו למסלול. פותר את «הכל מוקלד ביד» דווקא בנקודה שהמתחרים העולמיים לא מכסים.</p>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">05</span>
+      <h2>הדרך לאוויר — עם שערי אישור</h2>
+    </div>
+    <p class="lede">שום דבר לא עולה לאוויר בלי אישור מפורש ממך. כל שלב מסתיים בנקודת עצירה שבה אתה בודק ומחליט אם ממשיכים.</p>
+
+    <div class="steps">
+
+      <div class="step">
+        <div class="step-n">01</div>
+        <div class="step-body">
+          <h3>עבודה בלי אינטרנט <span class="owner">אני</span></h3>
+          <p>החסם היחיד שהייתי מסרב לעלות לאוויר בלעדיו. גם פותר את «להוריד מחנות האפליקציות» — PWA מותקן למסך הבית.</p>
+          <ul class="tasks">
+            <li class="mine">Service Worker + manifest, התקנה למסך הבית עם אייקון</li>
+            <li class="mine">פתיחה מלאה בלי רשת, עם כל נתוני הטיול הפעיל</li>
+            <li class="mine">שמירת מסמכים מראש לצפייה בלי קליטה</li>
+            <li class="mine">חיווי ברור «מצב לא מקוון» ומתי סונכרן לאחרונה</li>
+          </ul>
+          <div class="gate">שער 1 — אני בודק במצב טיסה אמיתי ומראה לך תוצאה. אתה מאשר שזה מספיק.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">02</div>
+        <div class="step-body">
+          <h3>החלטה על ה-AI <span class="owner">החלטה משותפת</span></h3>
+          <p>לא טכנית — אסטרטגית. הקוד מוכן, אבל אם נפעיל אותו כמו שהוא נקבל בדיוק את הבעיה שסימנתי למעלה.</p>
+          <ul class="tasks">
+            <li><b>אפשרות א:</b> לא להפעיל בינתיים. לשווק על לוגיסטיקה, שבת וכשרות — ולא לשקר בשום מקום</li>
+            <li><b>אפשרות ב:</b> להפעיל עם הסתייגות גלויה («הצעות ראשוניות, אמת מול מקור עדכני»)</li>
+            <li><b>אפשרות ג:</b> להפעיל רק סריקת דרכונים, שהיא קריאה מתמונה ולא ידע על העולם — ולכן לא מתיישנת</li>
+          </ul>
+          <div class="gate">שער 2 — אתה בוחר. ההמלצה שלי: ג׳ עכשיו, א׳ לגבי המסלולים.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">03</div>
+        <div class="step-body">
+          <h3>הקשחה לפני שיש לקוחות <span class="owner">רובו עליך</span></h3>
+          <p>הדברים שמרגישים בירוקרטיים עד לרגע שהם נדרשים.</p>
+          <ul class="tasks">
+            <li>שדרוג Supabase לתוכנית בתשלום — כדי שהפרויקט לא יירדם <b>(אתה)</b></li>
+            <li>הפעלת גיבויים ובדיקה שאפשר לשחזר מהם <b>(אתה, אני מדריך)</b></li>
+            <li>הפעלת כניסה עם Google לפי המדריך ששלחתי <b>(אתה)</b></li>
+            <li class="mine">מדיניות פרטיות ותנאי שימוש — חובה כי נשמרים דרכונים ומסמכים</li>
+            <li class="mine">מחיקת חשבון ומחיקת טיול — דרישה בסיסית בהגנת פרטיות</li>
+          </ul>
+          <div class="gate">שער 3 — עוברים יחד על הרשימה. בלי גיבוי עובד לא ממשיכים.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">04</div>
+        <div class="step-body">
+          <h3>סביבת בדיקה פרטית <span class="owner">אני מקים, אתה בודק</span></h3>
+          <p>כתובת אמיתית באוויר, אבל <b>לא מפורסמת ולא מקודמת</b> — רק אתה ומי שתבחר. כאן אתה בודק בטלפון האמיתי שלך.</p>
+          <ul class="tasks">
+            <li class="mine">פריסה לכתובת פרטית, מסומנת בבירור כגרסת בדיקה</li>
+            <li class="mine">רשימת בדיקה מלאה — כל מסך, כל כפתור, מה אמור לקרות</li>
+            <li>אתה עובר מסך-מסך בטלפון ומסמן מה לא בסדר <b>(אתה)</b></li>
+            <li>בדיקה במצב טיסה, במצב כהה, ובאייפון ואנדרואיד אם אפשר <b>(אתה)</b></li>
+          </ul>
+          <div class="gate">שער 4 — אני מתקן הכל שסימנת. חוזרים על הסבב עד שאתה מרוצה.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">05</div>
+        <div class="step-body">
+          <h3>טיול אמיתי אחד <span class="owner">אתה</span></h3>
+          <p>השלב שהכי קל לדלג עליו והכי מסוכן לדלג עליו. לפני שמישהו זר נוגע בזה — שמישהו שאתה מכיר ייסע איתו באמת.</p>
+          <ul class="tasks">
+            <li>משפחה אחת, טיול אמיתי, מההרשמה ועד החזרה <b>(אתה מגייס)</b></li>
+            <li class="mine">אני עוקב אחרי שגיאות ומתקן תוך כדי</li>
+            <li>מה הם לא הבינו? מה הם לא השתמשו בו? איפה חזרו לוואטסאפ? <b>(אתה שואל)</b></li>
+          </ul>
+          <div class="gate">שער 5 — אם משפחה אחת לא סיימה טיול בשלום, אין טעם לפתוח לקהל.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">06</div>
+        <div class="step-body">
+          <h3>פתיחה לקהל <span class="owner">אתה מחליט</span></h3>
+          <p>רק אחרי שכל השערים נסגרו, ורק בהחלטה מפורשת שלך.</p>
+          <ul class="tasks">
+            <li>דומיין משלך במקום כתובת ברירת מחדל <b>(אתה)</b></li>
+            <li class="mine">אנליטיקס בסיסי — כמה נרשמו, כמה יצרו טיול, איפה נטשו</li>
+            <li class="mine">ערוץ לדיווח תקלות מתוך האפליקציה</li>
+            <li>3–5 סוכני נסיעות קטנים כפיילוט — הקהל שהכי כואב לו <b>(אתה)</b></li>
+          </ul>
+          <div class="gate">שער 6 — הפרסום יוצא רק כשאתה אומר «כן».</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">06</span>
+      <h2>מה אני ממליץ לעשות עכשיו</h2>
+    </div>
+    <p>שלב 1 — עבודה בלי אינטרנט. זה החסם היחיד שהוא גם תיקון של פער אמיתי מול המתחרים, גם התשובה לשאלה על חנות האפליקציות, וגם חלק מהבידול: «עובדת גם בלי קליטה» היא הבטחה שאפשר לשווק, ואצל Wanderlog היא נמצאת מאחורי תשלום.</p>
+    <p>אחרי זה נעצור בשער 1, תראה את זה עובד במצב טיסה, ונחליט יחד על ה-AI.</p>
+    <div class="note">
+      <b>מה שלא אעשה בלי אישור מפורש ממך:</b> לא אפרסם שום כתובת ציבורית, לא אקדם, ולא אשתף קישור לאף אחד. הכל נשאר פרטי עד שתגיד אחרת.
+    </div>
+  </section>
+
+  <section class="sources">
+    <div class="sec-head"><span class="sec-num">מקורות</span></div>
+    <ul>
+      <li><a href="https://tripstone.app/blog/wanderlog-vs-tripit">Wanderlog vs TripIt 2026 — Real Verdict After 3 Months Testing</a></li>
+      <li><a href="https://blueplanit.co/blog/wanderlog-vs-tripit">Wanderlog vs TripIt: Which Travel Planning App Is Better in 2026</a></li>
+      <li><a href="https://layla.ai/blog/news-and-tips/ai-trip-planners-tier-list">Best AI Trip Planner: The Tier List</a></li>
+      <li><a href="https://tineo.ai/blog/best-ai-travel-planner-apps-2026/">Best AI Travel Planner Apps 2026</a></li>
+      <li><a href="https://www.capterra.com/p/148927/Travefy-Agent/">Travefy Agent — Pricing &amp; Alternatives 2026</a></li>
+      <li><a href="https://www.capterra.com/p/10023068/Vamoos/">Vamoos Travel App — Pricing &amp; Alternatives 2026</a></li>
+      <li><a href="https://passportnews.co.il/article/183535">אפליקציית Triplan — PassportNews</a></li>
+      <li><a href="https://www.gokosher.com/">goKosher — Kosher Travel Directory</a></li>
+      <li><a href="https://www.koshertraveldeals.com/blog/kosher-travel-apps-tools">The Best Apps and Tools for Kosher Travelers in 2026</a></li>
+      <li><a href="https://www.eketter.com/israel-outbound-travel-market-research">Israel Outbound Travel Market Research</a></li>
+      <li><a href="https://www.jpost.com/consumerism/article-849038">Dramatic Recovery in Outbound Tourism — Jerusalem Post</a></li>
+    </ul>
+  </section>
+
+</div>

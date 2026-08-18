@@ -1,0 +1,687 @@
+<title>TripCraft</title>
+<style>
+  /* ================= tokens — carried over from the app's own design system ========= */
+  :root {
+    --sea:        #17A2A8;
+    --sea-deep:   #0E7078;
+    --sea-wash:   #DFF2F2;
+    --coral:      #EE6C4D;
+    --coral-wash: #FCE6DF;
+    --sun:        #F2C14E;
+    --sun-wash:   #FCF0D6;
+
+    --ink:        #1E3040;
+    --ink-soft:   #52697A;
+    --ink-faint:  #8AA0AC;
+    --ground:     #F4FAFA;
+    --card:       #FFFFFF;
+    --sunk:       #E7F1F2;
+    --rule:       #D2E3E4;
+
+    --shadow-s: 0 1px 2px rgba(30,48,64,.06), 0 6px 18px -14px rgba(30,48,64,.45);
+    --shadow-l: 0 30px 70px -40px rgba(14,112,120,.55), 0 8px 30px -22px rgba(30,48,64,.4);
+
+    --s--1: clamp(.76rem, .74rem + .1vw, .82rem);
+    --s-0:  clamp(1rem, .97rem + .16vw, 1.08rem);
+    --s-1:  clamp(1.18rem, 1.1rem + .38vw, 1.42rem);
+    --s-2:  clamp(1.5rem, 1.32rem + .82vw, 2.1rem);
+    --s-3:  clamp(2.05rem, 1.6rem + 2.1vw, 3.6rem);
+
+    --font: "Segoe UI", "Heebo", "Assistant", system-ui, -apple-system, "Noto Sans Hebrew", sans-serif;
+    --mono: "Cascadia Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --sea: #3FC3C8; --sea-deep: #7FE0E2; --sea-wash: #143439;
+      --coral: #FF8A6B; --coral-wash: #3A2019;
+      --sun: #F5CE6B; --sun-wash: #362B14;
+      --ink: #E9F1F2; --ink-soft: #A8C0C6; --ink-faint: #7794A0;
+      --ground: #0E1A20; --card: #16262E; --sunk: #1C3038; --rule: #27424C;
+      --shadow-s: 0 1px 2px rgba(0,0,0,.5), 0 6px 18px -14px rgba(0,0,0,.9);
+      --shadow-l: 0 30px 70px -40px rgba(0,0,0,.95), 0 8px 30px -22px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --sea: #3FC3C8; --sea-deep: #7FE0E2; --sea-wash: #143439;
+    --coral: #FF8A6B; --coral-wash: #3A2019;
+    --sun: #F5CE6B; --sun-wash: #362B14;
+    --ink: #E9F1F2; --ink-soft: #A8C0C6; --ink-faint: #7794A0;
+    --ground: #0E1A20; --card: #16262E; --sunk: #1C3038; --rule: #27424C;
+    --shadow-s: 0 1px 2px rgba(0,0,0,.5), 0 6px 18px -14px rgba(0,0,0,.9);
+    --shadow-l: 0 30px 70px -40px rgba(0,0,0,.95), 0 8px 30px -22px rgba(0,0,0,.8);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font); font-size: var(--s-0); line-height: 1.6;
+    direction: rtl; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 68rem; margin-inline: auto; padding: 0 clamp(1rem,.6rem + 2vw,2.5rem) 5rem; }
+  section { padding-block: clamp(3rem, 2rem + 4vw, 5.5rem); }
+  h1,h2,h3 { margin: 0; text-wrap: balance; letter-spacing: -.02em; }
+  p { margin: 0; }
+
+  .eyebrow {
+    font-size: var(--s--1); font-weight: 800; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--sea);
+  }
+
+  /* ================= hero ================= */
+  .hero {
+    display: grid; gap: clamp(2rem,1rem + 4vw,4rem);
+    grid-template-columns: 1fr;
+    align-items: center;
+    padding-block: clamp(2.5rem,1.5rem + 4vw,5rem) clamp(3rem,2rem + 4vw,5.5rem);
+  }
+  @media (min-width: 62rem) { .hero { grid-template-columns: 1.05fr .95fr; } }
+  .hero-copy { display: flex; flex-direction: column; gap: 1.15rem; }
+  .brand { display: flex; align-items: center; gap: .6rem; font-weight: 800; font-size: var(--s-1); }
+  .brand .mark {
+    width: 2.2rem; height: 2.2rem; border-radius: .8rem; display: grid; place-items: center;
+    background: linear-gradient(140deg, var(--sun), var(--coral)); font-size: 1.15rem;
+  }
+  h1 { font-size: var(--s-3); line-height: 1.03; font-weight: 800; }
+  h1 .hl { color: var(--sea); }
+  .sub { font-size: var(--s-1); color: var(--ink-soft); max-width: 34ch; line-height: 1.5; }
+  .hero-tags { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .3rem; }
+  .tag {
+    font-size: var(--s--1); font-weight: 700; padding: .35rem .75rem; border-radius: 999px;
+    background: var(--sea-wash); color: var(--sea-deep);
+  }
+  .tag.c { background: var(--coral-wash); color: var(--coral); }
+  .tag.s { background: var(--sun-wash); color: #8A6412; }
+  :root[data-theme="dark"] .tag.s, :root:not([data-theme="light"]) .tag.s { color: var(--sun); }
+
+  /* ================= phone ================= */
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+  .phone {
+    width: min(20rem, 88vw); aspect-ratio: 375/760;
+    background: #0B1B22; border-radius: 2.6rem; padding: .55rem;
+    box-shadow: var(--shadow-l); position: relative; flex: none;
+  }
+  .screen {
+    width: 100%; height: 100%; border-radius: 2.1rem; overflow: hidden;
+    background: var(--ground); position: relative;
+    display: flex; flex-direction: column;
+  }
+  .notch {
+    position: absolute; top: .55rem; left: 50%; transform: translateX(-50%);
+    width: 5.5rem; height: 1.15rem; background: #0B1B22; border-radius: 0 0 .8rem .8rem; z-index: 5;
+  }
+  .statusbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: .5rem .95rem .2rem; font-size: .62rem; font-weight: 700; color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  .app-head {
+    display: flex; align-items: center; gap: .5rem; padding: .35rem .9rem .6rem;
+  }
+  .app-head .em {
+    width: 1.8rem; height: 1.8rem; border-radius: .6rem; display: grid; place-items: center;
+    background: linear-gradient(140deg, var(--sun), var(--coral)); font-size: .9rem;
+  }
+  .app-head .t { font-weight: 800; font-size: .78rem; line-height: 1.1; }
+  .app-head .s { font-size: .6rem; color: var(--ink-faint); }
+
+  .frames { position: relative; flex: 1; overflow: hidden; }
+  .frame {
+    position: absolute; inset: 0; padding: 0 .7rem .7rem;
+    overflow: hidden;
+    opacity: 0; transform: translateX(-8%); pointer-events: none;
+    transition: opacity .5s ease, transform .5s cubic-bezier(.3,.8,.4,1);
+    display: flex; flex-direction: column; gap: .45rem;
+  }
+  .frame.on { opacity: 1; transform: none; pointer-events: auto; }
+
+  .tabbar {
+    display: grid; grid-template-columns: repeat(5,1fr); gap: .1rem;
+    padding: .35rem .3rem .55rem; border-top: 1px solid var(--rule); background: var(--card);
+  }
+  .tabbar div { text-align: center; font-size: .52rem; color: var(--ink-faint); font-weight: 600; }
+  .tabbar div span { display: block; font-size: .8rem; line-height: 1.2; }
+  .tabbar div.act { color: var(--sea); }
+
+  /* mini components inside the phone */
+  .m-card { background: var(--card); border-radius: .85rem; padding: .55rem .65rem; box-shadow: var(--shadow-s); }
+  .m-hero {
+    border-radius: 1rem; padding: .75rem; color: #fff;
+    background: linear-gradient(135deg, var(--sea), #1E6E9C);
+  }
+  .m-hero .big { font-size: 1.75rem; font-weight: 800; line-height: 1; }
+  .m-hero .lbl { font-size: .58rem; opacity: .92; }
+  .m-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: .35rem; }
+  .m-stats .m-card { text-align: center; padding: .45rem .2rem; }
+  .m-stats b { display: block; font-size: .95rem; }
+  .m-stats span { font-size: .52rem; color: var(--ink-faint); }
+  .m-row { display: flex; align-items: flex-start; gap: .45rem; }
+  .m-ico {
+    width: 1.5rem; height: 1.5rem; border-radius: .5rem; flex: none;
+    display: grid; place-items: center; font-size: .75rem; background: var(--sea-wash);
+  }
+  .m-ico.coral { background: var(--coral-wash); }
+  .m-ico.sun { background: var(--sun-wash); }
+  .m-t { font-size: .64rem; font-weight: 700; line-height: 1.25; }
+  .m-d { font-size: .55rem; color: var(--ink-faint); line-height: 1.3; }
+  .m-time { font-size: .55rem; font-weight: 800; color: var(--sea); }
+  .m-sec { font-size: .6rem; font-weight: 800; padding: .15rem 0 .1rem; }
+  .m-pill {
+    display: inline-block; font-size: .5rem; font-weight: 700; padding: .1rem .4rem;
+    border-radius: 999px; background: var(--sea-wash); color: var(--sea-deep);
+  }
+  .m-pill.coral { background: var(--coral-wash); color: var(--coral); }
+  .m-pill.sun { background: var(--sun-wash); color: #8A6412; }
+  :root[data-theme="dark"] .m-pill.sun, :root:not([data-theme="light"]) .m-pill.sun { color: var(--sun); }
+  .m-route { display: flex; align-items: center; justify-content: space-between; gap: .3rem; }
+  .m-air { text-align: center; }
+  .m-air b { display: block; font-size: 1.05rem; font-weight: 800; line-height: 1; }
+  .m-air span { font-size: .5rem; color: var(--ink-faint); }
+  .m-line { flex: 1; height: 1px; background: var(--rule); position: relative; }
+  .m-line::after {
+    content: "✈"; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%,-50%) scaleX(-1); background: var(--ground);
+    padding: 0 .2rem; font-size: .6rem; color: var(--ink-faint);
+  }
+  .m-grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: .3rem; text-align: center; }
+  .m-grid3 b { font-size: .6rem; display: block; }
+  .m-grid3 span { font-size: .46rem; color: var(--ink-faint); }
+  .m-check { display: flex; align-items: center; gap: .4rem; }
+  .m-box {
+    width: .8rem; height: .8rem; border-radius: .25rem; border: 1.5px solid var(--rule); flex: none;
+  }
+  .m-box.done { background: var(--sea); border-color: var(--sea); position: relative; }
+  .m-box.done::after {
+    content: "✓"; position: absolute; inset: 0; display: grid; place-items: center;
+    color: #fff; font-size: .55rem; font-weight: 800;
+  }
+  .m-done-txt { text-decoration: line-through; opacity: .55; }
+
+  /* demo controls */
+  .controls { display: flex; align-items: center; gap: .8rem; }
+  .dots { display: flex; gap: .35rem; }
+  .dot {
+    width: .5rem; height: .5rem; border-radius: 50%; border: none; padding: 0;
+    background: var(--rule); cursor: pointer; transition: background .25s, transform .25s;
+  }
+  .dot.on { background: var(--sea); transform: scale(1.35); }
+  .dot:focus-visible, .playbtn:focus-visible, a:focus-visible { outline: 2px solid var(--sea); outline-offset: 3px; }
+  .playbtn {
+    border: 1px solid var(--rule); background: var(--card); color: var(--ink);
+    border-radius: 999px; padding: .3rem .85rem; font-size: var(--s--1); font-weight: 700;
+    cursor: pointer; font-family: inherit;
+  }
+  .caption { font-size: var(--s--1); color: var(--ink-faint); min-height: 1.4em; text-align: center; }
+
+  /* ================= generic blocks ================= */
+  .band { background: var(--card); border-radius: 1.25rem; padding: clamp(1.3rem,1rem + 2vw,2.5rem); }
+  .head { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1.6rem; }
+  h2 { font-size: var(--s-2); font-weight: 800; }
+  .lede { color: var(--ink-soft); max-width: 60ch; }
+
+  .cols { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 44rem) { .cols { grid-template-columns: repeat(3,1fr); } }
+  .col { background: var(--card); border-radius: 1rem; padding: 1.2rem; box-shadow: var(--shadow-s); display: flex; flex-direction: column; gap: .5rem; }
+  .col .n { font-size: 1.5rem; }
+  .col h3 { font-size: var(--s-1); font-weight: 800; }
+  .col p { font-size: var(--s--1); color: var(--ink-soft); }
+
+  .before-after { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 44rem) { .before-after { grid-template-columns: 1fr 1fr; } }
+  .ba { border-radius: 1rem; padding: 1.2rem; display: flex; flex-direction: column; gap: .6rem; }
+  .ba.now { background: var(--sunk); }
+  .ba.next { background: linear-gradient(140deg, var(--sea), var(--sea-deep)); color: #fff; }
+  .ba h3 { font-size: var(--s-0); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .ba ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .45rem; font-size: var(--s--1); }
+  .ba li { padding-inline-start: 1.2rem; position: relative; }
+  .ba.now li::before { content: "✕"; position: absolute; inset-inline-start: 0; color: var(--coral); font-weight: 800; }
+  .ba.next li::before { content: "✓"; position: absolute; inset-inline-start: 0; font-weight: 800; }
+
+  /* gallery */
+  .gallery { display: flex; gap: 1.5rem; overflow-x: auto; padding-block: .5rem 1.5rem; scroll-snap-type: x mandatory; }
+  .gallery > figure { margin: 0; scroll-snap-align: center; display: flex; flex-direction: column; gap: .7rem; align-items: center; }
+  .gallery figcaption { font-size: var(--s--1); color: var(--ink-soft); text-align: center; max-width: 20rem; }
+  .gallery figcaption b { display: block; color: var(--ink); font-size: var(--s-0); }
+  .phone.sm { width: 17rem; }
+
+  /* diff list */
+  .diffs { display: flex; flex-direction: column; gap: .8rem; }
+  .diff { display: grid; grid-template-columns: auto 1fr; gap: .2rem .9rem; background: var(--card); border-radius: 1rem; padding: 1rem 1.15rem; box-shadow: var(--shadow-s); }
+  .diff .ic { font-size: 1.3rem; grid-row: span 2; align-self: center; }
+  .diff h3 { font-size: var(--s-0); font-weight: 800; }
+  .diff p { font-size: var(--s--1); color: var(--ink-soft); max-width: 62ch; }
+
+  .cta { text-align: center; display: flex; flex-direction: column; gap: 1rem; align-items: center; }
+  .cta h2 { max-width: 22ch; }
+  .cta p { color: var(--ink-soft); max-width: 48ch; }
+  .btn {
+    display: inline-block; background: var(--coral); color: #fff; text-decoration: none;
+    font-weight: 800; padding: .8rem 2rem; border-radius: 999px; font-size: var(--s-0);
+    box-shadow: var(--shadow-s);
+  }
+  footer { text-align: center; color: var(--ink-faint); font-size: var(--s--1); padding-bottom: 2rem; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .frame { transition: none; }
+  }
+</style>
+
+<div class="wrap">
+
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="hero-copy">
+      <div class="brand"><span class="mark">🌴</span> TripCraft</div>
+      <h1>כל הטיול של המשפחה<br><span class="hl">במקום אחד.</span> גם בלי קליטה.</h1>
+      <p class="sub">אפליקציה בעברית שמנהלת טיול קבוצתי מהרגע שהזמנתם ועד שחזרתם — נוסעים, טיסות, מסמכים, מסלול וצ׳קליסט.</p>
+      <div class="hero-tags">
+        <span class="tag">עברית מלאה RTL</span>
+        <span class="tag c">כשרות ושבת</span>
+        <span class="tag s">קבוצות גדולות</span>
+        <span class="tag">למטיילים ולסוכנים</span>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="statusbar"><span>9:41</span><span>▮▮▮ ᯤ 100%</span></div>
+          <div class="app-head">
+            <span class="em">🏝️</span>
+            <span><span class="t">חופשה משפחתית ברודוס</span><span class="s">רודוס, יוון · 6 ימים</span></span>
+          </div>
+
+          <div class="frames" id="frames">
+
+            <!-- 1. HOME -->
+            <div class="frame on" data-cap="בית — ספירה לאחור, מה קורה היום, והטיסה הקרובה">
+              <div class="m-hero">
+                <div class="big">24</div>
+                <div class="lbl">ימים עד היציאה · 10 בספט׳</div>
+              </div>
+              <div class="m-stats">
+                <div class="m-card"><b>4</b><span>משתתפים</span></div>
+                <div class="m-card"><b>2</b><span>נסיעה</span></div>
+                <div class="m-card"><b>6</b><span>ימים</span></div>
+              </div>
+              <div class="m-sec">📣 עדכונים חשובים</div>
+              <div class="m-card m-row">
+                <span class="m-ico coral">🚨</span>
+                <span><span class="m-t">מפגש בשדה ב-03:40</span><span class="m-d">טרמינל 3, ליד דלפק אל על</span></span>
+              </div>
+              <div class="m-card m-row">
+                <span class="m-ico sun">🌧️</span>
+                <span><span class="m-t">צפי לגשם ביום רביעי</span><span class="m-d">שקלו להחליף לאקווריום</span></span>
+              </div>
+              <div class="m-sec">✈️ הטיסה הקרובה</div>
+              <div class="m-card">
+                <div class="m-route">
+                  <span class="m-air"><b>TLV</b><span>06:40</span></span>
+                  <span class="m-line"></span>
+                  <span class="m-air"><b>RHO</b><span>09:15</span></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. ITINERARY -->
+            <div class="frame" data-cap="מסלול — יום אחר יום, עם ניווט למפות בלחיצה">
+              <div class="m-sec">🗓️ יום 1 · יום חמישי, 10 בספטמבר</div>
+              <div class="m-card m-row">
+                <span class="m-ico">✈️</span>
+                <span><span class="m-time">06:40</span> <span class="m-t">טיסה לרודוס</span><span class="m-d">📍 נתב״ג</span><span class="m-pill">מפה</span></span>
+              </div>
+              <div class="m-card m-row">
+                <span class="m-ico">🚕</span>
+                <span><span class="m-time">10:00</span> <span class="m-t">איסוף רכב שכור</span><span class="m-d">📍 נמל התעופה</span><span class="m-pill">מפה</span></span>
+              </div>
+              <div class="m-card m-row">
+                <span class="m-ico">🏨</span>
+                <span><span class="m-time">14:00</span> <span class="m-t">צ׳ק אין ומנוחה בבריכה</span><span class="m-d">📍 Rodos Palace</span></span>
+              </div>
+              <div class="m-sec">🗓️ יום 2 · יום שישי, 11 בספטמבר</div>
+              <div class="m-card m-row">
+                <span class="m-ico">🎯</span>
+                <span><span class="m-time">09:30</span> <span class="m-t">העיר העתיקה של רודוס</span><span class="m-d">נוח לעגלה חלקית</span></span>
+              </div>
+              <div class="m-card m-row">
+                <span class="m-ico coral">🕯️</span>
+                <span><span class="m-t">כניסת שבת 19:12</span><span class="m-d">אין פעילות מתוכננת</span><span class="m-pill coral">שבת</span></span>
+              </div>
+            </div>
+
+            <!-- 3. SUGGESTIONS + KOSHER -->
+            <div class="frame" data-cap="מומלצים — מסוננים לפי גיל והעדפות, עם כשרות מובנית">
+              <div class="m-card" style="background:var(--sea-wash)">
+                <div class="m-t">🍽️ אוכל כשר ברודוס</div>
+                <div style="display:flex;gap:.25rem;margin-top:.3rem;flex-wrap:wrap">
+                  <span class="m-pill">מסעדות כשרות</span><span class="m-pill">בית חב״ד</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:.25rem;flex-wrap:wrap">
+                <span class="m-pill">הכל</span><span class="m-pill">🎡 אטרקציות</span><span class="m-pill">🍜 מסעדות</span>
+              </div>
+              <div class="m-card m-row">
+                <span class="m-ico">🎡</span>
+                <span><span class="m-t">האקרופוליס של לינדוס</span><span class="m-d">נוף לים. מומלץ בבוקר לפני החום</span><span class="m-pill">מפה</span> <span class="m-pill coral">♥ אהבתי</span></span>
+              </div>
+              <div class="m-card m-row">
+                <span class="m-ico">🎡</span>
+                <span><span class="m-t">עמק הפרפרים</span><span class="m-d">שביל מוצל — מושלם עם ילדים קטנים</span><span class="m-pill">מפה</span></span>
+              </div>
+              <div class="m-card m-row">
+                <span class="m-ico">🎡</span>
+                <span><span class="m-t">אקווריום רודוס</span><span class="m-d">פתרון מצוין ליום גשום</span><span class="m-pill">מפה</span></span>
+              </div>
+            </div>
+
+            <!-- 4. TRANSPORT -->
+            <div class="frame" data-cap="נסיעה — טרמינל, מושבים, כבודה וסטטוס טיסה חי">
+              <div class="m-sec">✈️ טיסות</div>
+              <div class="m-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.35rem">
+                  <span class="m-pill">הלוך</span><span class="m-t">אל על LY381</span>
+                </div>
+                <div class="m-route">
+                  <span class="m-air"><b>TLV</b><span>06:40</span><span>טרמינל 3</span></span>
+                  <span class="m-line"></span>
+                  <span class="m-air"><b>RHO</b><span>09:15</span><span>טרמינל 1</span></span>
+                </div>
+                <div class="m-grid3" style="margin-top:.5rem;border-top:1px solid var(--rule);padding-top:.4rem">
+                  <span><b>ABC123</b><span>אסמכתה</span></span>
+                  <span><b>12A-12D</b><span>מושבים</span></span>
+                  <span><b>2×23 ק״ג</b><span>כבודה</span></span>
+                </div>
+                <div style="margin-top:.4rem"><span class="m-pill">סטטוס טיסה</span> <span class="m-pill">שדה TLV</span></div>
+              </div>
+              <div class="m-sec">🏨 לינה</div>
+              <div class="m-card">
+                <div class="m-t">Rodos Palace Resort</div>
+                <div class="m-d">Iraklidon Ave, Ialysos</div>
+                <div style="margin-top:.3rem"><span class="m-pill">מפה</span> <span class="m-pill coral">ניווט</span> <span class="m-pill">חיוג</span></div>
+              </div>
+            </div>
+
+            <!-- 5. PREFLIGHT -->
+            <div class="frame" data-cap="צ׳קליסט לפני טיסה — נבנה לבד לפי מי נוסע איתך">
+              <div class="m-card m-row" style="background:var(--sea-wash)">
+                <span class="m-ico">🛫</span>
+                <span><span class="m-t">מה לעשות לפני הטיסה</span><span class="m-d">נבנה לפי הנוסעים והטיסות שלך</span></span>
+              </div>
+              <div class="m-sec"><span class="m-pill">שבוע לפני</span></div>
+              <div class="m-card m-check"><span class="m-box done"></span><span class="m-t m-done-txt">דרכונים בתוקף (6+ חודשים)</span></div>
+              <div class="m-card m-check"><span class="m-box done"></span><span class="m-t m-done-txt">ארוחה כשרה בטיסה</span></div>
+              <div class="m-card m-check"><span class="m-box"></span><span class="m-t">סיוע נגישות לסבתא רבקה</span></div>
+              <div class="m-card m-check"><span class="m-box"></span><span class="m-t">עריסה לאיתי (בן 3)</span></div>
+              <div class="m-sec"><span class="m-pill">יום לפני</span></div>
+              <div class="m-card m-check"><span class="m-box"></span><span class="m-t">צ׳ק-אין אונליין</span></div>
+              <div class="m-card m-check"><span class="m-box"></span><span class="m-t">תיק יד לילדים</span></div>
+            </div>
+
+          </div>
+
+          <div class="tabbar">
+            <div class="act"><span>🏠</span>בית</div>
+            <div><span>🗓️</span>מסלול</div>
+            <div><span>✨</span>מומלצים</div>
+            <div><span>📄</span>מסמכים</div>
+            <div><span>✅</span>צ׳קליסט</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="playbtn" id="play" aria-label="השהיית ההדגמה">⏸ השהה</button>
+        <div class="dots" id="dots" role="tablist" aria-label="מסכי ההדגמה"></div>
+      </div>
+      <p class="caption" id="cap"></p>
+    </div>
+  </section>
+
+  <!-- ================= PROBLEM ================= -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">הבעיה</span>
+      <h2>טיול של 12 נפשות מנוהל היום באקסל ובוואטסאפ</h2>
+      <p class="lede">שלוש משפחות, מסבתא עד פעוט. אחד מחזיק את הדרכונים, אחר את אישור המלון, ומישהו שואל בקבוצה בפעם השלישית מתי הטיסה.</p>
+    </div>
+    <div class="before-after">
+      <div class="ba now">
+        <h3>בלי TripCraft</h3>
+        <ul>
+          <li>אישורים פזורים בין מיילים, צילומי מסך וקבוצה</li>
+          <li>אף אחד לא בטוח מה התוכנית למחר</li>
+          <li>מחפשים אוכל כשר על הבטן, ברחוב, בלי קליטה</li>
+          <li>שבת נכנסת באמצע הטיול ואף אחד לא תכנן לזה</li>
+          <li>הסוכן שולח PDF שאף אחד לא פותח שוב</li>
+        </ul>
+      </div>
+      <div class="ba next">
+        <h3>עם TripCraft</h3>
+        <ul>
+          <li>כל המסמכים במקום אחד, לפי נוסע</li>
+          <li>מסך אחד שאומר מה קורה היום</li>
+          <li>כשרות ובית חב״ד בתוך היום הרלוונטי</li>
+          <li>זמני שבת לפי היעד, בתוך המסלול</li>
+          <li>הסוכן שולח קישור חי שמתעדכן</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= PILLARS ================= -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">מה זה עושה</span>
+      <h2>שלושה דברים, טוב</h2>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <span class="n">👨‍👩‍👧‍👦</span>
+        <h3>מנהל את הקבוצה</h3>
+        <p>שם, גיל והעדפות לכל נוסע. מדביקים רשימה או מעלים אקסל — 12 אנשים נכנסים בבת אחת במקום להקליד אחד-אחד. צ׳קליסט אישי לכל נוסע לצד המשותף.</p>
+      </div>
+      <div class="col">
+        <span class="n">📍</span>
+        <h3>מלווה בשטח</h3>
+        <p>מה קורה היום, מתי הטיסה, איפה המלון. ניווט בלחיצה לכל אתר, מסעדה ונקודת איסוף. מסמכים, דרכונים וביטוח זמינים ברגע שצריך אותם.</p>
+      </div>
+      <div class="col">
+        <span class="n">🕯️</span>
+        <h3>מבין את המטייל הישראלי</h3>
+        <p>עברית מלאה, לא תרגום. כשרות ובית חב״ד לפי היום והמקום. זמני שבת לפי היעד. ארוחה כשרה בטיסה עולה בצ׳קליסט לבד.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SCREENS ================= -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">המסכים</span>
+      <h2>מהאשף ועד הקישור ללקוח</h2>
+      <p class="lede">גלול לצדדים כדי לראות עוד.</p>
+    </div>
+    <div class="gallery">
+
+      <figure>
+        <div class="phone sm">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span>▮▮▮ ᯤ</span></div>
+            <div style="padding:.6rem .8rem;display:flex;flex-direction:column;gap:.5rem;flex:1">
+              <div style="text-align:center;padding:.8rem 0 .4rem">
+                <div style="font-size:2rem">🌴</div>
+                <div style="font-weight:800;font-size:.95rem">TripCraft</div>
+                <div style="font-size:.58rem;color:var(--ink-faint)">בונים, מארגנים ומלווים כל טיול</div>
+              </div>
+              <div style="display:flex;gap:.25rem;background:var(--sunk);border-radius:.6rem;padding:.15rem">
+                <div style="flex:1;text-align:center;font-size:.6rem;font-weight:700;background:var(--card);border-radius:.45rem;padding:.25rem">כניסה</div>
+                <div style="flex:1;text-align:center;font-size:.6rem;color:var(--ink-faint);padding:.25rem">הרשמה</div>
+              </div>
+              <div><div style="font-size:.55rem;font-weight:700;margin-bottom:.15rem">אימייל</div><div style="height:1.6rem;border:1px solid var(--rule);border-radius:.5rem;background:var(--card)"></div></div>
+              <div><div style="font-size:.55rem;font-weight:700;margin-bottom:.15rem">סיסמה</div><div style="height:1.6rem;border:1px solid var(--rule);border-radius:.5rem;background:var(--card)"></div></div>
+              <div style="background:var(--sea);color:#fff;text-align:center;font-size:.65rem;font-weight:800;border-radius:.6rem;padding:.45rem">כניסה</div>
+              <div style="text-align:center;font-size:.5rem;color:var(--ink-faint)">או</div>
+              <div style="border:1px solid var(--rule);text-align:center;font-size:.62rem;font-weight:700;border-radius:.6rem;padding:.45rem;background:var(--card)">המשך עם Google</div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>התחברות</b>מייל וסיסמה או Google. כל משתמש רואה רק את הטיולים שלו.</figcaption>
+      </figure>
+
+      <figure>
+        <div class="phone sm">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span>▮▮▮ ᯤ</span></div>
+            <div style="padding:.6rem .8rem;display:flex;flex-direction:column;gap:.45rem;flex:1">
+              <div style="font-size:.7rem;font-weight:800">משתתפים (11)</div>
+              <div style="border:1.5px dashed var(--sea);background:var(--sea-wash);border-radius:.8rem;padding:.55rem;display:flex;gap:.45rem;align-items:center">
+                <span class="m-ico">👥</span>
+                <span><span class="m-t">הוספת קבוצה בבת אחת</span><span class="m-d">רשימה, Excel, או סריקת דרכונים</span></span>
+              </div>
+              <div class="m-card m-row"><span class="m-ico coral">ד</span><span><span class="m-t">דני כהן</span><span class="m-d">גיל 41 · 🍽️ 🏛️ ⚽</span></span></div>
+              <div class="m-card m-row"><span class="m-ico coral">מ</span><span><span class="m-t">מיכל כהן</span><span class="m-d">גיל 39 · 🏖️ 🛍️</span></span></div>
+              <div class="m-card m-row"><span class="m-ico coral">י</span><span><span class="m-t">יעל כהן</span><span class="m-d">גיל 8 · 🏖️ 🍽️</span></span></div>
+              <div class="m-card m-row"><span class="m-ico coral">א</span><span><span class="m-t">איתי כהן</span><span class="m-d">גיל 3 · 🏖️</span></span></div>
+              <div class="m-card m-row"><span class="m-ico coral">ר</span><span><span class="m-t">סבתא רבקה</span><span class="m-d">גיל 70 · ♿ כשר</span></span></div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>משתתפים</b>מדביקים רשימה או מעלים אקסל — 11 נוסעים נכנסו בהדבקה אחת.</figcaption>
+      </figure>
+
+      <figure>
+        <div class="phone sm">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span>▮▮▮ ᯤ</span></div>
+            <div style="padding:.6rem .8rem;display:flex;flex-direction:column;gap:.45rem;flex:1">
+              <div style="font-size:.7rem;font-weight:800">מסמכים וקבצים</div>
+              <div style="display:flex;gap:.25rem;flex-wrap:wrap">
+                <span class="m-pill">הכל</span><span class="m-pill">✈️ טיסה</span><span class="m-pill">🛂 דרכון</span>
+              </div>
+              <div class="m-card m-row"><span class="m-ico">✈️</span><span><span class="m-t">כרטיסי טיסה — כל המשפחה</span><span class="m-d">כרטיס טיסה</span></span></div>
+              <div class="m-card m-row"><span class="m-ico">🏨</span><span><span class="m-t">אישור מלון Rodos Palace</span><span class="m-d">אישור מלון</span></span></div>
+              <div class="m-card m-row"><span class="m-ico sun">🛡️</span><span><span class="m-t">פוליסת ביטוח נסיעות</span><span class="m-d">ביטוח</span></span></div>
+              <div class="m-card m-row"><span class="m-ico coral">🛂</span><span><span class="m-t">דרכון — יעל</span><span class="m-d">דרכון · יעל כהן</span></span></div>
+              <div style="background:var(--sea);color:#fff;text-align:center;font-size:.62rem;font-weight:800;border-radius:.6rem;padding:.45rem;margin-top:auto">📷 צילום מסמך</div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>מסמכים</b>מצלמים או מעלים. משויך לנוסע ולקטגוריה, פרטי לחלוטין.</figcaption>
+      </figure>
+
+      <figure>
+        <div class="phone sm">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span>▮▮▮ ᯤ</span></div>
+            <div style="padding:.6rem .8rem;display:flex;flex-direction:column;gap:.45rem;flex:1">
+              <div style="background:linear-gradient(135deg,var(--sun),var(--coral));border-radius:.8rem;padding:.7rem;color:#fff">
+                <div style="font-size:.55rem;opacity:.9">מטעם</div>
+                <div style="font-weight:800;font-size:.8rem">סוכנות הנסיעות שלך</div>
+              </div>
+              <div style="font-size:.65rem;font-weight:800">חופשה משפחתית ברודוס</div>
+              <div class="m-d">10–15 בספטמבר 2026 · 6 ימים</div>
+              <div class="m-card m-row"><span class="m-ico coral">📣</span><span><span class="m-t">מפגש בשדה ב-03:40</span><span class="m-d">טרמינל 3</span></span></div>
+              <div class="m-card"><div class="m-route"><span class="m-air"><b>TLV</b><span>06:40</span></span><span class="m-line"></span><span class="m-air"><b>RHO</b><span>09:15</span></span></div></div>
+              <div class="m-card m-row"><span class="m-ico">🗓️</span><span><span class="m-t">יום 1 · טיסה ואיסוף רכב</span></span></div>
+              <div class="m-card m-row"><span class="m-ico">🗓️</span><span><span class="m-t">יום 2 · העיר העתיקה</span></span></div>
+              <div style="text-align:center;font-size:.5rem;color:var(--ink-faint);margin-top:auto">צפייה בלבד · נבנה עם TripCraft 🌴</div>
+            </div>
+          </div>
+        </div>
+        <figcaption><b>קישור ללקוח</b>סוכן שולח קישור ממותג לצפייה בלבד. מסמכים נשארים פרטיים.</figcaption>
+      </figure>
+
+    </div>
+  </section>
+
+  <!-- ================= DIFFERENTIATORS ================= -->
+  <section class="band">
+    <div class="head">
+      <span class="eyebrow">הבידול</span>
+      <h2>מה שאף אפליקציית טיולים אחרת לא עושה</h2>
+      <p class="lede">יש הרבה מתכנני טיולים. אין אחד שבנוי למטייל הישראלי.</p>
+    </div>
+    <div class="diffs">
+      <div class="diff">
+        <span class="ic">🕯️</span>
+        <h3>שבת וחג בתוך המסלול</h3>
+        <p>זמני כניסה ויציאה לפי היעד והתאריך, והתרעה כשמתוכננת פעילות בשבת. מאגרי הכשרות בעולם הם חיפושים נפרדים — אף אחד מהם לא יודע מה התוכנית שלכם ליום שלישי.</p>
+      </div>
+      <div class="diff">
+        <span class="ic">🍽️</span>
+        <h3>כשרות ברמת היום, לא ברמת היעד</h3>
+        <p>לא ״מסעדות כשרות ברודוס״ אלא ״היום אתם בלינדוס — הנה מה שכשר בטווח הליכה״.</p>
+      </div>
+      <div class="diff">
+        <span class="ic">👨‍👩‍👧‍👦</span>
+        <h3>קבוצות גדולות ורב-משפחתיות</h3>
+        <p>הכלים בעולם בנויים ל״אני״ או ל״לקוח״. שלוש משפחות, 12 נפשות, מסבתא עד פעוט — זה אופי הטיול הישראלי, וזה מה שנבנה כאן.</p>
+      </div>
+      <div class="diff">
+        <span class="ic">📶</span>
+        <h3>עובד בלי קליטה</h3>
+        <p>נחתתם, אין דאטה, וצריך את כתובת המלון. אצל המתחרים זה פיצ׳ר בתשלום. כאן זו ההבטחה.</p>
+      </div>
+      <div class="diff">
+        <span class="ic">🏷️</span>
+        <h3>גם למטיילים וגם לסוכנים</h3>
+        <p>אותה אפליקציה. משפחה מנהלת את עצמה; סוכן בונה, ממתג ושולח קישור חי ללקוח — ואז משכפל אותו כתבנית לטיול הבא.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CTA ================= -->
+  <section class="cta">
+    <span class="eyebrow">מחפש שותפים ראשונים</span>
+    <h2>סוכני נסיעות — אני מחפש 5 שיעצבו את זה איתי</h2>
+    <p>המוצר עובד. עכשיו אני רוצה לבנות את הגרסה הבאה מול אנשים שמכינים טיולים ללקוחות כל יום, ולא מתוך ניחוש.</p>
+    <a class="btn" href="mailto:roi.asado@gmail.com?subject=TripCraft%20-%20מתעניין">דברו איתי</a>
+  </section>
+
+  <footer>TripCraft · נבנה בישראל 🌴</footer>
+</div>
+
+<script>
+  (function () {
+    var frames = Array.prototype.slice.call(document.querySelectorAll('#frames .frame'));
+    var dotsBox = document.getElementById('dots');
+    var cap = document.getElementById('cap');
+    var playBtn = document.getElementById('play');
+    var i = 0, timer = null;
+    var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var playing = !reduced;
+
+    frames.forEach(function (f, n) {
+      var b = document.createElement('button');
+      b.className = 'dot' + (n === 0 ? ' on' : '');
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-label', 'מסך ' + (n + 1));
+      b.addEventListener('click', function () { stop(); show(n); });
+      dotsBox.appendChild(b);
+    });
+    var dots = Array.prototype.slice.call(dotsBox.children);
+
+    function show(n) {
+      i = (n + frames.length) % frames.length;
+      frames.forEach(function (f, k) { f.classList.toggle('on', k === i); });
+      dots.forEach(function (d, k) { d.classList.toggle('on', k === i); });
+      cap.textContent = frames[i].getAttribute('data-cap') || '';
+    }
+    function start() {
+      playing = true;
+      playBtn.textContent = '⏸ השהה';
+      playBtn.setAttribute('aria-label', 'השהיית ההדגמה');
+      clearInterval(timer);
+      timer = setInterval(function () { show(i + 1); }, 3400);
+    }
+    function stop() {
+      playing = false;
+      playBtn.textContent = '▶ הפעל';
+      playBtn.setAttribute('aria-label', 'הפעלת ההדגמה');
+      clearInterval(timer);
+    }
+    playBtn.addEventListener('click', function () { playing ? stop() : start(); });
+
+    show(0);
+    if (playing) start(); else stop();
+  })();
+</script>
