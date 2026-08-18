@@ -1,0 +1,311 @@
+<title>TripCraft Marks</title>
+<style>
+  :root {
+    --sea:   #17A2A8;
+    --deep:  #0E7078;
+    --coral: #EE6C4D;
+    --sun:   #F2C14E;
+
+    --ink:      #17272F;
+    --ink-soft: #55707C;
+    --ink-faint:#8AA3AD;
+    --ground:   #F3F8F8;
+    --card:     #FFFFFF;
+    --sunk:     #E6F0F1;
+    --rule:     #D5E4E5;
+
+    --shadow: 0 1px 2px rgba(23,39,47,.05), 0 10px 28px -22px rgba(23,39,47,.6);
+
+    --s--1: clamp(.76rem, .74rem + .1vw, .82rem);
+    --s-0:  clamp(1rem, .97rem + .15vw, 1.06rem);
+    --s-1:  clamp(1.15rem, 1.08rem + .32vw, 1.35rem);
+    --s-2:  clamp(1.45rem, 1.3rem + .7vw, 2rem);
+    --s-3:  clamp(1.9rem, 1.55rem + 1.6vw, 3rem);
+
+    --font: "Segoe UI", "Heebo", "Assistant", system-ui, -apple-system, "Noto Sans Hebrew", sans-serif;
+    --mono: "Cascadia Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --sea: #3EC4C9; --deep: #86E2E4; --coral: #FF8A6B; --sun: #F5CE6B;
+      --ink: #E8F1F2; --ink-soft: #A6BFC5; --ink-faint: #78949F;
+      --ground: #0D181D; --card: #15242B; --sunk: #1B2E36; --rule: #274049;
+      --shadow: 0 1px 2px rgba(0,0,0,.55), 0 10px 28px -22px rgba(0,0,0,.95);
+    }
+  }
+  :root[data-theme="dark"] {
+    --sea: #3EC4C9; --deep: #86E2E4; --coral: #FF8A6B; --sun: #F5CE6B;
+    --ink: #E8F1F2; --ink-soft: #A6BFC5; --ink-faint: #78949F;
+    --ground: #0D181D; --card: #15242B; --sunk: #1B2E36; --rule: #274049;
+    --shadow: 0 1px 2px rgba(0,0,0,.55), 0 10px 28px -22px rgba(0,0,0,.95);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font); font-size: var(--s-0); line-height: 1.6;
+    direction: rtl; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 62rem; margin-inline: auto; padding: clamp(2rem,1.2rem + 3vw,4rem) clamp(1rem,.6rem + 2vw,2.5rem) 6rem; display: flex; flex-direction: column; gap: clamp(2.5rem,2rem + 2vw,4rem); }
+  h1,h2,h3 { margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+  p { margin: 0; }
+  .eyebrow { font-size: var(--s--1); font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: var(--sea); }
+  h1 { font-size: var(--s-3); font-weight: 800; line-height: 1.05; }
+  .lede { color: var(--ink-soft); max-width: 58ch; }
+  h2 { font-size: var(--s-2); font-weight: 800; }
+
+  /* ---------- mark colouring hooks ---------- */
+  .mk { --a: var(--sea); --b: var(--coral); --c: var(--sun); --hole: var(--card); display: block; }
+  .mk .a { fill: var(--a); }
+  .mk .b { fill: var(--b); }
+  .mk .c { fill: var(--c); }
+  .mk .sa { stroke: var(--a); fill: none; }
+  .mk .sb { stroke: var(--b); fill: none; }
+
+  /* ---------- concept card ---------- */
+  .concept { background: var(--card); border-radius: 1.25rem; box-shadow: var(--shadow); overflow: hidden; }
+  .concept-top { display: grid; grid-template-columns: 1fr; gap: 1.5rem; padding: clamp(1.25rem,1rem + 1.5vw,2rem); align-items: center; }
+  @media (min-width: 48rem) { .concept-top { grid-template-columns: 11rem 1fr; } }
+  .big-mark { display: grid; place-items: center; background: var(--sunk); border-radius: 1rem; padding: 1.25rem; }
+  .big-mark .mk { width: 100%; max-width: 8rem; height: auto; --hole: var(--sunk); }
+  .concept-copy { display: flex; flex-direction: column; gap: .55rem; }
+  .cname { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+  .cname h3 { font-size: var(--s-1); font-weight: 800; }
+  .cname .tag { font-family: var(--mono); font-size: .68rem; letter-spacing: .06em; color: var(--ink-faint); border: 1px solid var(--rule); border-radius: 2px; padding: .05rem .4rem; }
+  .concept-copy p { font-size: var(--s--1); color: var(--ink-soft); max-width: 60ch; }
+  .verdict { font-size: var(--s--1); }
+  .verdict b { color: var(--ink); }
+  .verdict.warn b { color: var(--coral); }
+
+  /* ---------- usage strip ---------- */
+  .usage { display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: flex-end; padding: 1.1rem clamp(1.25rem,1rem + 1.5vw,2rem) 1.4rem; border-top: 1px solid var(--rule); background: var(--sunk); }
+  .usage .mk { --hole: var(--sunk); }   /* default for this strip; the icon and mono boxes override below */
+  .u { display: flex; flex-direction: column; gap: .45rem; align-items: center; }
+  .u-lbl { font-family: var(--mono); font-size: .62rem; color: var(--ink-faint); letter-spacing: .05em; }
+
+  .icon-app {
+    width: 4.5rem; height: 4.5rem; border-radius: 1.1rem; display: grid; place-items: center;
+    background: linear-gradient(145deg, var(--sea), var(--deep));
+    box-shadow: var(--shadow);
+  }
+  .icon-app .mk { width: 60%; height: auto; --a: #fff; --b: #fff; --c: #fff; --hole: var(--deep); }
+  .icon-app.warm { background: linear-gradient(145deg, var(--sun), var(--coral)); }
+  .icon-app.warm .mk { --hole: var(--coral); }
+
+  .fav { display: flex; gap: .6rem; align-items: flex-end; }
+  .fav .mk { height: auto; }
+  .f32 { width: 2rem; } .f16 { width: 1rem; }
+
+  .mono-box { display: grid; place-items: center; width: 4.5rem; height: 4.5rem; border-radius: .8rem; background: var(--ink); }
+  .mono-box .mk { width: 60%; --a: var(--ground); --b: var(--ground); --c: var(--ground); --hole: var(--ink); }
+
+  /* ---------- lockup ---------- */
+  .lockup { display: flex; align-items: center; gap: .7rem; }
+  .lockup .mk { width: 2.6rem; height: auto; flex: none; }
+  .lockup .words { display: flex; flex-direction: column; line-height: 1.1; }
+  .lockup .wm { font-size: 1.35rem; font-weight: 800; letter-spacing: -.03em; }
+  .lockup .wm span { color: var(--sea); }
+  .lockup .tl { font-size: .66rem; color: var(--ink-faint); font-weight: 600; }
+
+  /* ---------- recommendation ---------- */
+  .rec { background: linear-gradient(140deg, var(--sea), var(--deep)); color: #fff; border-radius: 1.25rem; padding: clamp(1.4rem,1.1rem + 2vw,2.5rem); display: flex; flex-direction: column; gap: 1rem; }
+  .rec .eyebrow { color: #fff; opacity: .85; }
+  .rec h2 { color: #fff; }
+  .rec p { max-width: 56ch; }
+  .rec .row { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center; margin-top: .4rem; }
+  .rec .chip { background: rgba(255,255,255,.16); border-radius: .8rem; padding: 1rem; display: grid; place-items: center; }
+  .rec .chip .mk { width: 4rem; --a: #fff; --b: #fff; --c: #fff; --hole: var(--deep); }
+
+  .note { background: var(--card); border-radius: 1rem; padding: 1.1rem 1.25rem; font-size: var(--s--1); color: var(--ink-soft); box-shadow: var(--shadow); }
+  .note b { color: var(--ink); }
+  .note ul { margin: .5rem 0 0; padding-inline-start: 1.1rem; display: flex; flex-direction: column; gap: .3rem; }
+</style>
+
+<!-- ============ mark definitions ============ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+
+    <!-- 1 · Route & Company: three travellers of different sizes on one rising path -->
+    <symbol id="m-route" viewBox="0 0 64 64">
+      <path class="sa" d="M13 51C13 38 25 39 29 30c4-9 14-8 20-9"
+            stroke-width="4.5" stroke-linecap="round"/>
+      <circle class="a" cx="13" cy="51" r="7"/>
+      <circle class="b" cx="27" cy="34.5" r="5"/>
+      <circle class="c" cx="38" cy="24" r="3.8"/>
+      <path class="b" d="M49 8c-5 0-9 4-9 9 0 6.8 9 14 9 14s9-7.2 9-14c0-5-4-9-9-9z"/>
+      <circle class="a" cx="49" cy="17" r="3.4"/>
+    </symbol>
+
+    <!-- 2 · Pin Cluster: a map pin whose head holds a group -->
+    <symbol id="m-pin" viewBox="0 0 64 64">
+      <path class="a" d="M32 5C20.4 5 11 14.4 11 26c0 14.7 21 33 21 33s21-18.3 21-33C53 14.4 43.6 5 32 5z"/>
+      <circle class="b" cx="25" cy="24" r="6"/>
+      <circle class="c" cx="39" cy="24" r="6"/>
+      <circle cx="32" cy="30" r="6.5" fill="var(--hole)"/>
+      <circle class="a" cx="32" cy="30" r="3.6"/>
+    </symbol>
+
+    <!-- 3 · Sun & Horizon: a route that doubles as a coastline under a rising sun -->
+    <symbol id="m-sun" viewBox="0 0 64 64">
+      <circle class="c" cx="32" cy="24" r="13"/>
+      <path class="b" d="M32 11a13 13 0 0 1 0 26z"/>
+      <path class="sa" d="M6 45c7 0 9-5 16-5s9 5 16 5 9-5 16-5"
+            stroke-width="4.5" stroke-linecap="round"/>
+      <path class="sa" d="M12 55c6 0 8-4 14-4s8 4 14 4 8-4 14-4"
+            stroke-width="3.5" stroke-linecap="round" opacity=".45"/>
+    </symbol>
+
+    <!-- 4 · Day Stack: the itinerary itself — stacked days with a marked one -->
+    <symbol id="m-days" viewBox="0 0 64 64">
+      <rect class="a" x="8" y="12" width="48" height="9" rx="4.5"/>
+      <rect class="b" x="8" y="27.5" width="48" height="9" rx="4.5"/>
+      <rect class="a" x="8" y="43" width="30" height="9" rx="4.5" opacity=".45"/>
+      <circle class="c" cx="49" cy="47.5" r="8"/>
+      <path class="a" d="M45.6 47.4l2.3 2.3 4.6-4.7" stroke="var(--a)" stroke-width="2.6"
+            fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+
+    <!-- 5 · Compass Craft: a needle built from two halves, one sea one coral -->
+    <symbol id="m-compass" viewBox="0 0 64 64">
+      <circle class="sa" cx="32" cy="32" r="24" stroke-width="4.5"/>
+      <path class="b" d="M32 32L44 20 36 34z"/>
+      <path class="a" d="M32 32L20 44 28 30z"/>
+      <circle class="c" cx="32" cy="32" r="3.6"/>
+    </symbol>
+
+  </defs>
+</svg>
+
+<div class="wrap">
+
+  <header style="display:flex;flex-direction:column;gap:.9rem">
+    <span class="eyebrow">זהות חזותית</span>
+    <h1>חמישה כיווני לוגו</h1>
+    <p class="lede">כל אחד מוצג איך שהוא באמת ייראה: אייקון אפליקציה, פאביקון ב-16 פיקסל, גרסת צבע אחד, ולוקאפ עם השם. אלו שלושת המבחנים שרוב הלוגואים נופלים בהם — לא ההגדלה.</p>
+  </header>
+
+  <!-- ============ 1 ============ -->
+  <div class="concept">
+    <div class="concept-top">
+      <div class="big-mark"><svg class="mk" viewBox="0 0 64 64" role="img" aria-label="לוגו: מסלול עולה עם שלושה נוסעים וסיכת יעד"><use href="#m-route"/></svg></div>
+      <div class="concept-copy">
+        <div class="cname"><h3>מסלול וחבורה</h3><span class="tag">01</span></div>
+        <p>שלושה עיגולים בגדלים שונים — מבוגר, ילד, פעוט — נעים על מסלול אחד שמסתיים בסיכת יעד. זה הסיפור של המוצר בדיוק: לא מטייל בודד, אלא קבוצה בגדלים שונים על מסלול משותף.</p>
+        <p class="verdict"><b>למה זה חזק:</b> היחיד מהחמישה שמקודד את הבידול האמיתי — טיול קבוצתי רב-דורי. גם קריא בקטן.</p>
+        <p class="verdict warn"><b>הסיכון:</b> הכי מורכב מבין החמישה. ב-16 פיקסל הנקודה הקטנה כמעט נעלמת.</p>
+      </div>
+    </div>
+    <div class="usage">
+      <div class="u"><div class="icon-app"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-route"/></svg></div><span class="u-lbl">אייקון</span></div>
+      <div class="u"><div class="icon-app warm"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-route"/></svg></div><span class="u-lbl">חלופה חמה</span></div>
+      <div class="u"><div class="fav"><svg class="mk f32" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-route"/></svg><svg class="mk f16" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-route"/></svg></div><span class="u-lbl">32 / 16 פיקסל</span></div>
+      <div class="u"><div class="mono-box"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-route"/></svg></div><span class="u-lbl">צבע אחד</span></div>
+      <div class="u"><div class="lockup"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-route"/></svg><span class="words"><span class="wm">Trip<span>Craft</span></span><span class="tl">מלווה הטיולים שלך</span></span></div><span class="u-lbl">לוקאפ</span></div>
+    </div>
+  </div>
+
+  <!-- ============ 2 ============ -->
+  <div class="concept">
+    <div class="concept-top">
+      <div class="big-mark"><svg class="mk" viewBox="0 0 64 64" role="img" aria-label="לוגו: סיכת מפה שבתוכה קבוצת אנשים"><use href="#m-pin"/></svg></div>
+      <div class="concept-copy">
+        <div class="cname"><h3>סיכה עם חבורה</h3><span class="tag">02</span></div>
+        <p>סיכת מפה מוכרת, אבל במקום נקודה במרכז יש שלושה ראשים חופפים. המסר: מקום אחד, כמה אנשים.</p>
+        <p class="verdict"><b>למה זה חזק:</b> הכי קריא בקטן מכל החמישה. הצללית של סיכה מזוהה מיד גם בגודל של פאביקון.</p>
+        <p class="verdict warn"><b>הסיכון:</b> סיכת מפה היא הקלישאה הכי שחוקה בקטגוריה. תיראה כמו עוד אפליקציית מפות.</p>
+      </div>
+    </div>
+    <div class="usage">
+      <div class="u"><div class="icon-app"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-pin"/></svg></div><span class="u-lbl">אייקון</span></div>
+      <div class="u"><div class="icon-app warm"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-pin"/></svg></div><span class="u-lbl">חלופה חמה</span></div>
+      <div class="u"><div class="fav"><svg class="mk f32" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-pin"/></svg><svg class="mk f16" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-pin"/></svg></div><span class="u-lbl">32 / 16 פיקסל</span></div>
+      <div class="u"><div class="mono-box"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-pin"/></svg></div><span class="u-lbl">צבע אחד</span></div>
+      <div class="u"><div class="lockup"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-pin"/></svg><span class="words"><span class="wm">Trip<span>Craft</span></span><span class="tl">מלווה הטיולים שלך</span></span></div><span class="u-lbl">לוקאפ</span></div>
+    </div>
+  </div>
+
+  <!-- ============ 3 ============ -->
+  <div class="concept">
+    <div class="concept-top">
+      <div class="big-mark"><svg class="mk" viewBox="0 0 64 64" role="img" aria-label="לוגו: שמש מעל קו חוף גלי"><use href="#m-sun"/></svg></div>
+      <div class="concept-copy">
+        <div class="cname"><h3>שמש וחוף</h3><span class="tag">03</span></div>
+        <p>שמש שחציה קורל וחציה צהוב, מעל שני קווי גל. הכי קרוב לזהות הקיצית שכבר בחרת לאפליקציה.</p>
+        <p class="verdict"><b>למה זה חזק:</b> חם, מזמין, ומתחבר ישירות לפלטת הצבעים הקיימת. עובד יפה כאייקון.</p>
+        <p class="verdict warn"><b>הסיכון:</b> אומר «חופשה בים» ולא «ניהול טיול». סוכן נסיעות שמחפש כלי עבודה לא יזהה בזה תוכנה.</p>
+      </div>
+    </div>
+    <div class="usage">
+      <div class="u"><div class="icon-app"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-sun"/></svg></div><span class="u-lbl">אייקון</span></div>
+      <div class="u"><div class="icon-app warm"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-sun"/></svg></div><span class="u-lbl">חלופה חמה</span></div>
+      <div class="u"><div class="fav"><svg class="mk f32" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-sun"/></svg><svg class="mk f16" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-sun"/></svg></div><span class="u-lbl">32 / 16 פיקסל</span></div>
+      <div class="u"><div class="mono-box"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-sun"/></svg></div><span class="u-lbl">צבע אחד</span></div>
+      <div class="u"><div class="lockup"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-sun"/></svg><span class="words"><span class="wm">Trip<span>Craft</span></span><span class="tl">מלווה הטיולים שלך</span></span></div><span class="u-lbl">לוקאפ</span></div>
+    </div>
+  </div>
+
+  <!-- ============ 4 ============ -->
+  <div class="concept">
+    <div class="concept-top">
+      <div class="big-mark"><svg class="mk" viewBox="0 0 64 64" role="img" aria-label="לוגו: שורות מסלול מוערמות עם סימון וי"><use href="#m-days"/></svg></div>
+      <div class="concept-copy">
+        <div class="cname"><h3>ימי המסלול</h3><span class="tag">04</span></div>
+        <p>שלוש שורות — ימי המסלול — והיום האחרון עדיין חלקי, עם וי שמסמן שמשהו סומן. זה המסך המרכזי של האפליקציה, מזוקק לצורה.</p>
+        <p class="verdict"><b>למה זה חזק:</b> אומר «כלי עבודה» ולא «חופשה». לסוכן זה נראה כמו תוכנה שהוא יכול לסמוך עליה.</p>
+        <p class="verdict warn"><b>הסיכון:</b> יכול להיקרא כאפליקציית משימות גנרית. אין בו כלום מהטיול עצמו.</p>
+      </div>
+    </div>
+    <div class="usage">
+      <div class="u"><div class="icon-app"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-days"/></svg></div><span class="u-lbl">אייקון</span></div>
+      <div class="u"><div class="icon-app warm"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-days"/></svg></div><span class="u-lbl">חלופה חמה</span></div>
+      <div class="u"><div class="fav"><svg class="mk f32" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-days"/></svg><svg class="mk f16" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-days"/></svg></div><span class="u-lbl">32 / 16 פיקסל</span></div>
+      <div class="u"><div class="mono-box"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-days"/></svg></div><span class="u-lbl">צבע אחד</span></div>
+      <div class="u"><div class="lockup"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-days"/></svg><span class="words"><span class="wm">Trip<span>Craft</span></span><span class="tl">מלווה הטיולים שלך</span></span></div><span class="u-lbl">לוקאפ</span></div>
+    </div>
+  </div>
+
+  <!-- ============ 5 ============ -->
+  <div class="concept">
+    <div class="concept-top">
+      <div class="big-mark"><svg class="mk" viewBox="0 0 64 64" role="img" aria-label="לוגו: מצפן עם מחט דו-צבעית"><use href="#m-compass"/></svg></div>
+      <div class="concept-copy">
+        <div class="cname"><h3>מצפן</h3><span class="tag">05</span></div>
+        <p>מחט מצפן משני משולשים — קורל לצפון, טורקיז לדרום — בתוך טבעת פתוחה.</p>
+        <p class="verdict"><b>למה זה חזק:</b> נקי, סימטרי, ומתנהג מצוין בכל גודל. הכי «בוגר» מהחמישה.</p>
+        <p class="verdict warn"><b>הסיכון:</b> מצפן הוא הקלישאה השנייה בקטגוריה אחרי סיכת המפה. לא יזוהה כשלך.</p>
+      </div>
+    </div>
+    <div class="usage">
+      <div class="u"><div class="icon-app"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-compass"/></svg></div><span class="u-lbl">אייקון</span></div>
+      <div class="u"><div class="icon-app warm"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-compass"/></svg></div><span class="u-lbl">חלופה חמה</span></div>
+      <div class="u"><div class="fav"><svg class="mk f32" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-compass"/></svg><svg class="mk f16" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-compass"/></svg></div><span class="u-lbl">32 / 16 פיקסל</span></div>
+      <div class="u"><div class="mono-box"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-compass"/></svg></div><span class="u-lbl">צבע אחד</span></div>
+      <div class="u"><div class="lockup"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-compass"/></svg><span class="words"><span class="wm">Trip<span>Craft</span></span><span class="tl">מלווה הטיולים שלך</span></span></div><span class="u-lbl">לוקאפ</span></div>
+    </div>
+  </div>
+
+  <!-- ============ recommendation ============ -->
+  <div class="rec">
+    <span class="eyebrow">ההמלצה</span>
+    <h2>מסלול וחבורה — מספר 01</h2>
+    <div class="row">
+      <div class="chip"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-route"/></svg></div>
+      <p>זה היחיד שאומר משהו שאף מתחרה לא יכול לומר. סיכה ומצפן יתאימו לכל אפליקציית טיולים בעולם; שמש תמכור חופשה אבל לא תוכנה. שלושה נוסעים בגדלים שונים על מסלול אחד זה בדיוק המוצר — ובדיוק הפער בשוק שמצאנו.</p>
+    </div>
+    <p><b>הסתייגות אחת, ישרה:</b> הוא גם הכי צפוף. אם בבדיקה על מסך טלפון אמיתי הנקודה הקטנה נבלעת — מוותרים עליה ונשארים עם שני נוסעים. עדיף לוגו קריא עם שניים מלוגו עמוס עם שלושה.</p>
+  </div>
+
+  <div class="note">
+    <b>לפני שסוגרים על אחד — שלוש בדיקות שלוקחות חמש דקות:</b>
+    <ul>
+      <li>פתח את הדף הזה בטלפון והסתכל על שורת ה-16 פיקסל מרחוק זרוע. מה שלא קריא שם, לא קריא בטאב של דפדפן.</li>
+      <li>הסתכל על ריבוע «צבע אחד». לוגו שנשבר בצבע אחד יישבר בכל חשבונית, חותמת ופקס.</li>
+      <li>החלף את המסמך למצב כהה ובהיר ובדוק שהשניים עובדים. הדף כאן כבר עושה את זה לבד.</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <b>מה שעוד לא עשיתי, בכוונה:</b> לא החלפתי את הלוגו באפליקציה. הכל כאן הוא הצעה — אחרי שתבחר, אני מייצר קובצי SVG ו-PNG בכל הגדלים, מחליף את הפאביקון, את האייקון להתקנה למסך הבית, ואת המיתוג במצגת ובעמוד השיתוף ללקוחות.
+  </div>
+
+</div>
