@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="TripCraft">
+  <g transform="translate(32,32) scale(0.855) translate(-31,-31.75)">
+    <path d="M11 57C11 45 17 40 27.5 35.5" stroke="#17A2A8" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <path d="M26 58C27.5 48 28.5 41 30 36" stroke="#EE6C4D" stroke-width="6" fill="none" stroke-linecap="round"/>
+    <path d="M42 56C38 46 35 40 32.5 35.5" stroke="#F2C14E" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M30 35C36.5 30 40 23 43 15" stroke="#0B5F68" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <circle cx="49.5" cy="7.5" r="5" fill="#EE6C4D"/>
+  </g>
+</svg>

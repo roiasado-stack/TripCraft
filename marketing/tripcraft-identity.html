@@ -1,0 +1,341 @@
+<title>הצמה — סימן ל-TripCraft</title>
+<style>
+  :root {
+    --sea:   #17A2A8;
+    --deep:  #0B5F68;
+    --coral: #EE6C4D;
+    --sun:   #F2C14E;
+
+    --ink:      #14232B;
+    --ink-soft: #506A76;
+    --ink-faint:#8AA3AD;
+    --ground:   #F2F7F8;
+    --card:     #FFFFFF;
+    --sunk:     #E4EFF0;
+    --rule:     #D3E3E4;
+
+    --shadow: 0 1px 2px rgba(20,35,43,.05), 0 12px 32px -24px rgba(20,35,43,.65);
+
+    --s--1: clamp(.76rem, .74rem + .1vw, .82rem);
+    --s-0:  clamp(1rem, .97rem + .15vw, 1.06rem);
+    --s-1:  clamp(1.15rem, 1.08rem + .32vw, 1.35rem);
+    --s-2:  clamp(1.45rem, 1.3rem + .7vw, 2rem);
+    --s-3:  clamp(2rem, 1.6rem + 1.8vw, 3.2rem);
+
+    --font: "Segoe UI", "Heebo", "Assistant", system-ui, -apple-system, "Noto Sans Hebrew", sans-serif;
+    --mono: "Cascadia Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --sea: #3EC4C9; --deep: #9BEBEC; --coral: #FF8A6B; --sun: #F5CE6B;
+      --ink: #E8F1F2; --ink-soft: #A6BFC5; --ink-faint: #78949F;
+      --ground: #0C171C; --card: #14232A; --sunk: #1A2D35; --rule: #263F48;
+      --shadow: 0 1px 2px rgba(0,0,0,.55), 0 12px 32px -24px rgba(0,0,0,.95);
+    }
+  }
+  :root[data-theme="dark"] {
+    --sea: #3EC4C9; --deep: #9BEBEC; --coral: #FF8A6B; --sun: #F5CE6B;
+    --ink: #E8F1F2; --ink-soft: #A6BFC5; --ink-faint: #78949F;
+    --ground: #0C171C; --card: #14232A; --sunk: #1A2D35; --rule: #263F48;
+    --shadow: 0 1px 2px rgba(0,0,0,.55), 0 12px 32px -24px rgba(0,0,0,.95);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font); font-size: var(--s-0); line-height: 1.65;
+    direction: rtl; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 60rem; margin-inline: auto; padding: clamp(2rem,1.2rem + 3vw,4rem) clamp(1rem,.6rem + 2vw,2.5rem) 6rem; display: flex; flex-direction: column; gap: clamp(2.5rem,2rem + 2.5vw,4.5rem); }
+  h1,h2,h3 { margin: 0; letter-spacing: -.022em; text-wrap: balance; }
+  p { margin: 0; max-width: 64ch; }
+  .eyebrow { font-size: var(--s--1); font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: var(--sea); }
+  h1 { font-size: var(--s-3); font-weight: 800; line-height: 1.05; }
+  h2 { font-size: var(--s-2); font-weight: 800; }
+  h3 { font-size: var(--s-1); font-weight: 800; }
+  .lede { color: var(--ink-soft); }
+
+  /* ---- mark hooks ---- */
+  .mk { --a: var(--sea); --b: var(--coral); --c: var(--sun); --d: var(--deep); display: block; }
+  .mk .sa { stroke: var(--a); fill: none; stroke-linecap: round; }
+  .mk .sb { stroke: var(--b); fill: none; stroke-linecap: round; }
+  .mk .sc { stroke: var(--c); fill: none; stroke-linecap: round; }
+  .mk .sd { stroke: var(--d); fill: none; stroke-linecap: round; }
+  .mk .fb { fill: var(--b); }
+
+  /* ---- research strip ---- */
+  .facts { display: grid; gap: .75rem; grid-template-columns: 1fr; }
+  @media (min-width: 40rem) { .facts { grid-template-columns: repeat(3,1fr); } }
+  .fact { background: var(--card); border-radius: 1rem; padding: 1rem 1.15rem; box-shadow: var(--shadow); }
+  .fact b { display: block; font-size: 1.9rem; font-weight: 800; line-height: 1; color: var(--coral); font-variant-numeric: tabular-nums; }
+  .fact span { font-size: var(--s--1); color: var(--ink-soft); }
+
+  /* ---- hero mark ---- */
+  .hero-mark {
+    background: var(--card); border-radius: 1.5rem; box-shadow: var(--shadow); overflow: hidden;
+    display: grid; grid-template-columns: 1fr; align-items: center;
+  }
+  @media (min-width: 50rem) { .hero-mark { grid-template-columns: 22rem 1fr; } }
+  .hero-mark .plate {
+    background: linear-gradient(150deg, var(--sea), var(--deep));
+    display: grid; place-items: center; padding: clamp(2rem,1.5rem + 3vw,3.5rem); min-height: 18rem;
+  }
+  .hero-mark .plate .mk { width: 100%; max-width: 11rem; --a: #fff; --b: #fff; --c: #fff; --d: #fff; }
+  .hero-mark .side { padding: clamp(1.25rem,1rem + 1.6vw,2.25rem); display: flex; flex-direction: column; gap: .8rem; }
+  .hero-mark .side p { font-size: var(--s--1); color: var(--ink-soft); }
+
+  /* ---- anatomy ---- */
+  .anatomy { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 44rem) { .anatomy { grid-template-columns: repeat(3,1fr); } }
+  .an { background: var(--card); border-radius: 1rem; padding: 1.15rem; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: .6rem; }
+  .an .box { background: var(--sunk); border-radius: .75rem; display: grid; place-items: center; padding: 1rem; }
+  .an .box .mk { width: 5.5rem; }
+  .an h3 { font-size: var(--s-0); }
+  .an p { font-size: var(--s--1); color: var(--ink-soft); }
+
+  /* ---- usage ---- */
+  .usage { background: var(--card); border-radius: 1.25rem; box-shadow: var(--shadow); padding: clamp(1.25rem,1rem + 1.6vw,2rem); display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-end; }
+  .usage .mk { --hole: var(--card); }
+  .u { display: flex; flex-direction: column; gap: .5rem; align-items: center; }
+  .u-lbl { font-family: var(--mono); font-size: .62rem; color: var(--ink-faint); letter-spacing: .05em; }
+  .icon-app { width: 4.6rem; height: 4.6rem; border-radius: 1.15rem; display: grid; place-items: center; background: linear-gradient(150deg, var(--sea), var(--deep)); box-shadow: var(--shadow); }
+  .icon-app .mk { width: 62%; --a: #fff; --b: #fff; --c: #fff; --d: #fff; }
+  .icon-app.warm { background: linear-gradient(150deg, var(--sun), var(--coral)); }
+  .icon-app.paper { background: var(--card); border: 1px solid var(--rule); }
+  .icon-app.paper .mk { --a: var(--sea); --b: var(--coral); --c: var(--sun); --d: var(--deep); }
+  .fav { display: flex; gap: .7rem; align-items: flex-end; }
+  .f32 { width: 2rem; } .f16 { width: 1rem; }
+  .mono-box { display: grid; place-items: center; width: 4.6rem; height: 4.6rem; border-radius: .85rem; background: var(--ink); }
+  .mono-box .mk { width: 62%; --a: var(--ground); --b: var(--ground); --c: var(--ground); --d: var(--ground); }
+
+  .lockup { display: flex; align-items: center; gap: .75rem; }
+  .lockup .mk { width: 2.9rem; flex: none; }
+  .lockup .words { display: flex; flex-direction: column; line-height: 1.08; }
+  .lockup .wm { font-size: 1.4rem; font-weight: 800; letter-spacing: -.035em; }
+  .lockup .wm em { font-style: normal; color: var(--sea); }
+  .lockup .tl { font-size: .66rem; color: var(--ink-faint); font-weight: 600; letter-spacing: .01em; }
+  .lockup.inv .wm { color: #fff; } .lockup.inv .wm em { color: var(--sun); } .lockup.inv .tl { color: rgba(255,255,255,.7); }
+  .lockup.inv .mk { --a:#fff; --b:#fff; --c:#fff; --d:#fff; }
+  .inv-strip { background: linear-gradient(120deg, var(--deep), var(--sea)); border-radius: 1rem; padding: 1.25rem 1.5rem; }
+
+  /* ---- small-size variant ---- */
+  .variant { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 44rem) { .variant { grid-template-columns: 1fr 1fr; } }
+  .vcard { background: var(--card); border-radius: 1rem; padding: 1.15rem; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: .7rem; }
+  .vrow { display: flex; gap: 1rem; align-items: flex-end; background: var(--sunk); border-radius: .75rem; padding: 1rem; }
+  .vrow .mk { --hole: var(--sunk); }
+  .vcard p { font-size: var(--s--1); color: var(--ink-soft); }
+
+  /* ---- alternates ---- */
+  .alts { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 44rem) { .alts { grid-template-columns: 1fr 1fr; } }
+  .alt { background: var(--card); border-radius: 1rem; padding: 1.15rem; box-shadow: var(--shadow); display: grid; grid-template-columns: 5.5rem 1fr; gap: .3rem 1rem; align-items: center; }
+  .alt .box { grid-row: span 2; background: var(--sunk); border-radius: .75rem; display: grid; place-items: center; padding: .8rem; }
+  .alt .box .mk { width: 100%; }
+  .alt h3 { font-size: var(--s-0); align-self: end; }
+  .alt p { font-size: var(--s--1); color: var(--ink-soft); align-self: start; }
+
+  .note { background: var(--card); border-radius: 1rem; padding: 1.15rem 1.3rem; font-size: var(--s--1); color: var(--ink-soft); box-shadow: var(--shadow); }
+  .note b { color: var(--ink); }
+  .note ul { margin: .5rem 0 0; padding-inline-start: 1.1rem; display: flex; flex-direction: column; gap: .3rem; }
+  .sources { font-size: var(--s--1); color: var(--ink-faint); }
+  .sources ul { margin: .4rem 0 0; padding-inline-start: 1.1rem; }
+  a { color: var(--sea); text-underline-offset: .18em; }
+  a:focus-visible { outline: 2px solid var(--sea); outline-offset: 3px; }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- THE MARK · הצמה — three strands gather into one path, which leaps to its destination -->
+    <symbol id="m-braid" viewBox="0 0 64 64">
+      <g transform="translate(32,32) scale(0.855) translate(-31,-31.75)">
+      <path class="sa" d="M11 57C11 45 17 40 27.5 35.5" stroke-width="7"/>
+      <path class="sb" d="M26 58C27.5 48 28.5 41 30 36" stroke-width="6"/>
+      <path class="sc" d="M42 56C38 46 35 40 32.5 35.5" stroke-width="5"/>
+      <path class="sd" d="M30 35C36.5 30 40 23 43 15" stroke-width="8"/>
+      <circle class="fb" cx="49.5" cy="7.5" r="5"/>
+      </g>
+    </symbol>
+
+    <!-- small-size variant: two strands, heavier, no gap-leap -->
+    <symbol id="m-braid-sm" viewBox="0 0 64 64">
+      <g transform="translate(32,32) scale(0.826) translate(-32.5,-31.25)">
+      <path class="sa" d="M13 57C13 44 20 39 29 34" stroke-width="9"/>
+      <path class="sc" d="M42 56C37 45 34 39 31 34.5" stroke-width="8"/>
+      <path class="sd" d="M29.5 34C37 28 41 20 45 10" stroke-width="10"/>
+      <circle class="fb" cx="51" cy="6.5" r="5.5"/>
+      </g>
+    </symbol>
+
+    <!-- alternate A · הקשר — a ring linked by a strand: the round trip, tied -->
+    <symbol id="m-knot" viewBox="0 0 64 64">
+      <circle class="sa" cx="27" cy="39" r="14" stroke-width="7"/>
+      <path class="sb" d="M17 52C27 42 38 28 51 12" stroke-width="7"/>
+      <path class="sa" d="M13.6 34.6C15.6 27.4 21.6 25 27 25" stroke-width="7"/>
+    </symbol>
+
+    <!-- alternate B · ט — the Hebrew letter, carved as a route that turns back -->
+    <symbol id="m-tet" viewBox="0 0 64 64">
+      <g transform="translate(32,32) scale(1.2) translate(-32,-31)">
+      <path class="sd" d="M17 15v18c0 9 6 14 15 14h3c8 0 12-5 12-13V15" stroke-width="8"/>
+      <path class="sb" d="M47 15c0 8-4 11-9 11" stroke-width="7"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+  <header style="display:flex;flex-direction:column;gap:1rem">
+    <span class="eyebrow">זהות · סבב שני</span>
+    <h1>הצמה</h1>
+    <p class="lede">סימן שנבנה מתוך מחקר על מה שכבר תפוס בקטגוריה — ובמכוון בורח מכל אחד מהם.</p>
+  </header>
+
+  <section style="display:flex;flex-direction:column;gap:1.1rem">
+    <div>
+      <span class="eyebrow">מה המחקר מצא</span>
+      <h2 style="margin-top:.4rem">הקטגוריה מציירת את אותם חמישה דברים</h2>
+    </div>
+    <div class="facts">
+      <div class="fact"><b>26%</b><span>מלוגו הנסיעות משתמשים ב<b style="font-size:inherit;color:inherit;display:inline">מטוס</b></span></div>
+      <div class="fact"><b>23%</b><span>משתמשים ב<b style="font-size:inherit;color:inherit;display:inline">גלובוס</b></span></div>
+      <div class="fact"><b>15%</b><span>משתמשים ב<b style="font-size:inherit;color:inherit;display:inline">מזוודה</b></span></div>
+    </div>
+    <p class="lede">אחריהם: מפה, דרכון, מצפן, חוף וסיכת מיקום. הסבב הקודם שהצעתי לך נפל בדיוק שם — סיכה, מצפן ושמש מעל גל הם שלוש מהקלישאות המדויקות שהמחקר מונה. צדקת שדחית אותם.</p>
+    <p class="lede">שלוש דרכי המילוט שהמחקר מציע: <b>חלל שלילי</b>, <b>הפשטה מוחלטת</b>, ו<b>צירוף בלתי צפוי</b>. הלכתי על השלישית — ולקחתי את המילה שאף מותג נסיעות לא נוגע בה: <b>Craft</b>. אריגה. קליעה. חיבור של חוטים.</p>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:1.2rem">
+    <div>
+      <span class="eyebrow">הסימן</span>
+      <h2 style="margin-top:.4rem">שלושה חוטים נאספים לדרך אחת</h2>
+    </div>
+    <div class="hero-mark">
+      <div class="plate">
+        <svg class="mk" viewBox="0 0 64 64" role="img" aria-label="הסימן: שלושה חוטים בעוביים שונים נאספים לחוט אחד שמזנק אל נקודת יעד">
+          <use href="#m-braid"/>
+        </svg>
+      </div>
+      <div class="side">
+        <h3>למה דווקא זה</h3>
+        <p>שלושה חוטים בעוביים שונים — מבוגר, ילד, פעוט — עולים מלמטה, נאספים לנקודה אחת, וממשיכים כחוט אחד. זה בדיוק המוצר: לא מטייל בודד, אלא קבוצה רב-דורית שהופכת למסלול משותף.</p>
+        <p>הרווח לפני הנקודה הוא החלק החשוב. הוא לא קישוט — הוא הזינוק. העין משלימה אותו לבד, וזו נקודת ה«אה» של הסימן.</p>
+        <p><b style="color:var(--ink)">אין כאן מטוס, גלובוס, מזוודה, מצפן, סיכה או שמש.</b> אין אף אחד מתשעת הסמלים שהקטגוריה שוחקת.</p>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:1rem">
+    <div>
+      <span class="eyebrow">אנטומיה</span>
+      <h2 style="margin-top:.4rem">שלוש שכבות משמעות בצורה אחת</h2>
+    </div>
+    <div class="anatomy">
+      <div class="an">
+        <div class="box"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-braid"/></svg></div>
+        <h3>הקבוצה</h3>
+        <p>שלושה עוביים שונים = דורות שונים. זה הבידול שמצאנו במחקר השוק, מקודד בצורה עצמה.</p>
+      </div>
+      <div class="an">
+        <div class="box"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-braid"/></svg></div>
+        <h3>ה-Craft</h3>
+        <p>קליעה היא מלאכת יד. השם הוא TripCraft, וזו הפעם הראשונה שהמילה הזו מקבלת ביטוי חזותי במותג נסיעות.</p>
+      </div>
+      <div class="an">
+        <div class="box"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-braid"/></svg></div>
+        <h3>התנועה</h3>
+        <p>הכיוון עולה שמאלה-למעלה — בעברית זו תנועה קדימה. הסימן נקרא נכון בכיווניות שלנו.</p>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:1rem">
+    <div>
+      <span class="eyebrow">מבחני שימוש</span>
+      <h2 style="margin-top:.4rem">איפה שסימנים באמת נשברים</h2>
+    </div>
+    <div class="usage">
+      <div class="u"><div class="icon-app"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-braid"/></svg></div><span class="u-lbl">אייקון</span></div>
+      <div class="u"><div class="icon-app warm"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-braid"/></svg></div><span class="u-lbl">חלופה חמה</span></div>
+      <div class="u"><div class="icon-app paper"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-braid"/></svg></div><span class="u-lbl">על לבן</span></div>
+      <div class="u"><div class="mono-box"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-braid"/></svg></div><span class="u-lbl">צבע אחד</span></div>
+      <div class="u"><div class="fav"><svg class="mk f32" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-braid-sm"/></svg><svg class="mk f16" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-braid-sm"/></svg></div><span class="u-lbl">32 / 16 פיקסל</span></div>
+      <div class="u"><div class="lockup"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-braid"/></svg><span class="words"><span class="wm">Trip<em>Craft</em></span><span class="tl">מלווה הטיולים שלך</span></span></div><span class="u-lbl">לוקאפ</span></div>
+    </div>
+    <div class="inv-strip">
+      <div class="lockup inv"><svg class="mk" viewBox="0 0 64 64" aria-hidden="true"><use href="#m-braid"/></svg><span class="words"><span class="wm">Trip<em>Craft</em></span><span class="tl">מלווה הטיולים שלך</span></span></div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:1rem">
+    <div>
+      <span class="eyebrow">מערכת, לא קובץ בודד</span>
+      <h2 style="margin-top:.4rem">גרסה לגדלים קטנים</h2>
+    </div>
+    <div class="variant">
+      <div class="vcard">
+        <div class="vrow">
+          <svg class="mk" viewBox="0 0 64 64" style="width:4rem" aria-hidden="true"><use href="#m-braid"/></svg>
+          <svg class="mk" viewBox="0 0 64 64" style="width:2rem" aria-hidden="true"><use href="#m-braid"/></svg>
+          <svg class="mk" viewBox="0 0 64 64" style="width:1rem" aria-hidden="true"><use href="#m-braid"/></svg>
+        </div>
+        <h3>הגרסה המלאה</h3>
+        <p>שלושה חוטים. מצוינת מ-24 פיקסל ומעלה. מתחת לזה החוט הדק נבלע.</p>
+      </div>
+      <div class="vcard">
+        <div class="vrow">
+          <svg class="mk" viewBox="0 0 64 64" style="width:4rem" aria-hidden="true"><use href="#m-braid-sm"/></svg>
+          <svg class="mk" viewBox="0 0 64 64" style="width:2rem" aria-hidden="true"><use href="#m-braid-sm"/></svg>
+          <svg class="mk" viewBox="0 0 64 64" style="width:1rem" aria-hidden="true"><use href="#m-braid-sm"/></svg>
+        </div>
+        <h3>הגרסה לקטן</h3>
+        <p>שני חוטים, עובי גדול יותר, נקודה גדולה יותר. לפאביקון, לאייקון קטן ולחותמת. זה מה שמותגים רציניים עושים.</p>
+      </div>
+    </div>
+    <p class="lede">השוו את שתי השורות בגודל 16 פיקסל — ההבדל הוא כל הסיפור.</p>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:1rem">
+    <div>
+      <span class="eyebrow">גם נבחנו</span>
+      <h2 style="margin-top:.4rem">שתי חלופות שהגיעו לגמר</h2>
+    </div>
+    <div class="alts">
+      <div class="alt">
+        <div class="box"><svg class="mk" viewBox="0 0 64 64" role="img" aria-label="חלופה: טבעת שחוט משתרשר דרכה"><use href="#m-knot"/></svg></div>
+        <h3>הקשר</h3>
+        <p>טבעת שחוט עובר דרכה — הלוך ושוב שנקשר. יפה ומופשט, אבל בגודל קטן נקרא כאות Q או כזכוכית מגדלת.</p>
+      </div>
+      <div class="alt">
+        <div class="box"><svg class="mk" viewBox="0 0 64 64" role="img" aria-label="חלופה: האות ט מעוצבת כמסלול"><use href="#m-tet"/></svg></div>
+        <h3>האות ט</h3>
+        <p>מ«טיול», מעוצבת כמסלול שחוזר. אמירה עברית חזקה שאף מתחרה לא יכול להעתיק — אבל מתנגשת עם שם לטיני, ולא תיקרא מחוץ לישראל.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="note">
+    <b>מה שאני עדיין לא בטוח בו, ואתה צריך לבדוק:</b>
+    <ul>
+      <li>פתח את הדף בטלפון והסתכל על שורת ה-16 פיקסל ממרחק זרוע. אם הגרסה המלאה נראית כמו כתם — טוב, בשביל זה יש גרסה לקטן.</li>
+      <li>הראה את הסימן לשלושה אנשים בלי להסביר, ושאל מה הם רואים. אם אף אחד לא אומר «כמה אנשים יחד» — הרעיון לא עובר, וצריך לחזק את הפרשי העובי.</li>
+      <li>הצורה עלולה להיקרא כצמח שצומח. זה לא נורא — «צמיחה» היא קריאה שנייה סבירה, והיא בוודאי לא קלישאה של נסיעות.</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <b>לא שיניתי כלום באפליקציה.</b> הלוגו שם עדיין 🌴. אחרי שתאשר, אני מייצר SVG ו-PNG בכל הגדלים, מחליף פאביקון ואייקון התקנה, ומעדכן את המצגת ואת עמוד השיתוף ללקוחות.
+  </div>
+
+  <section class="sources">
+    <span class="eyebrow">מקורות</span>
+    <ul>
+      <li><a href="https://logo.com/logos/travel-logo-maker">LOGO.com — נתוני שכיחות סמלים בלוגו נסיעות</a></li>
+      <li><a href="https://inkbotdesign.com/travel-logos/">Inkbot Design — Branding Secrets From The World's 25 Best Travel Logos</a></li>
+      <li><a href="https://www.designrush.com/agency/logo-design/trends/negative-space-logo">DesignRush — Negative Space Logo: Principles, Types, Best Examples</a></li>
+      <li><a href="https://www.ebaqdesign.com/blog/negative-space-logo-design">Ebaq Design — The Art of Negative Space in Logo Design</a></li>
+    </ul>
+  </section>
+
+</div>
