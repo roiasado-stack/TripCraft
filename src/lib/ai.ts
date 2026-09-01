@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Participant, Trip } from "./types";
+import type { AgentCard, Participant, Trip } from "./types";
 
 export type TuneOption = "more_kids" | "calmer" | "cheaper" | "more_active";
 
@@ -51,6 +51,40 @@ export async function generateContent(
       return { ok: false, error: error.message };
     }
     return { ok: true, inserted: (data as { inserted?: number })?.inserted ?? 0 };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "unknown" };
+  }
+}
+
+export type AskTurn = { role: "user" | "assistant"; content: string };
+
+export type AskResult = {
+  ok: boolean;
+  error?: string;
+  answer?: string;
+  cards?: AgentCard[];
+};
+
+/**
+ * Calls the `ask` Supabase Edge Function — the conversational agent.
+ * It answers in Hebrew about this specific trip and may return cards the caller
+ * can insert into `suggestions` / `itinerary_items`. The function itself writes
+ * nothing; persisting the conversation is the caller's job.
+ */
+export async function askAgent(trip: Trip, message: string, history: AskTurn[]): Promise<AskResult> {
+  try {
+    const { data, error } = await supabase.functions.invoke("ask", {
+      body: { trip_id: trip.id, message, history },
+    });
+    if (error) {
+      const msg = (error.message || "").toLowerCase();
+      if (msg.includes("not found") || msg.includes("failed to fetch") || msg.includes("404"))
+        return { ok: false, error: "not_deployed" };
+      return { ok: false, error: error.message };
+    }
+    const res = data as { answer?: string; cards?: AgentCard[] };
+    if (!res?.answer) return { ok: false, error: "empty_answer" };
+    return { ok: true, answer: res.answer, cards: res.cards ?? [] };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "unknown" };
   }

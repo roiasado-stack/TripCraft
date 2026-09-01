@@ -35,16 +35,22 @@ export default function TripsListPage() {
 
   useEffect(() => {
     (async () => {
+      if (!user) return;
+      // Filter by user_id explicitly: RLS alone is not enough here. The
+      // "shared trips readable" policy also grants SELECT to `authenticated`,
+      // and permissive policies are OR'd — so without this every signed-in user
+      // would see everyone else's publicly shared trips in their own list.
       const { data } = await supabase
         .from("trips")
         .select("*")
+        .eq("user_id", user.id)
         .eq("is_template", false)
         .order("start_date", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: false });
       setTrips((data as Trip[]) ?? []);
       setLoading(false);
     })();
-  }, []);
+  }, [user]);
 
   const firstName = (profile?.full_name ?? "").split(" ")[0];
 

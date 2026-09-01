@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { CalendarDays, CheckSquare, FileText, Home, MapPinned } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/use-auth";
 import type { Participant, Trip } from "@/lib/types";
 import { Button, FullSpinner } from "@/components/ui";
 import { ShareSheet } from "@/components/ShareSheet";
@@ -29,6 +30,7 @@ const TABS = [
 export default function TripLayout() {
   const { tripId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "notfound">("loading");
@@ -42,8 +44,16 @@ export default function TripLayout() {
 
   useEffect(() => {
     (async () => {
-      if (!tripId) return;
-      const { data, error } = await supabase.from("trips").select("*").eq("id", tripId).maybeSingle();
+      if (!tripId || !user) return;
+      // Same reason as the list query: "shared trips readable" also covers
+      // `authenticated`, so a plain lookup by id would open the full owner UI
+      // for anyone else's shared trip. Visitors belong on /share/:slug.
+      const { data, error } = await supabase
+        .from("trips")
+        .select("*")
+        .eq("id", tripId)
+        .eq("user_id", user.id)
+        .maybeSingle();
       if (error || !data) {
         setState("notfound");
         return;
@@ -53,7 +63,7 @@ export default function TripLayout() {
       setState("ready");
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripId]);
+  }, [tripId, user]);
 
   if (state === "loading") return <FullSpinner label="טוען את הטיול…" />;
   if (state === "notfound" || !trip)

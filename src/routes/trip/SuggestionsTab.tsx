@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarPlus, Compass, Heart, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { CalendarPlus, Compass, Heart, MessageCircle, Plus, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Suggestion } from "@/lib/types";
 import { useTrip } from "./TripLayout";
@@ -22,6 +23,7 @@ const TUNE: { value: TuneOption; label: string }[] = [
 
 export default function SuggestionsTab() {
   const { trip, participants } = useTrip();
+  const navigate = useNavigate();
   const toast = useToast();
   const [items, setItems] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,6 +146,9 @@ export default function SuggestionsTab() {
             </Button>
             <Button size="sm" variant="outline" loading={picking} onClick={addDestinationPicks}>
               <Compass className="size-4" /> מובילים
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => navigate("../ask")}>
+              <MessageCircle className="size-4" /> שאל
             </Button>
             <Button size="sm" variant="soft" onClick={() => setShowGen(true)}>
               <Sparkles className="size-4" /> AI

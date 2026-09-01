@@ -167,3 +167,22 @@ export interface UserRole {
 export interface UserRoleRow {
   role: AppRole;
 }
+
+/** One recommendation the agent returned, which the user can add to the trip. */
+export interface AgentCard {
+  kind: string; // attraction | restaurant | tip | gear
+  title: string;
+  description: string | null;
+  tags: string[];
+  price_level: string | null;
+  location: string | null;
+}
+
+export interface TripChatMessage {
+  id: string;
+  trip_id: string;
+  role: string; // user | assistant
+  content: string;
+  cards: AgentCard[];
+  created_at: string;
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { CalendarDays, CopyPlus, Plane, Users } from "lucide-react";
+import { CalendarDays, CopyPlus, Plane, Sparkles, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -178,6 +178,18 @@ export default function HomeTab() {
       <TripUpdates tripId={trip.id} />
 
       <PhotoAlbumCard trip={trip} />
+
+      <Link to="ask">
+        <Card className="mt-4 flex items-center gap-3 p-4">
+          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary-soft text-primary">
+            <Sparkles className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="font-bold leading-snug">שאל את הסוכן</div>
+            <div className="text-sm text-muted-foreground">שאלות והמלצות בהתאמה לטיול שלך</div>
+          </div>
+        </Card>
+      </Link>
 
       {loading ? (
         <div className="flex justify-center py-10">

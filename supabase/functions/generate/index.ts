@@ -12,7 +12,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const MODEL = "claude-sonnet-4-5";
+const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
 const cors = {

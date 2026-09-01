@@ -110,12 +110,24 @@ supabase secrets set ANTHROPIC_API_KEY=sk-ant-your-key
 supabase functions deploy generate
 ```
 
+```bash
+supabase functions deploy ask
+```
+
 הפונקציה נמצאת ב-[`supabase/functions/generate/index.ts`](supabase/functions/generate/index.ts). היא מוודאת שהמשתמש הוא הבעלים של הטיול לפני שהיא מייצרת משהו, ומייצרת:
 - **מומלצים** — 8 אטרקציות, 6 מסעדות, 4 טיפים, מותאמים לגילאים ולהעדפות.
 - **מסלול** — 3–5 פריטים לכל יום, לפי סדר הגיוני.
 - **צ'קליסט** — 15–25 פריטים מותאמים.
 
 עם כפתור "צור מחדש" אפשר לכוונן: יותר ידידותי לילדים / יותר רגוע / תקציב נמוך / יותר אקטיבי.
+
+### שאל את הסוכן
+
+המסך **"שאל את הסוכן"** (כניסה ממסך הבית וממסך "מומלצים") הוא שיחה בעברית על הטיול הספציפי — היעד, התאריכים, המשתתפים והמסלול שכבר נבנה. לצד התשובה הסוכן יכול להחזיר כרטיסי המלצה עם כפתור הוספה למומלצים או למסלול.
+
+הפונקציה נמצאת ב-[`supabase/functions/ask/index.ts`](supabase/functions/ask/index.ts) ורצה על `claude-haiku-4-5` (קבוע `MODEL` בראש הקובץ). היא **לבעלים בלבד** — היא משווה את `user_id` של הטיול למשתמש שב-JWT, ואין לה חשיפה למבקרים בדף השיתוף. השיחה נשמרת בטבלה `trip_chat_messages` (מיגרציה 003), שגם היא ללא הרשאת קריאה ל-`anon`.
+
+> שים לב: מפתח ה-API הוא סוד יחיד של הפרויקט — כל שאלה נופלת על חשבון בעל הפרויקט, לא על המשתמש.
 
 > גם בלי ה-AI, כפתור **"רשימה מומלצת"** בצ'קליסט עובד לגמרי — הוא בונה רשימה חכמה מותאמת אישית ללא צורך בשרת.
 
@@ -149,11 +161,13 @@ src/
   hooks/          use-auth (התחברות ותפקידים), use-theme (מצב כהה), use-toast
   lib/            supabase (חיבור), types, trip-options (קבועים בעברית), ai, starter
   routes/         AuthPage, TripsListPage, WizardPage, SettingsPage, SharePage
-    trip/         TripLayout (טאב-בר) + 5 המסכים
+    trip/         TripLayout (טאב-בר) + המסכים, כולל AskTab (הסוכן)
   styles.css      מערכת העיצוב (צבעים, גרדיאנטים, מצב כהה)
 supabase/
   schema.sql      כל הסכימה — הרץ פעם אחת
+  migrations/     שינויים מצטברים לסכימה (002, 003…)
   functions/generate/  ה-Edge Function ליצירת תוכן AI
+  functions/ask/       ה-Edge Function של סוכן השאלות
 ```
 
 ---

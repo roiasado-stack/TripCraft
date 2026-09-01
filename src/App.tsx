@@ -17,6 +17,7 @@ import PeopleTab from "@/routes/trip/PeopleTab";
 import TransportTab from "@/routes/trip/TransportTab";
 import ItineraryTab from "@/routes/trip/ItineraryTab";
 import SuggestionsTab from "@/routes/trip/SuggestionsTab";
+import AskTab from "@/routes/trip/AskTab";
 import DocumentsTab from "@/routes/trip/DocumentsTab";
 import ChecklistTab from "@/routes/trip/ChecklistTab";
 
@@ -83,6 +84,7 @@ export default function App() {
                   <Route path="transport" element={<TransportTab />} />
                   <Route path="itinerary" element={<ItineraryTab />} />
                   <Route path="suggestions" element={<SuggestionsTab />} />
+                  <Route path="ask" element={<AskTab />} />
                   <Route path="documents" element={<DocumentsTab />} />
                   <Route path="checklist" element={<ChecklistTab />} />
                 </Route>
