@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "TripCraft — מלווה הטיולים שלך",
+  "short_name": "TripCraft",
+  "description": "בונים, מארגנים ומלווים כל טיול. מסלול יומי, מסמכים, צ'קליסט והמלצות חכמות. בעברית, מכל מכשיר.",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f0fdfc",
+  "theme_color": "#12b3b0",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
