@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;700;900&family=Assistant:wght@300;400;600&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #B5451B; } a:hover { color: #8a3414; }
+  </style>
+</helmet>
+
+<div dir="rtl" style="width: 390px; height: 844px; overflow: hidden; position: relative; background: #F4F0E8; font-family: Assistant, system-ui, sans-serif; color: #16130F;">
+
+  <!-- Masthead -->
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 24px 24px 12px; border-bottom: 3px double #16130F;">
+    <span style="font-family: 'Frank Ruhl Libre', Georgia, serif; font-weight: 900; font-size: 20px; letter-spacing: -0.01em;">יומן המסע</span>
+    <span style="font-size: 11px; letter-spacing: 0.14em; color: #7C7365;">גיליון · יוני</span>
+  </div>
+
+  <!-- Lede -->
+  <div style="padding: 22px 24px 0;">
+    <span style="font-size: 11px; letter-spacing: 0.2em; color: #B5451B;">ה י ע ד</span>
+    <h1 style="margin: 8px 0 0; font-family: 'Frank Ruhl Libre', Georgia, serif; font-weight: 900; font-size: 46px; line-height: 0.95; letter-spacing: -0.02em; text-wrap: pretty;">סנטוריני,<br>ביוני</h1>
+    <p style="margin: 12px 0 0; font-size: 15px; line-height: 1.55; color: #4A443A; max-width: 300px; text-wrap: pretty;">תשעה ימים, שישה אנשים, אי אחד. הנה מה שנשאר לסדר לפני שיוצאים.</p>
+  </div>
+
+  <!-- The number, as a drop figure -->
+  <div style="display: flex; align-items: flex-start; gap: 16px; margin: 22px 24px 0; padding-top: 18px; border-top: 1px solid #D6CFC0;">
+    <span style="font-family: 'Frank Ruhl Libre', Georgia, serif; font-weight: 900; font-size: 104px; line-height: 0.7; letter-spacing: -0.05em; color: #B5451B;">23</span>
+    <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 6px;">
+      <span style="font-family: 'Frank Ruhl Libre', Georgia, serif; font-size: 21px; font-weight: 700;">ימים להמראה</span>
+      <span style="font-size: 13px; color: #7C7365; line-height: 1.45;">אייג'יאן A3 962<br>נתב"ג · 06:40</span>
+    </div>
+  </div>
+
+  <!-- Two-column rag, like a magazine spread -->
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 22px 24px 0; padding-top: 18px; border-top: 1px solid #D6CFC0;">
+    <div style="display: flex; flex-direction: column; gap: 5px;">
+      <span style="font-size: 10px; letter-spacing: 0.16em; color: #7C7365;">ה י ו ם</span>
+      <span style="font-family: 'Frank Ruhl Libre', Georgia, serif; font-size: 17px; line-height: 1.25;">שקיעה באואיה</span>
+      <span style="font-size: 12px; color: #7C7365;">18:40</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 5px;">
+      <span style="font-size: 10px; letter-spacing: 0.16em; color: #7C7365;">א ח ר י ־ כ ך</span>
+      <span style="font-family: 'Frank Ruhl Libre', Georgia, serif; font-size: 17px; line-height: 1.25;">אמברוסיה</span>
+      <span style="font-size: 12px; color: #7C7365;">20:15 · הוזמן</span>
+    </div>
+  </div>
+
+  <!-- Pull quote: the agent -->
+  <div style="margin: 22px 24px 0; padding: 18px 0; border-top: 1px solid #D6CFC0; border-bottom: 1px solid #D6CFC0;">
+    <p style="margin: 0; font-family: 'Frank Ruhl Libre', Georgia, serif; font-size: 19px; line-height: 1.42; font-style: italic; text-wrap: pretty;">״איפה אוכלים כשר בסביבת המלון?״</p>
+    <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+      <span style="width: 22px; height: 1px; background: #B5451B;"></span>
+      <span style="font-size: 12px; letter-spacing: 0.1em; color: #B5451B;">שאל את הסוכן</span>
+    </div>
+  </div>
+
+  <!-- Standfirst stats, as a byline rule -->
+  <div style="display: flex; align-items: baseline; gap: 20px; margin: 16px 24px 0;">
+    <span style="font-size: 12px; color: #7C7365;"><strong style="font-family: 'Frank Ruhl Libre', Georgia, serif; font-size: 16px; color: #16130F;">6</strong> משתתפים</span>
+    <span style="font-size: 12px; color: #7C7365;"><strong style="font-family: 'Frank Ruhl Libre', Georgia, serif; font-size: 16px; color: #16130F;">31</strong> עצירות</span>
+    <span style="font-size: 12px; color: #7C7365;"><strong style="font-family: 'Frank Ruhl Libre', Georgia, serif; font-size: 16px; color: #B5451B;">4</strong> פתוחים</span>
+  </div>
+
+  <!-- Nav: a folio line -->
+  <div style="position: absolute; inset-inline: 0; bottom: 0; padding: 0 12px; border-top: 3px double #16130F; background: #F4F0E8;">
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));">
+      <div style="min-height: 58px; display: flex; align-items: center; justify-content: center;">
+        <span style="font-family: 'Frank Ruhl Libre', Georgia, serif; font-size: 14px; font-weight: 700; border-bottom: 2px solid #B5451B; padding-bottom: 2px;">בית</span>
+      </div>
+      <div style="min-height: 58px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 13px; color: #7C7365;">מסלול</span></div>
+      <div style="min-height: 58px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 13px; color: #7C7365;">מומלצים</span></div>
+      <div style="min-height: 58px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 13px; color: #7C7365;">מסמכים</span></div>
+      <div style="min-height: 58px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 13px; color: #7C7365;">צ'קליסט</span></div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@200;300;400;500;600&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #4FE3C1; } a:hover { color: #3cbfa2; }
+  </style>
+</helmet>
+
+<div dir="rtl" style="width: 390px; height: 844px; overflow: hidden; position: relative; background: #04141A; font-family: Rubik, system-ui, sans-serif; color: #EAF4F2;">
+
+  <!-- Depth: light falling from the surface -->
+  <div style="position: absolute; inset: 0; background:
+      radial-gradient(130% 40% at 50% -4%, #1B6E74 0%, rgba(27,110,116,0) 62%),
+      radial-gradient(90% 34% at 18% 6%, #2A8E86 0%, rgba(42,142,134,0) 70%),
+      linear-gradient(180deg, #072A33 0%, #04141A 58%, #020C11 100%);"></div>
+
+  <!-- Caustics -->
+  <svg viewBox="0 0 390 300" style="position: absolute; inset-inline: 0; top: 0; width: 390px; height: 300px; opacity: 0.3;" aria-hidden="true">
+    <g fill="none" stroke="#7FF0DA" stroke-width="1.4" stroke-linecap="round">
+      <path d="M-10 34 C 60 8, 120 62, 190 30 C 250 2, 320 58, 400 26" opacity="0.55"/>
+      <path d="M-10 78 C 70 46, 130 102, 200 70 C 262 42, 330 96, 400 66" opacity="0.4"/>
+      <path d="M-10 128 C 66 98, 136 152, 206 120 C 268 94, 336 144, 400 116" opacity="0.26"/>
+      <path d="M-10 186 C 72 158, 140 206, 210 178 C 272 154, 340 198, 400 172" opacity="0.15"/>
+    </g>
+  </svg>
+
+  <!-- Header -->
+  <div style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 24px 22px 0;">
+    <span style="font-size: 15px; font-weight: 500;">סנטוריני</span>
+    <span style="font-size: 12px; font-weight: 300; color: rgba(234,244,242,0.55);">14 – 23 ביוני</span>
+  </div>
+
+  <!-- Countdown, sunk into the water -->
+  <div style="position: relative; padding: 62px 22px 0; text-align: center;">
+    <div style="font-size: 140px; font-weight: 200; line-height: 0.8; letter-spacing: -0.06em; color: #EAF4F2; text-shadow: 0 0 60px rgba(79,227,193,0.32);">23</div>
+    <div style="margin-top: 16px; font-size: 13px; font-weight: 300; letter-spacing: 0.34em; color: #4FE3C1;">י מ י ם   ל י צ י א ה</div>
+  </div>
+
+  <!-- Depth scale: the trip as a dive profile -->
+  <div style="position: absolute; inset-inline: 22px; top: 372px;">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+      <span style="font-size: 11px; font-weight: 400; letter-spacing: 0.16em; color: rgba(234,244,242,0.5);">ה ע ר ב</span>
+      <span style="flex-grow: 1; height: 1px; background: rgba(127,240,218,0.18);"></span>
+      <span style="font-size: 12px; color: #4FE3C1;">2</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 14px; padding: 15px 16px; border-radius: 18px; background: linear-gradient(180deg, rgba(127,240,218,0.09) 0%, rgba(127,240,218,0.03) 100%); border: 1px solid rgba(127,240,218,0.16);">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #4FE3C1; box-shadow: 0 0 12px #4FE3C1;"></span>
+        <span style="flex-grow: 1; font-size: 15px; font-weight: 400;">שקיעה באואיה</span>
+        <span style="font-size: 13px; font-weight: 300; color: #4FE3C1;">18:40</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; padding: 15px 16px; border-radius: 18px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07);">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: rgba(234,244,242,0.3);"></span>
+        <span style="flex-grow: 1; font-size: 15px; font-weight: 400; color: rgba(234,244,242,0.82);">ארוחת ערב · אמברוסיה</span>
+        <span style="font-size: 13px; font-weight: 300; color: rgba(234,244,242,0.5);">20:15</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div style="position: absolute; inset-inline: 22px; top: 566px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px;">
+    <div style="padding: 14px 12px; border-radius: 16px; background: rgba(255,255,255,0.04); display: flex; flex-direction: column; gap: 3px;">
+      <span style="font-size: 22px; font-weight: 300;">6</span>
+      <span style="font-size: 11px; font-weight: 300; color: rgba(234,244,242,0.55);">משתתפים</span>
+    </div>
+    <div style="padding: 14px 12px; border-radius: 16px; background: rgba(255,255,255,0.04); display: flex; flex-direction: column; gap: 3px;">
+      <span style="font-size: 22px; font-weight: 300;">9</span>
+      <span style="font-size: 11px; font-weight: 300; color: rgba(234,244,242,0.55);">ימים</span>
+    </div>
+    <div style="padding: 14px 12px; border-radius: 16px; background: rgba(79,227,193,0.12); display: flex; flex-direction: column; gap: 3px;">
+      <span style="font-size: 22px; font-weight: 300; color: #4FE3C1;">4</span>
+      <span style="font-size: 11px; font-weight: 300; color: rgba(79,227,193,0.75);">פתוחים</span>
+    </div>
+  </div>
+
+  <!-- Agent -->
+  <div style="position: absolute; inset-inline: 22px; top: 668px; display: flex; align-items: center; gap: 13px; padding: 15px 17px; border-radius: 18px; background: rgba(255,255,255,0.04); border: 1px solid rgba(127,240,218,0.13);">
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#4FE3C1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/>
+    </svg>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-size: 14px; font-weight: 400;">שאל את הסוכן</span>
+      <span style="font-size: 12px; font-weight: 300; color: rgba(234,244,242,0.5);">איפה אוכלים כשר בסביבת המלון?</span>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <div style="position: absolute; inset-inline: 0; bottom: 0; padding: 8px 10px 14px; background: linear-gradient(180deg, rgba(2,12,17,0) 0%, #020C11 42%);">
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px;">
+      <div style="min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;">
+        <span style="font-size: 12px; font-weight: 500; color: #4FE3C1;">בית</span>
+        <span style="width: 16px; height: 2px; border-radius: 2px; background: #4FE3C1;"></span>
+      </div>
+      <div style="min-height: 48px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; font-weight: 300; color: rgba(234,244,242,0.5);">מסלול</span></div>
+      <div style="min-height: 48px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; font-weight: 300; color: rgba(234,244,242,0.5);">מומלצים</span></div>
+      <div style="min-height: 48px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; font-weight: 300; color: rgba(234,244,242,0.5);">מסמכים</span></div>
+      <div style="min-height: 48px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; font-weight: 300; color: rgba(234,244,242,0.5);">צ'קליסט</span></div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

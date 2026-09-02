@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #FFB35C; } a:hover { color: #e09a45; }
+  </style>
+</helmet>
+
+<div dir="rtl" style="width: 390px; height: 844px; overflow: hidden; position: relative; background: #0B1020; font-family: Rubik, system-ui, sans-serif; color: #F2EFEA;">
+
+  <div style="position: absolute; inset-inline: 0; top: 0; height: 280px; background:
+      radial-gradient(120% 100% at 82% -20%, #4A2A55 0%, rgba(74,42,85,0) 66%),
+      radial-gradient(100% 84% at 10% -8%, #1E3A6B 0%, rgba(30,58,107,0) 70%);"></div>
+  <div style="position: absolute; inset: 0; background: linear-gradient(180deg, rgba(11,16,32,0) 0%, #0B1020 30%, #080C18 100%);"></div>
+
+  <!-- Header -->
+  <div style="position: relative; padding: 24px 22px 0;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <span style="font-size: 12px; font-weight: 300; color: rgba(242,239,234,0.55);">סנטוריני</span>
+      <span style="font-size: 12px; font-weight: 300; color: rgba(242,239,234,0.55);">18 שמורים</span>
+    </div>
+    <h1 style="margin: 8px 0 0; font-size: 30px; font-weight: 300; letter-spacing: -0.02em;">מומלצים</h1>
+  </div>
+
+  <!-- Filters -->
+  <div style="position: relative; margin-top: 18px; padding: 0 22px;">
+    <div style="display: flex; gap: 7px;">
+      <span style="min-height: 34px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 17px; background: rgba(255,179,92,0.18); border: 1px solid rgba(255,179,92,0.34); font-size: 13px; font-weight: 400; color: #FFB35C;">הכל</span>
+      <span style="min-height: 34px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 17px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); font-size: 13px; font-weight: 300; color: rgba(242,239,234,0.7);">אטרקציות</span>
+      <span style="min-height: 34px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 17px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); font-size: 13px; font-weight: 300; color: rgba(242,239,234,0.7);">מסעדות</span>
+      <span style="min-height: 34px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 17px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); font-size: 13px; font-weight: 300; color: rgba(242,239,234,0.7);">טיפים</span>
+    </div>
+  </div>
+
+  <!-- Kosher live-search strip: the differentiator, given real estate -->
+  <div style="position: relative; margin: 18px 22px 0; padding: 15px 16px; border-radius: 20px; background: linear-gradient(135deg, rgba(255,179,92,0.13) 0%, rgba(255,179,92,0.04) 100%); border: 1px solid rgba(255,179,92,0.24);">
+    <div style="font-size: 14px; font-weight: 500; margin-bottom: 9px;">אוכל כשר בסנטוריני</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 7px;">
+      <span style="min-height: 32px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: 16px; background: rgba(255,179,92,0.2); font-size: 12px; font-weight: 400; color: #FFD5A3;">מסעדות כשרות</span>
+      <span style="min-height: 32px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: 16px; background: rgba(255,179,92,0.2); font-size: 12px; font-weight: 400; color: #FFD5A3;">בית חב״ד</span>
+    </div>
+    <p style="margin: 9px 0 0; font-size: 11px; font-weight: 300; line-height: 1.45; color: rgba(242,239,234,0.5);">חיפוש חי — תמיד מעודכן. כדאי לאמת מול בית חב״ד לפני הנסיעה.</p>
+  </div>
+
+  <!-- Cards -->
+  <div style="position: relative; margin: 14px 22px 0; display: flex; flex-direction: column; gap: 11px;">
+
+    <div style="padding: 15px 16px; border-radius: 20px; background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.1);">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+        <div style="min-width: 0;">
+          <div style="font-size: 16px; font-weight: 400;">קרן אויה</div>
+          <div style="font-size: 11px; font-weight: 300; color: rgba(242,239,234,0.5); margin-top: 2px;">אטרקציה · ₪₪</div>
+        </div>
+        <div style="display: flex; gap: 7px; flex-shrink: 0;">
+          <span style="width: 34px; height: 34px; border-radius: 50%; background: rgba(255,179,92,0.18); display: inline-flex; align-items: center; justify-content: center;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#FFB35C" stroke="#FFB35C" stroke-width="1.6" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l8.8 8.8 8.8-8.8a5.5 5.5 0 0 0 0-7.8z"/></svg>
+          </span>
+          <span style="width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.07); display: inline-flex; align-items: center; justify-content: center;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(242,239,234,0.75)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </span>
+        </div>
+      </div>
+      <p style="margin: 8px 0 0; font-size: 13px; font-weight: 300; line-height: 1.5; color: rgba(242,239,234,0.68);">נקודת השקיעה הידועה של האי. מגיעים שעה מוקדם — עם ילדים זה ההבדל בין חוויה לבין תור.</p>
+      <div style="display: flex; gap: 6px; margin-top: 10px;">
+        <span style="padding: 4px 10px; border-radius: 12px; background: rgba(255,255,255,0.06); font-size: 11px; font-weight: 300; color: rgba(242,239,234,0.6);">נוף</span>
+        <span style="padding: 4px 10px; border-radius: 12px; background: rgba(255,255,255,0.06); font-size: 11px; font-weight: 300; color: rgba(242,239,234,0.6);">מתאים לילדים</span>
+      </div>
+    </div>
+
+    <div style="padding: 15px 16px; border-radius: 20px; background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.1);">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+        <div style="min-width: 0;">
+          <div style="font-size: 16px; font-weight: 400;">חוף פריסה האדום</div>
+          <div style="font-size: 11px; font-weight: 300; color: rgba(242,239,234,0.5); margin-top: 2px;">אטרקציה · חינם</div>
+        </div>
+        <div style="display: flex; gap: 7px; flex-shrink: 0;">
+          <span style="width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.07); display: inline-flex; align-items: center; justify-content: center;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(242,239,234,0.6)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l8.8 8.8 8.8-8.8a5.5 5.5 0 0 0 0-7.8z"/></svg>
+          </span>
+          <span style="width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.07); display: inline-flex; align-items: center; justify-content: center;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(242,239,234,0.75)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </span>
+        </div>
+      </div>
+      <p style="margin: 8px 0 0; font-size: 13px; font-weight: 300; line-height: 1.5; color: rgba(242,239,234,0.68);">הליכה קצרה על שביל לא סלול. נעליים סגורות, ולא בשעות הצהריים.</p>
+      <div style="display: flex; gap: 6px; margin-top: 10px;">
+        <span style="padding: 4px 10px; border-radius: 12px; background: rgba(255,255,255,0.06); font-size: 11px; font-weight: 300; color: rgba(242,239,234,0.6);">חוף</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Ask the agent, docked -->
+  <div style="position: absolute; inset-inline: 22px; bottom: 92px; display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 0 16px; border-radius: 20px; background: rgba(255,179,92,0.14); border: 1px solid rgba(255,179,92,0.3);">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFB35C" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/>
+    </svg>
+    <span style="font-size: 14px; font-weight: 400; color: #FFB35C;">שאל את הסוכן על עוד מקומות</span>
+  </div>
+
+  <!-- Nav -->
+  <div style="position: absolute; inset-inline: 16px; bottom: 18px; padding: 6px; border-radius: 26px; background: rgba(12,18,36,0.72); border: 1px solid rgba(255,255,255,0.11); backdrop-filter: blur(22px);">
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px;">
+      <div style="min-height: 48px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; font-weight: 300; color: rgba(242,239,234,0.55);">בית</span></div>
+      <div style="min-height: 48px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; font-weight: 300; color: rgba(242,239,234,0.55);">מסלול</span></div>
+      <div style="min-height: 48px; border-radius: 20px; background: rgba(255,179,92,0.16); display: flex; align-items: center; justify-content: center;">
+        <span style="font-size: 12px; font-weight: 500; color: #FFB35C;">מומלצים</span>
+      </div>
+      <div style="min-height: 48px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; font-weight: 300; color: rgba(242,239,234,0.55);">מסמכים</span></div>
+      <div style="min-height: 48px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; font-weight: 300; color: rgba(242,239,234,0.55);">צ'קליסט</span></div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&family=Miriam+Libre:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #FF4D00; } a:hover { color: #cc3d00; }
+  </style>
+</helmet>
+
+<div dir="rtl" style="width: 390px; height: 844px; overflow: hidden; position: relative; background: #E8E5DD; font-family: Heebo, system-ui, sans-serif; color: #101010;">
+
+  <!-- Hard black header block -->
+  <div style="background: #101010; color: #E8E5DD; padding: 20px 20px 18px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 11px; letter-spacing: 0.18em;">TRIPCRAFT / 06</span>
+      <span style="background: #FF4D00; color: #101010; font-size: 10px; font-weight: 900; padding: 3px 7px; letter-spacing: 0.1em;">מאושר</span>
+    </div>
+    <div style="display: flex; align-items: flex-end; justify-content: space-between;">
+      <div style="display: flex; flex-direction: column; gap: 1px;">
+        <span style="font-family: 'Miriam Libre', monospace; font-size: 40px; font-weight: 700; line-height: 1;">TLV</span>
+        <span style="font-size: 11px; color: #8C887E;">נתב״ג</span>
+      </div>
+      <svg width="52" height="16" viewBox="0 0 52 16" fill="none" stroke="#FF4D00" stroke-width="1.6" style="margin-bottom: 12px; transform: scaleX(-1);" aria-hidden="true">
+        <path d="M1 8h44M38 2l7 6-7 6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div style="display: flex; flex-direction: column; gap: 1px; text-align: start;">
+        <span style="font-family: 'Miriam Libre', monospace; font-size: 40px; font-weight: 700; line-height: 1;">JTR</span>
+        <span style="font-size: 11px; color: #8C887E;">סנטוריני</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Perforation -->
+  <div style="position: relative; height: 18px; background: #101010;">
+    <div style="position: absolute; inset-inline: 0; top: 50%; border-top: 2px dashed #E8E5DD;"></div>
+    <span style="position: absolute; inset-inline-end: -9px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; border-radius: 50%; background: #E8E5DD;"></span>
+    <span style="position: absolute; inset-inline-start: -9px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; border-radius: 50%; background: #E8E5DD;"></span>
+  </div>
+
+  <!-- Countdown as a departure board -->
+  <div style="padding: 22px 20px 0;">
+    <span style="font-family: 'Miriam Libre', monospace; font-size: 11px; letter-spacing: 0.18em; color: #6E6A60;">יוצאים בעוד</span>
+    <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 6px;">
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 82px; font-weight: 700; line-height: 0.85; letter-spacing: -0.02em;">23</span>
+      <span style="font-size: 22px; font-weight: 900;">ימים</span>
+      <span style="margin-inline-start: auto; font-family: 'Miriam Libre', monospace; font-size: 13px; color: #6E6A60;">14.06 · 06:40</span>
+    </div>
+  </div>
+
+  <!-- Data grid, like a ticket's field block -->
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin: 22px 20px 0; background: #101010; padding: 2px;">
+    <div style="background: #E8E5DD; padding: 11px 10px; display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 9px; letter-spacing: 0.14em; color: #6E6A60;">נוסעים</span>
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 21px; font-weight: 700;">06</span>
+    </div>
+    <div style="background: #E8E5DD; padding: 11px 10px; display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 9px; letter-spacing: 0.14em; color: #6E6A60;">לילות</span>
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 21px; font-weight: 700;">09</span>
+    </div>
+    <div style="background: #FF4D00; padding: 11px 10px; display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 9px; letter-spacing: 0.14em; color: #101010;">פתוחים</span>
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 21px; font-weight: 700; color: #101010;">04</span>
+    </div>
+  </div>
+
+  <!-- Today, as manifest rows -->
+  <div style="margin: 22px 20px 0;">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 2px solid #101010;">
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 11px; letter-spacing: 0.16em;">מ ה   ה י ו ם</span>
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 11px; color: #6E6A60;">02 פריטים</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid #C9C5BA;">
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 14px; font-weight: 700; min-width: 46px;">18:40</span>
+      <span style="flex-grow: 1; font-size: 15px; font-weight: 700;">שקיעה באואיה</span>
+      <span style="width: 8px; height: 8px; background: #FF4D00;"></span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid #C9C5BA;">
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 14px; font-weight: 700; min-width: 46px;">20:15</span>
+      <span style="flex-grow: 1; font-size: 15px; font-weight: 700;">אמברוסיה · הוזמן</span>
+      <span style="width: 8px; height: 8px; border: 1.5px solid #101010;"></span>
+    </div>
+  </div>
+
+  <!-- Agent as a rubber stamp -->
+  <div style="display: flex; align-items: center; gap: 13px; margin: 20px 20px 0; padding: 14px 15px; border: 2px solid #101010; background: #DEDACE;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#101010" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/>
+    </svg>
+    <div style="display: flex; flex-direction: column; gap: 1px;">
+      <span style="font-size: 14px; font-weight: 900;">שאל את הסוכן</span>
+      <span style="font-family: 'Miriam Libre', monospace; font-size: 11px; color: #6E6A60;">כשר בסביבה? יום גשום?</span>
+    </div>
+  </div>
+
+  <!-- Nav: barcode rail -->
+  <div style="position: absolute; inset-inline: 0; bottom: 0; background: #101010;">
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));">
+      <div style="min-height: 60px; background: #FF4D00; display: flex; align-items: center; justify-content: center;">
+        <span style="font-size: 12px; font-weight: 900; color: #101010;">בית</span>
+      </div>
+      <div style="min-height: 60px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; color: #B8B4AA;">מסלול</span></div>
+      <div style="min-height: 60px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; color: #B8B4AA;">מומלצים</span></div>
+      <div style="min-height: 60px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; color: #B8B4AA;">מסמכים</span></div>
+      <div style="min-height: 60px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; color: #B8B4AA;">צ'קליסט</span></div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

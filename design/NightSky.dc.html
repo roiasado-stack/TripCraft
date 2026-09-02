@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bellefair&family=Heebo:wght@200;300;400;500&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #E8C87E; } a:hover { color: #c9aa62; }
+  </style>
+</helmet>
+
+<div dir="rtl" style="width: 390px; height: 844px; overflow: hidden; position: relative; background: #070A18; font-family: Heebo, system-ui, sans-serif; color: #EDEAE0;">
+
+  <div style="position: absolute; inset: 0; background:
+      radial-gradient(110% 46% at 74% 8%, #16214A 0%, rgba(22,33,74,0) 66%),
+      radial-gradient(80% 30% at 12% 88%, #241B33 0%, rgba(36,27,51,0) 70%),
+      #070A18;"></div>
+
+  <!-- Star field -->
+  <svg viewBox="0 0 390 844" style="position: absolute; inset: 0; width: 390px; height: 844px;" aria-hidden="true">
+    <g fill="#EDEAE0">
+      <circle cx="34" cy="72" r="1" opacity="0.55"/><circle cx="112" cy="38" r="0.8" opacity="0.4"/>
+      <circle cx="188" cy="96" r="1.3" opacity="0.7"/><circle cx="262" cy="52" r="0.9" opacity="0.45"/>
+      <circle cx="330" cy="118" r="1.1" opacity="0.6"/><circle cx="62" cy="156" r="0.8" opacity="0.35"/>
+      <circle cx="152" cy="188" r="1" opacity="0.5"/><circle cx="298" cy="204" r="0.9" opacity="0.42"/>
+      <circle cx="88" cy="252" r="1.2" opacity="0.55"/><circle cx="352" cy="286" r="0.8" opacity="0.38"/>
+      <circle cx="24" cy="330" r="1" opacity="0.45"/><circle cx="214" cy="300" r="0.85" opacity="0.4"/>
+      <circle cx="128" cy="404" r="0.9" opacity="0.32"/><circle cx="316" cy="392" r="1.1" opacity="0.46"/>
+      <circle cx="56" cy="470" r="0.8" opacity="0.3"/><circle cx="240" cy="512" r="0.9" opacity="0.34"/>
+      <circle cx="358" cy="560" r="1" opacity="0.4"/><circle cx="96" cy="612" r="0.85" opacity="0.28"/>
+    </g>
+  </svg>
+
+  <!-- Header -->
+  <div style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 24px 22px 0;">
+    <span style="font-family: Bellefair, Georgia, serif; font-size: 19px; letter-spacing: 0.04em;">סנטוריני</span>
+    <span style="font-size: 11px; font-weight: 200; letter-spacing: 0.1em; color: rgba(237,234,224,0.5);">14 – 23 ביוני</span>
+  </div>
+
+  <!-- Countdown as a celestial figure -->
+  <div style="position: relative; padding: 78px 22px 0; text-align: center;">
+    <div style="font-family: Bellefair, Georgia, serif; font-size: 148px; line-height: 0.76; letter-spacing: -0.02em; color: #EDEAE0;">23</div>
+    <div style="display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 22px;">
+      <span style="width: 40px; height: 1px; background: rgba(232,200,126,0.4);"></span>
+      <span style="font-size: 11px; font-weight: 300; letter-spacing: 0.3em; color: #E8C87E;">י מ י ם</span>
+      <span style="width: 40px; height: 1px; background: rgba(232,200,126,0.4);"></span>
+    </div>
+  </div>
+
+  <!-- The evening, drawn as a constellation -->
+  <div style="position: absolute; inset-inline: 22px; top: 400px;">
+    <span style="font-size: 11px; font-weight: 300; letter-spacing: 0.18em; color: rgba(237,234,224,0.45);">מ ז ל   ה ע ר ב</span>
+
+    <div style="position: relative; margin-top: 18px; height: 148px;">
+      <svg viewBox="0 0 346 148" style="position: absolute; inset: 0; width: 346px; height: 148px;" aria-hidden="true">
+        <g stroke="#E8C87E" stroke-width="0.8" opacity="0.42" fill="none">
+          <path d="M300 26 L188 62 L232 116 L96 96"/>
+        </g>
+        <g fill="#E8C87E">
+          <circle cx="300" cy="26" r="3.6"/><circle cx="188" cy="62" r="2.6"/>
+          <circle cx="232" cy="116" r="2.2" opacity="0.6"/><circle cx="96" cy="96" r="2.8" opacity="0.6"/>
+        </g>
+      </svg>
+
+      <div style="position: absolute; inset-inline-end: 4px; top: 40px; display: flex; flex-direction: column; gap: 2px; text-align: start;">
+        <span style="font-family: Bellefair, Georgia, serif; font-size: 17px;">שקיעה באואיה</span>
+        <span style="font-size: 11px; font-weight: 200; color: rgba(237,234,224,0.5);">18:40</span>
+      </div>
+      <div style="position: absolute; inset-inline-start: 22px; top: 108px; display: flex; flex-direction: column; gap: 2px; text-align: start;">
+        <span style="font-family: Bellefair, Georgia, serif; font-size: 16px; color: rgba(237,234,224,0.85);">אמברוסיה</span>
+        <span style="font-size: 11px; font-weight: 200; color: rgba(237,234,224,0.42);">20:15</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats as an ephemeris rule -->
+  <div style="position: absolute; inset-inline: 22px; top: 590px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid rgba(237,234,224,0.13); border-bottom: 1px solid rgba(237,234,224,0.13);">
+    <div style="padding: 14px 4px; display: flex; flex-direction: column; gap: 3px; align-items: center;">
+      <span style="font-family: Bellefair, Georgia, serif; font-size: 25px;">6</span>
+      <span style="font-size: 10px; font-weight: 200; letter-spacing: 0.08em; color: rgba(237,234,224,0.5);">משתתפים</span>
+    </div>
+    <div style="padding: 14px 4px; display: flex; flex-direction: column; gap: 3px; align-items: center; border-inline: 1px solid rgba(237,234,224,0.13);">
+      <span style="font-family: Bellefair, Georgia, serif; font-size: 25px;">9</span>
+      <span style="font-size: 10px; font-weight: 200; letter-spacing: 0.08em; color: rgba(237,234,224,0.5);">ימים</span>
+    </div>
+    <div style="padding: 14px 4px; display: flex; flex-direction: column; gap: 3px; align-items: center;">
+      <span style="font-family: Bellefair, Georgia, serif; font-size: 25px; color: #E8C87E;">4</span>
+      <span style="font-size: 10px; font-weight: 200; letter-spacing: 0.08em; color: rgba(232,200,126,0.7);">פתוחים</span>
+    </div>
+  </div>
+
+  <!-- Agent -->
+  <div style="position: absolute; inset-inline: 22px; top: 690px; display: flex; align-items: center; gap: 13px; padding-top: 16px; border-top: 1px solid rgba(237,234,224,0.13);">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E8C87E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/>
+    </svg>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-family: Bellefair, Georgia, serif; font-size: 16px;">שאל את הסוכן</span>
+      <span style="font-size: 11px; font-weight: 200; color: rgba(237,234,224,0.45);">מה עושים עם בן 4 ביום גשום?</span>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <div style="position: absolute; inset-inline: 0; bottom: 0; padding: 10px 12px 16px;">
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));">
+      <div style="min-height: 46px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;">
+        <span style="font-size: 12px; font-weight: 400; color: #E8C87E;">בית</span>
+        <span style="width: 3px; height: 3px; border-radius: 50%; background: #E8C87E;"></span>
+      </div>
+      <div style="min-height: 46px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; font-weight: 200; color: rgba(237,234,224,0.45);">מסלול</span></div>
+      <div style="min-height: 46px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; font-weight: 200; color: rgba(237,234,224,0.45);">מומלצים</span></div>
+      <div style="min-height: 46px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; font-weight: 200; color: rgba(237,234,224,0.45);">מסמכים</span></div>
+      <div style="min-height: 46px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 12px; font-weight: 200; color: rgba(237,234,224,0.45);">צ'קליסט</span></div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

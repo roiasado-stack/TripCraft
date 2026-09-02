@@ -12,3 +12,6 @@ dist-ssr
 
 # Generated bundle for sharing the source — rebuildable, so not tracked.
 tripcraft-codebase.zip
+
+# Seeded design canvas — rebuilt from design/*.dc.html, so not tracked.
+design/tripcraft-*.html

@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Suez+One&family=Assistant:wght@400;600;700&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #A6432B; } a:hover { color: #7d3220; }
+  </style>
+</helmet>
+
+<div dir="rtl" style="width: 390px; height: 844px; overflow: hidden; position: relative; background: #EFE9DC; font-family: Assistant, system-ui, sans-serif; color: #23201A;">
+
+  <!-- Topographic ground -->
+  <svg viewBox="0 0 390 844" style="position: absolute; inset: 0; width: 390px; height: 844px;" aria-hidden="true">
+    <g fill="none" stroke="#C4B99E" stroke-width="1.1" opacity="0.55">
+      <path d="M-30 120 C 90 60, 210 170, 420 96"/>
+      <path d="M-30 152 C 96 96, 214 200, 420 130"/>
+      <path d="M-30 186 C 104 134, 220 232, 420 166"/>
+      <path d="M-30 402 C 70 340, 190 452, 420 372"/>
+      <path d="M-30 436 C 78 380, 196 484, 420 408"/>
+      <path d="M-30 700 C 88 640, 208 748, 420 668"/>
+      <path d="M-30 736 C 96 680, 214 780, 420 704"/>
+    </g>
+    <g fill="none" stroke="#A6432B" stroke-width="1" opacity="0.22" stroke-dasharray="3 6">
+      <path d="M330 0 L330 844"/>
+      <path d="M60 0 L60 844"/>
+    </g>
+  </svg>
+
+  <!-- Header -->
+  <div style="position: relative; display: flex; align-items: baseline; justify-content: space-between; padding: 22px 22px 0;">
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-size: 11px; letter-spacing: 0.22em; color: #7A705C;">י ו ו ן</span>
+      <span style="font-family: 'Suez One', Georgia, serif; font-size: 27px; line-height: 1.1;">סנטוריני</span>
+    </div>
+    <span style="font-family: 'Suez One', Georgia, serif; font-size: 12px; color: #A6432B; letter-spacing: 0.06em;">36.39°N · 25.46°E</span>
+  </div>
+
+  <!-- Countdown, set as a survey marker -->
+  <div style="position: relative; margin: 26px 22px 0; padding: 20px 0 18px; border-top: 2px solid #23201A; border-bottom: 1px solid #C4B99E;">
+    <div style="display: flex; align-items: flex-end; gap: 10px;">
+      <span style="font-family: 'Suez One', Georgia, serif; font-size: 88px; line-height: 0.82; letter-spacing: -0.03em;">23</span>
+      <div style="display: flex; flex-direction: column; gap: 3px; padding-bottom: 8px;">
+        <span style="font-size: 19px; font-weight: 700;">ימים</span>
+        <span style="font-size: 13px; color: #7A705C;">עד היציאה</span>
+      </div>
+      <span style="margin-inline-start: auto; padding-bottom: 9px; font-size: 12px; color: #7A705C;">14.6 – 23.6</span>
+    </div>
+  </div>
+
+  <!-- Route spine: the itinerary as an actual drawn route -->
+  <div style="position: relative; margin: 20px 22px 0;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+      <span style="font-size: 12px; letter-spacing: 0.16em; color: #7A705C;">ה מ ס ל ו ל</span>
+      <span style="font-size: 12px; color: #A6432B; font-weight: 600;">9 ימים · 31 עצירות</span>
+    </div>
+
+    <div style="position: relative; display: flex; flex-direction: column; gap: 14px; padding-inline-end: 30px;">
+      <svg viewBox="0 0 30 250" preserveAspectRatio="none" style="position: absolute; inset-inline-end: 2px; top: 6px; width: 30px; height: 250px;" aria-hidden="true">
+        <path d="M15 4 C 30 60, 2 110, 15 168 C 24 208, 12 226, 15 244" fill="none" stroke="#A6432B" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 7"/>
+      </svg>
+
+      <div style="display: flex; gap: 12px; align-items: flex-start;">
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-family: 'Suez One', Georgia, serif; font-size: 16px;">שקיעה באואיה</span>
+          <span style="font-size: 13px; color: #7A705C;">18:40 · הכי צפוף בשעה הזו</span>
+        </div>
+        <span style="flex-shrink: 0; width: 13px; height: 13px; margin-top: 5px; border-radius: 50%; background: #A6432B; box-shadow: 0 0 0 4px #EFE9DC;"></span>
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: flex-start;">
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-family: 'Suez One', Georgia, serif; font-size: 16px;">ארוחת ערב · אמברוסיה</span>
+          <span style="font-size: 13px; color: #7A705C;">20:15 · הוזמן מראש</span>
+        </div>
+        <span style="flex-shrink: 0; width: 13px; height: 13px; margin-top: 5px; border-radius: 50%; background: #EFE9DC; border: 2px solid #A6432B; box-shadow: 0 0 0 4px #EFE9DC;"></span>
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: flex-start;">
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-family: 'Suez One', Georgia, serif; font-size: 16px; color: #7A705C;">מחר · שיט לנאה קמני</span>
+          <span style="font-size: 13px; color: #9A9075;">07:30 · 6 משתתפים</span>
+        </div>
+        <span style="flex-shrink: 0; width: 13px; height: 13px; margin-top: 5px; border-radius: 50%; background: #EFE9DC; border: 2px solid #C4B99E; box-shadow: 0 0 0 4px #EFE9DC;"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend strip: the group, as a map legend -->
+  <div style="position: relative; margin: 24px 22px 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: #C4B99E; border: 1px solid #C4B99E;">
+    <div style="background: #EFE9DC; padding: 12px 10px; display: flex; flex-direction: column; gap: 3px;">
+      <span style="font-family: 'Suez One', Georgia, serif; font-size: 22px; line-height: 1;">6</span>
+      <span style="font-size: 11px; color: #7A705C;">משתתפים</span>
+    </div>
+    <div style="background: #EFE9DC; padding: 12px 10px; display: flex; flex-direction: column; gap: 3px;">
+      <span style="font-family: 'Suez One', Georgia, serif; font-size: 22px; line-height: 1;">2</span>
+      <span style="font-size: 11px; color: #7A705C;">טיסות</span>
+    </div>
+    <div style="background: #EFE9DC; padding: 12px 10px; display: flex; flex-direction: column; gap: 3px;">
+      <span style="font-family: 'Suez One', Georgia, serif; font-size: 22px; line-height: 1;">4</span>
+      <span style="font-size: 11px; color: #A6432B;">פתוחים בצ'קליסט</span>
+    </div>
+  </div>
+
+  <!-- Agent, as a margin note on the map -->
+  <div style="position: relative; margin: 18px 22px 0; padding: 14px 16px; background: #E3DBC8; border-inline-start: 3px solid #4A5D3A;">
+    <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 5px;">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#4A5D3A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/>
+      </svg>
+      <span style="font-family: 'Suez One', Georgia, serif; font-size: 15px; color: #35452A;">שאל את הסוכן</span>
+    </div>
+    <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #55503F;">"איפה אוכלים כשר בסביבת המלון?" · "מה עושים עם בן 4 ביום גשום?"</p>
+  </div>
+
+  <!-- Nav: a coordinate rule, not a pill bar -->
+  <div style="position: absolute; inset-inline: 0; bottom: 0; border-top: 2px solid #23201A; background: #EFE9DC;">
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));">
+      <div style="min-height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border-top: 4px solid #A6432B; margin-top: -3px;">
+        <span style="font-size: 12px; font-weight: 700; color: #A6432B;">בית</span>
+        <span style="font-size: 9px; color: #A6432B; letter-spacing: 0.1em;">01</span>
+      </div>
+      <div style="min-height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;">
+        <span style="font-size: 12px; color: #7A705C;">מסלול</span>
+        <span style="font-size: 9px; color: #B0A68C; letter-spacing: 0.1em;">02</span>
+      </div>
+      <div style="min-height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;">
+        <span style="font-size: 12px; color: #7A705C;">מומלצים</span>
+        <span style="font-size: 9px; color: #B0A68C; letter-spacing: 0.1em;">03</span>
+      </div>
+      <div style="min-height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;">
+        <span style="font-size: 12px; color: #7A705C;">מסמכים</span>
+        <span style="font-size: 9px; color: #B0A68C; letter-spacing: 0.1em;">04</span>
+      </div>
+      <div style="min-height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;">
+        <span style="font-size: 12px; color: #7A705C;">צ'קליסט</span>
+        <span style="font-size: 9px; color: #B0A68C; letter-spacing: 0.1em;">05</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
