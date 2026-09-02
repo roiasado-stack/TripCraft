@@ -15,3 +15,6 @@ tripcraft-codebase.zip
 
 # Seeded design canvas — rebuilt from design/*.dc.html, so not tracked.
 design/tripcraft-*.html
+
+# Playwright MCP scratch output (snapshots, console logs) — not project files.
+.playwright-mcp/
