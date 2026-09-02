@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarPlus, Heart, Send, Sparkles } from "lucide-react";
+import { AlertCircle, CalendarPlus, Heart, RotateCcw, Send, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { AgentCard, TripChatMessage } from "@/lib/types";
 import { useTrip } from "./TripLayout";
@@ -27,7 +27,13 @@ export default function AskTab() {
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
   const [added, setAdded] = useState<Record<string, boolean>>({});
+  /** Last failure, kept in the thread — the toast is gone in 3.6s but the
+      unanswered question stays, so it needs a durable explanation. */
+  const [failed, setFailed] = useState<{ question: string; message: string } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  /** State guard, not `thinking`: two fast Enters read the same stale closure
+      and each send costs money. */
+  const inFlight = useRef(false);
 
   const load = async () => {
     const { data } = await supabase
@@ -49,8 +55,10 @@ export default function AskTab() {
 
   const send = async (text: string) => {
     const question = text.trim();
-    if (!question || thinking) return;
+    if (!question || inFlight.current) return;
+    inFlight.current = true;
     setDraft("");
+    setFailed(null);
     setThinking(true);
 
     // Replay the conversation so far, then persist both turns ourselves —
@@ -69,11 +77,19 @@ export default function AskTab() {
 
     const res = await askAgent(trip, question, history);
     setThinking(false);
+    inFlight.current = false;
 
     if (!res.ok) {
-      if (res.error === "not_deployed") toast.error("הסוכן עדיין לא הופעל. ראה README (Edge Function).");
-      else if (res.error === "forbidden") toast.error("אין לך הרשאה לשאול על הטיול הזה.");
-      else toast.error("הסוכן לא הצליח לענות. נסה שוב.");
+      const message =
+        res.error === "not_deployed"
+          // No Latin term mid-sentence: a Hebrew prefix glued to one ("ה-Edge
+          // Function") strands the hyphen and the full stop when the line wraps.
+          ? "הסוכן עדיין לא הופעל בפרויקט הזה. צריך לפרוס את הפונקציה בצד השרת — ראה README."
+          : res.error === "forbidden"
+            ? "אין לך הרשאה לשאול על הטיול הזה."
+            : "הסוכן לא הצליח לענות.";
+      setFailed({ question, message });
+      toast.error(message);
       return;
     }
 
@@ -144,7 +160,10 @@ export default function AskTab() {
   };
 
   return (
-    <div className="px-4">
+    // Fills the viewport minus TripLayout's pb-24, so the composer is pushed to
+    // the bottom by the growing message area. `sticky` alone only pins once the
+    // page overflows — on a short conversation it just floated mid-screen.
+    <div className="flex min-h-[calc(100svh-6rem)] flex-col px-4">
       <TripHeader trip={trip} subtitle="שאלות והמלצות" />
       <ScreenTitle
         title="שאל את הסוכן"
@@ -158,11 +177,11 @@ export default function AskTab() {
       />
 
       {loading ? (
-        <div className="flex justify-center py-10">
+        <div className="flex flex-1 justify-center py-10">
           <Spinner />
         </div>
       ) : (
-        <div className="flex flex-col gap-3 pb-4">
+        <div className="flex flex-1 flex-col gap-3 pb-4">
           {messages.length === 0 && (
             <Card className="p-4">
               <div className="mb-1.5 flex items-center gap-2 text-sm font-bold text-primary">
@@ -247,6 +266,26 @@ export default function AskTab() {
               </div>
             </div>
           )}
+
+          {failed && !thinking && (
+            <div className="flex justify-end">
+              <div className="w-full rounded-3xl border border-destructive/35 bg-destructive/10 px-4 py-3">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
+                  <p className="flex-1 text-sm leading-snug text-foreground">{failed.message}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2.5"
+                  onClick={() => send(failed.question)}
+                >
+                  <RotateCcw className="size-4" /> נסה שוב
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div ref={endRef} />
         </div>
       )}

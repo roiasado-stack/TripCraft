@@ -5,6 +5,44 @@ export type TuneOption = "more_kids" | "calmer" | "cheaper" | "more_active";
 
 export type GenerateKind = "suggestions" | "itinerary" | "checklist";
 
+/**
+ * Translates a `functions.invoke()` failure into our own error vocabulary.
+ *
+ * supabase-js hides the real cause behind two wrappers, and neither message
+ * mentions the status: a function that isn't deployed (or is unreachable)
+ * throws `FunctionsFetchError` — "Failed to send a request to the Edge
+ * Function" — while any non-2xx becomes `FunctionsHttpError` — "Edge Function
+ * returned a non-2xx status code" — carrying the real Response on `.context`.
+ * Matching on the message alone silently collapses every case into "unknown",
+ * which is what used to happen here.
+ */
+async function mapInvokeError(error: unknown): Promise<string> {
+  const e = error as { name?: string; message?: string; context?: Response };
+  const msg = (e?.message ?? "").toLowerCase();
+
+  if (
+    e?.name === "FunctionsFetchError" ||
+    msg.includes("failed to send a request") ||
+    msg.includes("failed to fetch")
+  )
+    return "not_deployed";
+
+  const status = e?.context?.status;
+  if (status === 404) return "not_deployed";
+
+  // Our own functions answer with { error: "..." } — prefer that over the wrapper.
+  if (e?.context && typeof e.context.clone === "function") {
+    try {
+      const body = (await e.context.clone().json()) as { error?: unknown };
+      if (typeof body?.error === "string") return body.error;
+    } catch {
+      // Non-JSON body (a platform error page, say) — fall through.
+    }
+  }
+  if (status === 401 || status === 403) return "forbidden";
+  return e?.message || "unknown";
+}
+
 export type AiResult = {
   ok: boolean;
   error?: string;
@@ -44,12 +82,7 @@ export async function generateContent(
         })),
       },
     });
-    if (error) {
-      const msg = (error.message || "").toLowerCase();
-      if (msg.includes("not found") || msg.includes("failed to fetch") || msg.includes("404"))
-        return { ok: false, error: "not_deployed" };
-      return { ok: false, error: error.message };
-    }
+    if (error) return { ok: false, error: await mapInvokeError(error) };
     return { ok: true, inserted: (data as { inserted?: number })?.inserted ?? 0 };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "unknown" };
@@ -76,12 +109,7 @@ export async function askAgent(trip: Trip, message: string, history: AskTurn[]):
     const { data, error } = await supabase.functions.invoke("ask", {
       body: { trip_id: trip.id, message, history },
     });
-    if (error) {
-      const msg = (error.message || "").toLowerCase();
-      if (msg.includes("not found") || msg.includes("failed to fetch") || msg.includes("404"))
-        return { ok: false, error: "not_deployed" };
-      return { ok: false, error: error.message };
-    }
+    if (error) return { ok: false, error: await mapInvokeError(error) };
     const res = data as { answer?: string; cards?: AgentCard[] };
     if (!res?.answer) return { ok: false, error: "empty_answer" };
     return { ok: true, answer: res.answer, cards: res.cards ?? [] };

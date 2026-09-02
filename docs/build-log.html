@@ -1,0 +1,695 @@
+<title>יומן פיתוח TripCraft</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;600;700;800&family=Heebo:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    --ground: #F7FAFA;
+    --surface: #FFFFFF;
+    --sunken: #EDF3F3;
+    --ink: #14212B;
+    --ink-soft: #4A5D66;
+    --ink-faint: #7C8F97;
+    --accent: #0E7C82;
+    --accent-soft: #DCEFEF;
+    --finding: #B4442A;
+    --finding-soft: #FAEAE5;
+    --rule: #D9E5E6;
+    --rule-soft: #E8F0F0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0D1519;
+      --surface: #131F24;
+      --sunken: #0A1215;
+      --ink: #E6EFF0;
+      --ink-soft: #A8BCC2;
+      --ink-faint: #7A9098;
+      --accent: #4ECDC7;
+      --accent-soft: #10312F;
+      --finding: #E8836A;
+      --finding-soft: #2C1A15;
+      --rule: #24343A;
+      --rule-soft: #1B2A2F;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0D1519;
+    --surface: #131F24;
+    --sunken: #0A1215;
+    --ink: #E6EFF0;
+    --ink-soft: #A8BCC2;
+    --ink-faint: #7A9098;
+    --accent: #4ECDC7;
+    --accent-soft: #10312F;
+    --finding: #E8836A;
+    --finding-soft: #2C1A15;
+    --rule: #24343A;
+    --rule-soft: #1B2A2F;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: Heebo, system-ui, sans-serif;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 1.68;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 24px 120px;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    padding: 72px 0 34px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .kicker {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-family: Rubik, system-ui, sans-serif;
+    font-weight: 800;
+    font-size: clamp(34px, 6vw, 52px);
+    line-height: 1.06;
+    letter-spacing: -0.025em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0;
+    text-wrap: pretty;
+  }
+
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin-top: 32px;
+  }
+  .fact { background: var(--ground); padding: 13px 15px; }
+  .fact dt {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.13em;
+    color: var(--ink-faint);
+    margin: 0 0 5px;
+  }
+  .fact dd {
+    margin: 0;
+    font-size: 14.5px;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  /* ---------- phase spine ---------- */
+  .phase {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 0 26px;
+    padding-top: 56px;
+  }
+  .spine {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .spine .num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent);
+    padding-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .spine .line {
+    flex: 1;
+    width: 1px;
+    background: var(--rule);
+    min-height: 20px;
+  }
+  .phase:last-of-type .spine .line { background: linear-gradient(180deg, var(--rule), transparent); }
+
+  h2 {
+    font-family: Rubik, system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 25px;
+    letter-spacing: -0.015em;
+    line-height: 1.2;
+    margin: 0 0 4px;
+    text-wrap: balance;
+  }
+  .phase-note {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    color: var(--ink-faint);
+    margin: 0 0 20px;
+  }
+
+  h3 {
+    font-family: Rubik, system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 16.5px;
+    margin: 26px 0 8px;
+    letter-spacing: -0.005em;
+  }
+
+  p { margin: 0 0 14px; max-width: 68ch; text-wrap: pretty; }
+  .body-col > ul { max-width: 68ch; }
+
+  ul { margin: 0 0 14px; padding-inline-start: 20px; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--ink-faint); }
+
+  code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.86em;
+    background: var(--sunken);
+    border: 1px solid var(--rule-soft);
+    padding: 1px 5px;
+    direction: ltr;
+    display: inline-block;
+    unicode-bidi: embed;
+  }
+
+  pre {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.62;
+    background: var(--sunken);
+    border: 1px solid var(--rule);
+    padding: 14px 16px;
+    overflow-x: auto;
+    direction: ltr;
+    text-align: left;
+    margin: 0 0 16px;
+  }
+  pre code { background: none; border: 0; padding: 0; font-size: inherit; display: inline; }
+
+  /* ---------- findings: top hairline + label, no rail, no rounding ---------- */
+  .finding {
+    border-top: 2px solid var(--finding);
+    background: var(--finding-soft);
+    padding: 16px 18px;
+    margin: 0 0 16px;
+  }
+  .finding .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    color: var(--finding);
+    margin: 0 0 7px;
+    font-weight: 500;
+  }
+  .finding h3 { margin-top: 0; }
+  .finding p:last-child { margin-bottom: 0; }
+
+  .aside {
+    border-top: 1px solid var(--rule);
+    background: var(--surface);
+    padding: 15px 18px;
+    margin: 0 0 16px;
+  }
+  .aside .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    color: var(--ink-faint);
+    margin: 0 0 7px;
+  }
+  .aside p:last-child { margin-bottom: 0; }
+
+  /* ---------- tables ---------- */
+  .table-wrap { overflow-x: auto; margin: 0 0 18px; }
+  table { border-collapse: collapse; width: 100%; min-width: 460px; font-size: 14.5px; }
+  th, td {
+    text-align: start;
+    padding: 10px 13px;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  thead th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    color: var(--ink-faint);
+    font-weight: 500;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  tbody th { font-weight: 600; white-space: nowrap; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .decision { color: var(--accent); font-weight: 600; }
+
+  /* ---------- status list ---------- */
+  .status { list-style: none; padding: 0; margin: 0; max-width: 68ch; }
+  .status li {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule-soft);
+    margin: 0;
+    align-items: baseline;
+  }
+  .status .tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    padding-top: 3px;
+  }
+  .tag.done { color: var(--accent); }
+  .tag.open { color: var(--finding); }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 2px solid var(--ink);
+    font-size: 13.5px;
+    color: var(--ink-faint);
+    max-width: 68ch;
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (max-width: 620px) {
+    .phase { grid-template-columns: 1fr; gap: 0; }
+    .spine { flex-direction: row; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .spine .line { flex: 1; width: auto; height: 1px; min-height: 0; }
+    .status li { grid-template-columns: 1fr; gap: 2px; }
+  }
+</style>
+
+<div dir="rtl" class="page">
+
+  <header class="masthead">
+    <p class="kicker">י ו מ ן   פ י ת ו ח</p>
+    <h1>הוספת סוכן שיחה ל‑TripCraft</h1>
+    <p class="standfirst">
+      תיעוד של מחזור פיתוח אחד באפליקציית תכנון טיולים בעברית: מהחלטות התכנון, דרך מסד הנתונים
+      והשרת, ועד לבאגים שנמצאו רק כשהמסך נפתח בטלפון אמיתי. כולל שני ממצאי אבטחה שלא היו קשורים
+      למשימה המקורית.
+    </p>
+
+    <dl class="facts">
+      <div class="fact"><dt>מוצר</dt><dd>TripCraft — מלווה טיולים</dd></div>
+      <div class="fact"><dt>סטאק</dt><dd>React 18 · Vite · TypeScript · Tailwind v4</dd></div>
+      <div class="fact"><dt>שרת</dt><dd>Supabase — Auth, Postgres, Edge Functions</dd></div>
+      <div class="fact"><dt>מודל</dt><dd>claude-haiku-4-5</dd></div>
+      <div class="fact"><dt>שפה</dt><dd>עברית, RTL, mobile‑first</dd></div>
+      <div class="fact"><dt>סטטוס</dt><dd>מוזג ל‑master, טרם נפרס</dd></div>
+    </dl>
+  </header>
+
+  <!-- 01 -->
+  <section class="phase">
+    <div class="spine"><span class="num">01</span><span class="line"></span></div>
+    <div class="body-col">
+      <h2>תכנון: ארבע החלטות לפני שורת קוד</h2>
+      <p class="phase-note">ההחלטות שקבעו את היקף העבודה</p>
+
+      <p>
+        האפליקציה כבר כללה יצירת תוכן ב‑AI, אבל חד‑כיוונית: כפתור שמייצר אצווה של המלצות וכותב
+        אותה לטבלה. לא הייתה דרך <em>לשאול</em> שאלה. המטרה הייתה מנוע שיחה פשוט שעונה בהקשר של
+        טיול ספציפי.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>שאלה</th><th>ההחלטה</th><th>מה נדחה ולמה</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th>יכולות</th>
+              <td class="decision">תשובה + כרטיסים להוספה</td>
+              <td>סוכן שכותב לבד למסד הנתונים — דורש לולאת tool‑use ומאפשר כתיבה בלי אישור המשתמש</td>
+            </tr>
+            <tr>
+              <th>גישה</th>
+              <td class="decision">בעל הטיול בלבד</td>
+              <td>פתיחה לגולשים אנונימיים בדף השיתוף — אנדפוינט LLM פתוח על חשבון מפתח אחד</td>
+            </tr>
+            <tr>
+              <th>היסטוריה</th>
+              <td class="decision">טבלה ייעודית</td>
+              <td>שמירה בזיכרון הדפדפן — השיחה נמחקת בכל רענון</td>
+            </tr>
+            <tr>
+              <th>מודל</th>
+              <td class="decision">claude-haiku-4-5</td>
+              <td>מודלים חזקים יותר — פי 5 בעלות, בלי הצדקה לשאלות קצרות</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>שאלת הגישה היא שאלה כספית</h3>
+      <p>
+        מפתח ה‑API הוא סוד יחיד בצד השרת, כלומר כל קריאה של כל אדם נופלת על בעל הפרויקט. אין חיוב
+        פר‑משתמש. זו הסיבה שהשאלה "מי יכול לשאול" הוכרעה לפי עלות ולא לפי נוחות:
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>מודל</th><th>קלט / פלט למיליון</th><th>לשאלה</th><th>20 נפשות × 5 שאלות ביום, חודש</th></tr>
+          </thead>
+          <tbody>
+            <tr><th>Haiku 4.5</th><td class="num">$1 / $5</td><td class="num">~2 אג׳</td><td class="num">~$18</td></tr>
+            <tr><th>Sonnet 5</th><td class="num">$2 / $10</td><td class="num">~4 אג׳</td><td class="num">~$40</td></tr>
+            <tr><th>Opus 5</th><td class="num">$5 / $25</td><td class="num">~10 אג׳</td><td class="num">~$100</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        ההערכה מבוססת על שאילתה טיפוסית של ~3,500 טוקני קלט ו‑~500 פלט. היא שמרנית: עם
+        prompt caching על תמונת המצב של הטיול, הקלט בתורות עוקבות יורד בכ‑90%.
+      </p>
+    </div>
+  </section>
+
+  <!-- 02 -->
+  <section class="phase">
+    <div class="spine"><span class="num">02</span><span class="line"></span></div>
+    <div class="body-col">
+      <h2>מסד הנתונים: טבלה אחת, וחריגה מכוונת</h2>
+      <p class="phase-note">supabase/migrations/003_agent_chat.sql</p>
+
+      <p>
+        לפרויקט יש תבנית קבועה: כל טבלת‑בת מקבלת RLS עם מדיניות בעלות דרך <code>owns_trip()</code>,
+        ובנוסף הרשאת קריאה ל‑<code>anon</code> כדי שהיא תופיע בדף השיתוף הציבורי. טבלת השיחות
+        <strong>לא</strong> נכנסה לחלק השני של התבנית.
+      </p>
+
+      <pre><code>CREATE POLICY "owner all" ON public.trip_chat_messages FOR ALL TO authenticated
+USING (public.owns_trip(trip_id)) WITH CHECK (public.owns_trip(trip_id));
+
+REVOKE ALL ON public.trip_chat_messages FROM anon;</code></pre>
+
+      <p>
+        החריגה תועדה בהערה בתוך קובץ ה‑SQL עצמו, כדי שמי שיקרא את הסכימה בעתיד לא "יתקן" אותה
+        ויחשוף שיחות פרטיות בדף השיתוף.
+      </p>
+
+      <div class="aside">
+        <p class="label">מה שנלמד בבדיקה</p>
+        <p>
+          בדיקה ראשונה הראתה ש‑<code>anon</code> כן מחזיק הרשאת <code>SELECT</code> על הטבלה. התברר
+          ש‑Supabase מעניקה הרשאות אוטומטית לכל טבלה חדשה בסכימת <code>public</code>. זו לא הייתה
+          דליפה — RLS חוסם כל שורה כי אין ל‑<code>anon</code> שום מדיניות — אבל ה‑<code>REVOKE</code>
+          המפורש נוסף כדי שההרשאה תשקף את הכוונה ולא תישען על מנגנון יחיד. הבדיקה הראשונה שנכתבה
+          הייתה בעצמה שגויה: <code>has_table_privilege</code> בודק את ההרשאה, לא את הגישה לשורות.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 -->
+  <section class="phase">
+    <div class="spine"><span class="num">03</span><span class="line"></span></div>
+    <div class="body-col">
+      <h2>הפונקציה בצד השרת</h2>
+      <p class="phase-note">supabase/functions/ask/index.ts — Deno, Edge Function</p>
+
+      <p>
+        הפונקציה רצה בצד השרת כדי שמפתח ה‑API לא ייחשף בדפדפן. שלוש החלטות מבניות:
+      </p>
+
+      <h3>חסרת מצב — לא כותבת דבר</h3>
+      <p>
+        הפונקציה מחזירה תשובה, והקליינט שומר את שני התורות בעצמו. זה תואם תבנית שכבר קיימת
+        בפרויקט, ומצמצם את שטח הפנים של קוד שרץ עם הרשאות.
+      </p>
+
+      <h3>בדיקת בעלות מפורשת</h3>
+      <p>
+        השאילתה הטבעית — לשלוף את הטיול לפי מזהה — לא מספיקה. מדיניות
+        <code>shared trips readable</code> חלה גם על משתמשים מחוברים, ומדיניות RLS מרובות מתחברות
+        ב‑OR, כך שכל טיול משותף נשלף בהצלחה. הפונקציה הזו לא כותבת דבר, ולכן RLS על כתיבה לא היה
+        תופס את זה בהמשך:
+      </p>
+      <pre><code>if (!auth?.user || !trip || trip.user_id !== auth.user.id) {
+  return json({ error: "forbidden" }, 403);
+}</code></pre>
+      <p>בלי ההשוואה הזו, כל משתמש רשום יכול היה לשרוף תקציב API על טיול משותף של אדם אחר.</p>
+
+      <h3>נפילה רכה על JSON פגום</h3>
+      <p>
+        המודל מתבקש להחזיר JSON. אם הפיענוח נכשל, הטקסט הגולמי מוחזר כתשובה במקום שגיאה — שיחה
+        לא נשברת בגלל פסיק חסר.
+      </p>
+    </div>
+  </section>
+
+  <!-- 04 -->
+  <section class="phase">
+    <div class="spine"><span class="num">04</span><span class="line"></span></div>
+    <div class="body-col">
+      <h2>הקליינט והמסך</h2>
+      <p class="phase-note">src/lib/ai.ts · src/routes/trip/AskTab.tsx</p>
+
+      <p>
+        מסך חדש תחת <code>/trip/:tripId/ask</code>, בתבנית הקיימת של מסכים שאינם בטאב‑בר התחתון.
+        התשובה מוצגת כבועת שיחה, ולצידה עד חמישה כרטיסי המלצה עם כפתורי "הוסף למומלצים" ו"הוסף
+        למסלול" — שמשתמשים באותן פעולות הכנסה שכבר קיימות במסך ההמלצות.
+      </p>
+      <p>
+        דרישה מחייבת בפרויקט: האפליקציה חייבת להישאר שמישה גם בלי ה‑AI. אם הפונקציה לא נפרסה,
+        המסך מציג הודעה בעברית ולא קורס.
+      </p>
+    </div>
+  </section>
+
+  <!-- 05 -->
+  <section class="phase">
+    <div class="spine"><span class="num">05</span><span class="line"></span></div>
+    <div class="body-col">
+      <h2>שני ממצאי אבטחה שלא היו במשימה</h2>
+      <p class="phase-note">התגלו תוך כדי מיפוי מודל ההרשאות</p>
+
+      <p>
+        כדי להחליט מי יכול לשאול את הסוכן היה צריך למפות מי בכלל רואה מה. המיפוי חשף שתי בעיות
+        קיימות, שתיהן מאותו שורש: מדיניות השיתוף הוגדרה על <code>anon</code>
+        <strong>ועל</strong> <code>authenticated</code>, ומדיניות RLS מתחברות ב‑OR.
+      </p>
+
+      <div class="finding">
+        <p class="label">ממצא 1 · רשימת הטיולים</p>
+        <h3>כל משתמש רשום ראה את הטיולים המשותפים של כולם</h3>
+        <p>
+          מסך רשימת הטיולים שלף את הטיולים בלי סינון לפי בעלים, בהסתמך על RLS. בפועל RLS החזיר
+          "הטיולים שלי <em>או</em> כל טיול משותף". תוקן בסינון מפורש לפי מזהה המשתמש.
+        </p>
+      </div>
+
+      <div class="finding">
+        <p class="label">ממצא 2 · גישה ישירה לטיול</p>
+        <h3>כתובת ישירה פתחה את מסך הבעלים המלא</h3>
+        <p>
+          חמור יותר: פנייה ל‑<code>/trip/&lt;uuid&gt;</code> של טיול משותף השייך לאדם אחר טענה את
+          ממשק הבעלים על כל תוכנו — מסלול, משתתפים, טיסות, מלונות. כתיבה נחסמה, קריאה לא. תוקן
+          באותו אופן.
+        </p>
+      </div>
+
+      <p>
+        המדיניות עצמה לא שונתה: היא <em>חייבת</em> לחול גם על משתמשים מחוברים, אחרת משתמש מחובר
+        שלוחץ על קישור שיתוף לא יראה אותו. התיקון הוא סינון בשכבת השאילתה, עם הערה בקוד שמסבירה
+        למה הוא לא כפילות של ה‑RLS.
+      </p>
+    </div>
+  </section>
+
+  <!-- 06 -->
+  <section class="phase">
+    <div class="spine"><span class="num">06</span><span class="line"></span></div>
+    <div class="body-col">
+      <h2>עיצוב: מארבעה כיוונים לאחד</h2>
+      <p class="phase-note">design/ — 15 מסכים על קנבס עיצוב</p>
+
+      <p>
+        העיצוב הקיים — כרטיסים מעוגלים בטורקיז וקורל — היה בטוח וגנרי. במקום להציע כיוון אחד,
+        נבנו ארבעה על <strong>אותו מסך אמיתי</strong>, כדי שההשוואה תהיה הוגנת: מפה טופוגרפית,
+        מגזין מודפס, כרטיס עלייה למטוס, וכהה קולנועי. לכל אחד נרשמו הנימוק <em>והחיסרון</em>.
+      </p>
+      <p>
+        לאחר בחירת הכיוון הכהה נבנו ארבעה גוונים נוספים בתוך אותה משפחה — שניים מהם בכוונה
+        לא‑נוחים, כדי לבודד מה בדיוק נבחר: החושך, או השקיעה. הכיוון שנבחר הורחב לארבעה מסכים
+        ולמצב בהיר.
+      </p>
+
+      <div class="aside">
+        <p class="label">החלטה עיצובית שאינה קישוט</p>
+        <p>
+          במסך המסלול, הקו האנכי של ציר הזמן עובר מבהיר לכהה לאורך היום. הצבע מקודד את שעת
+          היום, כך שאפשר לראות איפה אתה ביום בלי לקרוא שעות.
+        </p>
+      </div>
+
+      <p>
+        המצב הבהיר נגזר מהכהה בעזרת סקריפט המרה, כדי ששני המצבים יישארו זהים מבנית ומעבר ביניהם
+        לא יזיז פריסה. שני שינויים בו היו הכרחיים ולא קוסמטיים: הענבר הוכהה כי הגוון המקורי לא
+        עומד בניגודיות על רקע לבן, והזוהר סביב הספירה לאחור הוסר כי על רקע בהיר הוא נראה ככתם.
+      </p>
+      <p>
+        הגזירה הראשונה יצאה גרועה — השמש צפה מעל התוכן וקו האופק נעלם. זה התגלה רק בצפייה
+        בדפדפן ותוקן.
+      </p>
+    </div>
+  </section>
+
+  <!-- 07 -->
+  <section class="phase">
+    <div class="spine"><span class="num">07</span><span class="line"></span></div>
+    <div class="body-col">
+      <h2>התקנה במסך הבית</h2>
+      <p class="phase-note">public/manifest.webmanifest · index.html</p>
+
+      <p>
+        ה‑README הבטיח שהאפליקציה "תיראה ותתנהג כאפליקציה" אחרי הוספה למסך הבית. בפועל לא היה
+        קובץ manifest ולא היו אייקונים — ההבטחה לא הייתה מכוסה.
+      </p>
+      <p>
+        האייקונים נוצרו מסימן המותג הקיים בשלוש מידות. לא הייתה במכונה ספריית המרה מ‑SVG, ולכן
+        הם צוירו ישירות: השטחה של עקומות בזיה והטבעת עיגולים חופפים לאורך המסלול. ניסיון ראשון
+        עם ציור קו רציף השאיר תפרים דקים בתוך הקווים.
+      </p>
+      <p>
+        ערכי הצבע במניפסט נלקחו מהטוקנים האמיתיים של הפרויקט, על ידי המרת הגדרות
+        <code>oklch()</code> דרך קנבס — ולא בהערכה ויזואלית.
+      </p>
+
+      <div class="aside">
+        <p class="label">מגבלה מתועדת</p>
+        <p>
+          ההתקנה עובדת דרך "הוסף למסך הבית" בלבד. כרום באנדרואיד לא יציע התקנה אוטומטית ללא
+          Service Worker, והוספת אחד תגרור תמיכה במצב לא‑מקוון שהפרויקט במפורש אינו כולל. ה‑README
+          עודכן כך שיאמר זאת במקום להבטיח יותר ממה שיש.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 -->
+  <section class="phase">
+    <div class="spine"><span class="num">08</span><span class="line"></span></div>
+    <div class="body-col">
+      <h2>מה שנמצא רק במכשיר אמיתי</h2>
+      <p class="phase-note">ארבעה באגים שבדיקת טיפוסים לא תופסת</p>
+
+      <p>
+        הקוד עבר <code>tsc</code> נקי ונטען בדפדפן בלי שגיאות. ארבעה באגים התגלו רק כשהמסך נפתח
+        בפועל — שלושה מהם רק מצילום מסך של שיחה אמיתית.
+      </p>
+
+      <div class="finding">
+        <p class="label">באג 1 · משוב</p>
+        <h3>כישלון לא הותיר עקבות</h3>
+        <p>
+          השאלה נשמרה במסד הנתונים, אבל הודעת השגיאה הייתה טוסט שנעלם אחרי 3.6 שניות. מה שנשאר
+          על המסך: שאלה תלויה בלי תשובה ובלי הסבר. מצב קבוע שדווח במשוב חולף. תוקן בשורת שגיאה
+          שנשארת בשיחה, עם כפתור ניסיון חוזר.
+        </p>
+      </div>
+
+      <div class="finding">
+        <p class="label">באג 2 · פריסה</p>
+        <h3>שורת הקלט צפה באמצע המסך</h3>
+        <p>
+          שורת הקלט הוגדרה <code>sticky</code>, אבל אלמנט נדבק רק כשיש גלילה. בשיחה קצרה היא
+          נחה במקומה הטבעי עם חלל ריק מתחתיה. תוקן במעבר לפריסת flex בגובה חלון מלא, שבה אזור
+          ההודעות גדל ודוחף את הקלט לתחתית.
+        </p>
+      </div>
+
+      <div class="finding">
+        <p class="label">באג 3 · עלות</p>
+        <h3>שליחה כפולה אפשרית</h3>
+        <p>
+          המשמר נגד שליחה כפולה קרא משתנה מצב, שנקרא מתוך closure ישן. שתי הקשות מהירות יכלו
+          לשלוח פעמיים ולחייב פעמיים. הועבר ל‑<code>useRef</code>, שנקרא ונכתב מיידית.
+        </p>
+      </div>
+
+      <div class="finding">
+        <p class="label">באג 4 · טיפול בשגיאות</p>
+        <h3>זיהוי השגיאות לא עבד מלכתחילה</h3>
+        <p>
+          הודעת "הפונקציה לא נפרסה" לא הופיעה. הסיבה: ספריית הקליינט עוטפת כשלים בשתי שכבות שאף
+          אחת מהן אינה מזכירה סטטוס — פונקציה חסרה מגיעה כ‑<code>"Failed to send a request to the
+          Edge Function"</code>, וכל תשובה שאינה 2xx כ‑<code>"Edge Function returned a non-2xx
+          status code"</code>, עם התשובה האמיתית על שדה נפרד. הקוד חיפש מחרוזות אחרות לגמרי, ולכן
+          כל מקרה קרס להודעה גנרית — כולל ענף ההרשאות, שמעולם לא רץ. הבאג היה קיים גם בקוד ה‑AI
+          המקורי, כלומר הועתק לתוך הקוד החדש. תוקן בפונקציית מיפוי אחת שקוראת את סוג השגיאה, את
+          קוד הסטטוס ואת גוף התשובה — ומשמשת את שני מסלולי הקריאה.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 -->
+  <section class="phase">
+    <div class="spine"><span class="num">09</span><span class="line"></span></div>
+    <div class="body-col">
+      <h2>מצב נוכחי</h2>
+      <p class="phase-note">שלושה קומיטים, מוזגו ל‑master</p>
+
+      <ul class="status">
+        <li><span class="tag done">הושלם</span><span>סכימת מסד הנתונים והמיגרציה — הורצה ואומתה בפרויקט</span></li>
+        <li><span class="tag done">הושלם</span><span>קוד הפונקציה בצד השרת</span></li>
+        <li><span class="tag done">הושלם</span><span>מסך השיחה, הכרטיסים והכניסות אליו</span></li>
+        <li><span class="tag done">הושלם</span><span>שני תיקוני האבטחה</span></li>
+        <li><span class="tag done">הושלם</span><span>מניפסט, אייקונים והתקנה במסך הבית</span></li>
+        <li><span class="tag done">הושלם</span><span>חקירת העיצוב — 15 מסכים, כהה ובהיר</span></li>
+        <li><span class="tag open">פתוח</span><span>פריסת ה‑Edge Function — הסוכן לא פעיל עד אז</span></li>
+        <li><span class="tag open">פתוח</span><span>בדיקה במכשירי אנדרואיד ו‑iOS דרך סביבת HTTPS</span></li>
+        <li><span class="tag open">פתוח</span><span>הכיוון העיצובי החדש — קיים כעיצוב בלבד, טרם מומש בקוד</span></li>
+      </ul>
+
+      <h3>מה שלא אומת</h3>
+      <p>
+        הטענה שהמצב הבהיר פותר קריאוּת בשמש ישירה נבדקה בדפדפן בלבד, לא בתנאי חוץ אמיתיים.
+        זרימת השיחה המלאה מול המודל טרם נבדקה, מכיוון שהפונקציה לא נפרסה. התקנה במסך הבית אומתה
+        ברמת הקבצים — המניפסט נטען, כל האייקונים מוחזרים בהצלחה, וכולם מגיעים לתיקיית הבנייה — אך
+        לא במכשיר פיזי.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      הפרויקט מדגים עבודה על מערכת קיימת ולא על דף חלק: קריאת מוסכמות קוד לפני שינוי, החלטות
+      ארכיטקטורה עם מחיר ידוע, מודל הרשאות ברמת השורה, וההבדל בין קוד שעובר בדיקת טיפוסים לבין
+      קוד שעובד. שני ממצאי האבטחה וארבעת הבאגים לא היו חלק מהמשימה — הם מה שיצא ממנה.
+    </p>
+  </footer>
+
+</div>

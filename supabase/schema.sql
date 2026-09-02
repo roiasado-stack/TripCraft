@@ -214,6 +214,11 @@ CREATE TABLE IF NOT EXISTS public.trip_chat_messages (
 );
 GRANT SELECT, INSERT, DELETE ON public.trip_chat_messages TO authenticated;
 GRANT ALL ON public.trip_chat_messages TO service_role;
+-- Supabase's default privileges on schema public grant new tables to anon, so
+-- the absence of a GRANT here is not enough — revoke explicitly. RLS already
+-- denies anon every row (no anon policy exists); this makes the grant match the
+-- intent instead of leaving RLS as the only thing holding the door.
+REVOKE ALL ON public.trip_chat_messages FROM anon;
 ALTER TABLE public.trip_chat_messages ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "owner all" ON public.trip_chat_messages;
 CREATE POLICY "owner all" ON public.trip_chat_messages FOR ALL TO authenticated
