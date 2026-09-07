@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CalendarPlus, Heart, RotateCcw, Send, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { AgentCard, TripChatMessage } from "@/lib/types";
+import type { AgentCard, PendingAction, TripChatMessage } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, Chip, Spinner, Textarea } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
-import { askAgent, type AskTurn } from "@/lib/ai";
+import { askAgent, confirmAgentAction, type AskTurn } from "@/lib/ai";
 import { MapLink } from "@/components/MapLink";
 import { suggestionKindLabel } from "@/lib/trip-options";
 import { resolveMapUrl } from "@/lib/maps";
@@ -27,6 +27,7 @@ export default function AskTab() {
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
   const [added, setAdded] = useState<Record<string, boolean>>({});
+  const [resolved, setResolved] = useState<Record<string, "confirmed" | "dismissed">>({});
   /** Last failure, kept in the thread — the toast is gone in 3.6s but the
       unanswered question stays, so it needs a durable explanation. */
   const [failed, setFailed] = useState<{ question: string; message: string } | null>(null);
@@ -95,10 +96,26 @@ export default function AskTab() {
 
     const { data: botRow } = await supabase
       .from("trip_chat_messages")
-      .insert({ trip_id: trip.id, role: "assistant", content: res.answer, cards: res.cards ?? [] })
+      .insert({
+        trip_id: trip.id,
+        role: "assistant",
+        content: res.answer,
+        cards: res.cards ?? [],
+        pending_actions: res.pendingActions ?? [],
+      })
       .select()
       .single();
     if (botRow) setMessages((m) => [...m, botRow as TripChatMessage]);
+  };
+
+  const confirmPending = async (action: PendingAction, key: string) => {
+    const res = await confirmAgentAction(trip, action);
+    if (!res.ok) {
+      toast.error("האישור נכשל. נסה שוב.");
+      return;
+    }
+    setResolved((r) => ({ ...r, [key]: "confirmed" }));
+    toast.success(action.tool === "add_to_itinerary" ? "נוסף למסלול 🗓️" : "נוסף למומלצים ✨");
   };
 
   const addToSuggestions = async (card: AgentCard, key: string) => {
@@ -248,6 +265,48 @@ export default function AskTab() {
                               onClick={() => addToItinerary(card, key)}
                             >
                               <CalendarPlus className="size-4" /> למסלול
+                            </Button>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {m.pending_actions?.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-2">
+                    {m.pending_actions.map((action, idx) => {
+                      const key = `${m.id}:pa:${idx}`;
+                      const input = action.input;
+                      const title = String(input.title ?? "");
+                      const description = typeof input.description === "string" ? input.description : null;
+                      const isItinerary = action.tool === "add_to_itinerary";
+                      const state = resolved[key];
+                      return (
+                        <Card key={key} className="border-dashed p-3">
+                          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-accent">
+                            {isItinerary ? <CalendarPlus className="size-3.5" /> : <Heart className="size-3.5" />}
+                            {isItinerary ? "הצעה להוספה למסלול" : "הצעה להוספה למומלצים"}
+                          </div>
+                          <div className="font-bold leading-snug">{title}</div>
+                          {description && <p className="mt-1.5 text-sm leading-snug text-muted-foreground">{description}</p>}
+                          {isItinerary && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {String(input.day_date ?? "")}
+                              {input.start_time ? ` · ${String(input.start_time)}` : ""}
+                            </p>
+                          )}
+                          <div className="mt-2.5 flex gap-1.5">
+                            <Button size="sm" variant="soft" disabled={!!state} onClick={() => confirmPending(action, key)}>
+                              {state === "confirmed" ? "אושר ✓" : "אשר הוספה"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={!!state}
+                              onClick={() => setResolved((r) => ({ ...r, [key]: "dismissed" }))}
+                            >
+                              {state === "dismissed" ? "בוטל" : "לא עכשיו"}
                             </Button>
                           </div>
                         </Card>

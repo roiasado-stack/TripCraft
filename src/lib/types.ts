@@ -178,11 +178,35 @@ export interface AgentCard {
   location: string | null;
 }
 
+/** One logged call to the `ask` or `generate` Edge Functions — Monitoring only, admin-read-only. */
+export interface AgentRun {
+  id: string;
+  trip_id: string | null;
+  user_id: string;
+  kind: string; // ask | generate_suggestions | generate_itinerary | generate_checklist | generate_passports
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  latency_ms: number;
+  status: string; // ok | error
+  error_message: string | null;
+  created_at: string;
+}
+
+/** A tool call the agent proposed but did not execute — shown as an approval
+ *  card; the actual write only happens if the user confirms it. */
+export interface PendingAction {
+  tool: "add_to_itinerary" | "add_suggestion";
+  id: string;
+  input: Record<string, unknown>;
+}
+
 export interface TripChatMessage {
   id: string;
   trip_id: string;
   role: string; // user | assistant
   content: string;
-  cards: AgentCard[];
+  cards: AgentCard[]; // legacy — pre-tool-use messages only
+  pending_actions: PendingAction[];
   created_at: string;
 }

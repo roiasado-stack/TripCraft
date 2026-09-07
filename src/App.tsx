@@ -5,11 +5,13 @@ import { ThemeProvider } from "@/hooks/use-theme";
 import { ToastProvider } from "@/hooks/use-toast";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminRoute } from "@/components/AdminRoute";
 import { SetupNeeded } from "@/components/SetupNeeded";
 import AuthPage from "@/routes/AuthPage";
 import TripsListPage from "@/routes/TripsListPage";
 import WizardPage from "@/routes/WizardPage";
 import SettingsPage from "@/routes/SettingsPage";
+import AdminMonitoringPage from "@/routes/AdminMonitoringPage";
 import SharePage from "@/routes/SharePage";
 import TripLayout from "@/routes/trip/TripLayout";
 import HomeTab from "@/routes/trip/HomeTab";
@@ -68,6 +70,14 @@ export default function App() {
                     <ProtectedRoute>
                       <SettingsPage />
                     </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/monitoring"
+                  element={
+                    <AdminRoute>
+                      <AdminMonitoringPage />
+                    </AdminRoute>
                   }
                 />
 

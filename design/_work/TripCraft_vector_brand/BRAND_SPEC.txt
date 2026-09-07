@@ -1,0 +1,21 @@
+TripCraft Vector Brand Master
+
+Slogan: PLAN • EXPLORE • GO
+
+Palette:
+Navy   #1E293B
+Blue   #0A3D91
+Sky    #0EA5FF
+Cyan   #38BDF8
+Orange #F59E0B
+Yellow #FCD34D
+Green  #22C55E
+
+Masters:
+- TripCraft_full_logo_MASTER.svg — scalable full logo
+- TripCraft_app_icon_MASTER.svg — scalable icon
+- TripCraft_app_icon_black.svg — black icon
+- TripCraft_app_icon_white.svg — white icon
+
+The SVG masters are vector artwork (paths, shapes and text), not embedded raster images.
+For App Store / Google Play, use the icon master and export a 1024×1024 PNG.

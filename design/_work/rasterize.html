@@ -1,0 +1,17 @@
+<!doctype html><html><body>
+<script>
+async function svgToPngDataUrl(svgText, size) {
+  const blob = new Blob([svgText], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+  const canvas = document.createElement("canvas");
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0, size, size);
+  URL.revokeObjectURL(url);
+  return canvas.toDataURL("image/png");
+}
+window.svgToPngDataUrl = svgToPngDataUrl;
+</script>
+</body></html>

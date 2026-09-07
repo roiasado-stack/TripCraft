@@ -15,6 +15,14 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
+// claude-sonnet-5 pricing (Anthropic API).
+const PRICE_PER_MTOK_INPUT_USD = 2.0;
+const PRICE_PER_MTOK_OUTPUT_USD = 10.0;
+
+// Per-user, per-day, shared with the `ask` function's cap (both write to the
+// same agent_runs table, so my_agent_daily_cost_usd() sums across both).
+const DAILY_CAP_USD = 2.0;
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -162,10 +170,54 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } },
     );
 
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth?.user) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
     const body = (await req.json()) as Body;
 
+    const logRun = async (fields: {
+      kind: string;
+      tripId: string | null;
+      inputTokens: number;
+      outputTokens: number;
+      costUsd: number;
+      latencyMs: number;
+      status: "ok" | "error";
+      errorMessage?: string;
+    }) => {
+      try {
+        await supabase.from("agent_runs").insert({
+          trip_id: fields.tripId,
+          user_id: auth.user.id,
+          kind: fields.kind,
+          input_tokens: fields.inputTokens,
+          output_tokens: fields.outputTokens,
+          cost_usd: fields.costUsd,
+          latency_ms: fields.latencyMs,
+          status: fields.status,
+          error_message: fields.errorMessage?.slice(0, 500) ?? null,
+        });
+      } catch {
+        // Monitoring must never break generation.
+      }
+    };
+
+    const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
+    if ((spentToday ?? 0) >= DAILY_CAP_USD) {
+      return new Response(JSON.stringify({ error: "daily_cap_reached" }), {
+        status: 429,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
     // Passport scanning returns parsed travellers to the client for review and
-    // writes nothing, so it needs no trip ownership check.
+    // writes nothing, so it needs no trip ownership check — but it still costs
+    // money, so it's still capped and logged (trip_id: null — see agent_runs).
     if (body.kind === "passports") {
       const images = (body.images ?? []).slice(0, 8);
       if (!images.length) {
@@ -193,6 +245,7 @@ Deno.serve(async (req) => {
 - אל תמציא פרטים. אל תחזיר מספרי דרכון או כל מידע אחר.`,
       });
 
+      const runStart = Date.now();
       const visionRes = await fetch(ANTHROPIC_URL, {
         method: "POST",
         headers: {
@@ -206,9 +259,11 @@ Deno.serve(async (req) => {
           messages: [{ role: "user", content }],
         }),
       });
+      const latencyMs = Date.now() - runStart;
 
       if (!visionRes.ok) {
         const detail = await visionRes.text();
+        await logRun({ kind: "generate_passports", tripId: null, inputTokens: 0, outputTokens: 0, costUsd: 0, latencyMs, status: "error", errorMessage: detail });
         return new Response(JSON.stringify({ error: "llm_failed", detail, items: [] }), {
           status: 502,
           headers: { ...cors, "Content-Type": "application/json" },
@@ -216,6 +271,12 @@ Deno.serve(async (req) => {
       }
 
       const visionPayload = await visionRes.json();
+      const visionUsage = visionPayload?.usage ?? {};
+      const visionInputTokens = Number(visionUsage.input_tokens ?? 0);
+      const visionOutputTokens = Number(visionUsage.output_tokens ?? 0);
+      const visionCostUsd =
+        (visionInputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (visionOutputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+
       const parsedVision = extractJson(visionPayload?.content?.[0]?.text ?? "");
       const people = Array.isArray(parsedVision?.items) ? parsedVision!.items : [];
       const items = people
@@ -231,24 +292,40 @@ Deno.serve(async (req) => {
         })
         .filter((p) => p.name);
 
+      await logRun({
+        kind: "generate_passports",
+        tripId: null,
+        inputTokens: visionInputTokens,
+        outputTokens: visionOutputTokens,
+        costUsd: visionCostUsd,
+        latencyMs,
+        status: "ok",
+      });
       return new Response(JSON.stringify({ ok: true, items }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
     // Verify the caller actually owns this trip before generating anything.
+    // Comparing user_id explicitly is required, not decorative: the "shared
+    // trips readable" policy also applies to `authenticated`, so a plain
+    // select by id succeeds for anyone's shared trip too (same issue already
+    // fixed in ../ask/index.ts) — without this check any signed-in user could
+    // spend the project's API budget generating content on someone else's
+    // shared trip.
     const { data: trip, error: tripErr } = await supabase
       .from("trips")
-      .select("id")
+      .select("id, user_id")
       .eq("id", body.trip_id)
       .maybeSingle();
-    if (tripErr || !trip) {
+    if (tripErr || !trip || trip.user_id !== auth.user.id) {
       return new Response(JSON.stringify({ error: "trip not found" }), {
         status: 404,
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
+    const runStart = Date.now();
     const llm = await fetch(ANTHROPIC_URL, {
       method: "POST",
       headers: {
@@ -262,9 +339,11 @@ Deno.serve(async (req) => {
         messages: [{ role: "user", content: buildPrompt(body) }],
       }),
     });
+    const latencyMs = Date.now() - runStart;
 
     if (!llm.ok) {
       const detail = await llm.text();
+      await logRun({ kind: `generate_${body.kind}`, tripId: body.trip_id, inputTokens: 0, outputTokens: 0, costUsd: 0, latencyMs, status: "error", errorMessage: detail });
       return new Response(JSON.stringify({ error: "llm_failed", detail }), {
         status: 502,
         headers: { ...cors, "Content-Type": "application/json" },
@@ -272,10 +351,16 @@ Deno.serve(async (req) => {
     }
 
     const payload = await llm.json();
+    const usage = payload?.usage ?? {};
+    const inputTokens = Number(usage.input_tokens ?? 0);
+    const outputTokens = Number(usage.output_tokens ?? 0);
+    const costUsd = (inputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (outputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+
     const text: string = payload?.content?.[0]?.text ?? "";
     const parsed = extractJson(text);
     const items = Array.isArray(parsed?.items) ? parsed!.items : [];
     if (items.length === 0) {
+      await logRun({ kind: `generate_${body.kind}`, tripId: body.trip_id, inputTokens, outputTokens, costUsd, latencyMs, status: "ok" });
       return new Response(JSON.stringify({ error: "no_items", inserted: 0 }), {
         status: 200,
         headers: { ...cors, "Content-Type": "application/json" },
@@ -335,6 +420,7 @@ Deno.serve(async (req) => {
       inserted = rows.length;
     }
 
+    await logRun({ kind: `generate_${body.kind}`, tripId: body.trip_id, inputTokens, outputTokens, costUsd, latencyMs, status: "ok" });
     return new Response(JSON.stringify({ ok: true, inserted }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });

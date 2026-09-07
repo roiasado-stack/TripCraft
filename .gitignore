@@ -18,3 +18,9 @@ design/tripcraft-*.html
 
 # Playwright MCP scratch output (snapshots, console logs) — not project files.
 .playwright-mcp/
+
+.vercel
+.env*
+
+# Supabase CLI local link cache (project ref, pooler URL) — machine state, not source.
+supabase/.temp/

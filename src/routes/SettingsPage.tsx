@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, LogOut, Moon, Sun } from "lucide-react";
+import { ChevronRight, Gauge, LogOut, Moon, Sun } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useToast } from "@/hooks/use-toast";
@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { Button, Card, Field, Input } from "@/components/ui";
 
 export default function SettingsPage() {
-  const { user, profile, roles, isAgent, refreshProfile, signOut } = useAuth();
+  const { user, profile, roles, isAgent, isAdmin, refreshProfile, signOut } = useAuth();
   const { theme, toggle } = useTheme();
   const toast = useToast();
   const navigate = useNavigate();
@@ -104,6 +104,13 @@ export default function SettingsPage() {
           <span className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-all ${theme === "dark" ? "left-0.5" : "right-0.5"}`} />
         </button>
       </Card>
+
+      {isAdmin && (
+        <Button variant="outline" size="lg" className="mb-4 w-full" onClick={() => navigate("/admin/monitoring")}>
+          <Gauge className="size-5" />
+          מוניטורינג
+        </Button>
+      )}
 
       <Button variant="outline" size="lg" className="w-full text-destructive" onClick={async () => { await signOut(); navigate("/auth", { replace: true }); }}>
         <LogOut className="size-5" />

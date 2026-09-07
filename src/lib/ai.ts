@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { AgentCard, Participant, Trip } from "./types";
+import type { AgentCard, Participant, PendingAction, Trip } from "./types";
 
 export type TuneOption = "more_kids" | "calmer" | "cheaper" | "more_active";
 
@@ -96,6 +96,7 @@ export type AskResult = {
   error?: string;
   answer?: string;
   cards?: AgentCard[];
+  pendingActions?: PendingAction[];
 };
 
 /**
@@ -110,9 +111,26 @@ export async function askAgent(trip: Trip, message: string, history: AskTurn[]):
       body: { trip_id: trip.id, message, history },
     });
     if (error) return { ok: false, error: await mapInvokeError(error) };
-    const res = data as { answer?: string; cards?: AgentCard[] };
+    const res = data as { answer?: string; cards?: AgentCard[]; pendingActions?: PendingAction[] };
     if (!res?.answer) return { ok: false, error: "empty_answer" };
-    return { ok: true, answer: res.answer, cards: res.cards ?? [] };
+    return { ok: true, answer: res.answer, cards: res.cards ?? [], pendingActions: res.pendingActions ?? [] };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "unknown" };
+  }
+}
+
+/**
+ * Confirms and executes one action the agent previously proposed
+ * (add_to_itinerary / add_suggestion) — the human-in-the-loop step. Nothing
+ * is written until this is called.
+ */
+export async function confirmAgentAction(trip: Trip, action: PendingAction): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke("ask", {
+      body: { trip_id: trip.id, confirm_action: action },
+    });
+    if (error) return { ok: false, error: await mapInvokeError(error) };
+    return { ok: (data as { ok?: boolean })?.ok === true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "unknown" };
   }

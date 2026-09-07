@@ -1,0 +1,374 @@
+<title>ארכיטקטורת TripCraft</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=Heebo:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #f6fbfa;
+    --surface: #ffffff;
+    --surface-2: #eef8f6;
+    --ink: #0f2e2c;
+    --ink-soft: #4b6663;
+    --line: #d7e9e6;
+    --line-soft: #e7f2f0;
+    --primary: #0e9c96;
+    --primary-deep: #0b7671;
+    --primary-tint: #d7f2ef;
+    --coral: #ee6d4e;
+    --coral-tint: #fce6dd;
+    --sun: #f2ab2e;
+    --sun-tint: #fdf0d9;
+    --shadow: 0 1px 2px rgba(15,46,44,.04), 0 8px 24px -12px rgba(15,46,44,.16);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --ground: #0b1d1c;
+      --surface: #102624;
+      --surface-2: #143330;
+      --ink: #eaf6f4;
+      --ink-soft: #a9c6c2;
+      --line: #1c403c;
+      --line-soft: #17332f;
+      --primary: #35c6bd;
+      --primary-deep: #7fdbd3;
+      --primary-tint: #143a37;
+      --coral: #ff9575;
+      --coral-tint: #3a231b;
+      --sun: #f5c15c;
+      --sun-tint: #3a2e14;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0b1d1c;
+    --surface: #102624;
+    --surface-2: #143330;
+    --ink: #eaf6f4;
+    --ink-soft: #a9c6c2;
+    --line: #1c403c;
+    --line-soft: #17332f;
+    --primary: #35c6bd;
+    --primary-deep: #7fdbd3;
+    --primary-tint: #143a37;
+    --coral: #ff9575;
+    --coral-tint: #3a231b;
+    --sun: #f5c15c;
+    --sun-tint: #3a2e14;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--ground); }
+
+  .page {
+    direction: rtl;
+    font-family: "Heebo", "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+    max-width: 800px;
+    margin-inline: auto;
+    padding: 28px 20px 80px;
+    line-height: 1.65;
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+  h1, h2, h3 { font-family: "Rubik", "Heebo", sans-serif; color: var(--ink); text-wrap: balance; }
+
+  /* --- Header -------------------------------------------------------- */
+  header.top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 22px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--line);
+  }
+  .mark {
+    width: 46px; height: 46px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+    display: grid; place-items: center;
+    color: #fff; font-family: "Rubik", sans-serif; font-weight: 800; font-size: 20px;
+    box-shadow: var(--shadow);
+    flex-shrink: 0;
+  }
+  header.top h1 { font-size: 22px; font-weight: 800; margin: 0 0 2px; }
+  header.top p { margin: 0; color: var(--ink-soft); font-size: 14.5px; }
+
+  /* --- Sections -------------------------------------------------------- */
+  section { margin-bottom: 40px; }
+  .eyebrow {
+    font-family: "Rubik", sans-serif;
+    font-size: 12px; font-weight: 700; letter-spacing: .04em;
+    color: var(--primary-deep);
+    text-transform: uppercase;
+    margin: 0 0 8px;
+  }
+  section > h2 { font-size: 19px; font-weight: 700; margin: 0 0 12px; }
+  section > p.lead { color: var(--ink-soft); font-size: 15px; margin: 0 0 18px; max-width: 62ch; }
+
+  /* --- What it does: fact strip -------------------------------------- */
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-top: 18px;
+  }
+  .facts > div { background: var(--surface); padding: 16px; }
+  .facts .num { font-family: "Rubik", sans-serif; font-weight: 800; font-size: 22px; color: var(--primary-deep); font-variant-numeric: tabular-nums; }
+  .facts .lbl { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+
+  /* --- Architecture diagram -------------------------------------------- */
+  .stack { display: flex; flex-direction: column; gap: 0; }
+  .layer {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  .layer + .layer { margin-top: 28px; }
+  .connector {
+    display: flex; justify-content: center;
+    margin-block: -18px 6px;
+    position: relative;
+    z-index: 1;
+  }
+  .connector svg { display: block; }
+  .layer .tag {
+    font-family: "Rubik", sans-serif; font-weight: 700; font-size: 13.5px;
+    color: var(--primary-deep);
+    margin-bottom: 6px;
+  }
+  .layer .items {
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .chip {
+    font-size: 13px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-soft);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .chip.mono { font-size: 12.5px; }
+  .layer .note { font-size: 13px; color: var(--ink-soft); margin-top: 8px; }
+  .layer.accent-coral .tag { color: var(--coral); }
+  .layer.accent-coral .chip.hi { background: var(--coral-tint); border-color: transparent; color: var(--coral); }
+  .layer .chip.hi { background: var(--primary-tint); border-color: transparent; color: var(--primary-deep); }
+  .layer .chip.hi-sun { background: var(--sun-tint); border-color: transparent; color: #8a5c0f; }
+  :root[data-theme="dark"] .layer .chip.hi-sun,
+  :root:not([data-theme="light"]) .layer .chip.hi-sun { @media (prefers-color-scheme: dark) { color: var(--sun); } }
+  :root[data-theme="dark"] .layer .chip.hi-sun { color: var(--sun); }
+
+  /* --- Two-column comparison -------------------------------------------- */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  @media (max-width: 620px) { .compare { grid-template-columns: 1fr; } }
+  .persona {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column;
+  }
+  .persona .head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .persona .icon {
+    width: 34px; height: 34px; border-radius: 10px;
+    display: grid; place-items: center;
+    font-size: 17px;
+  }
+  .persona.agent .icon { background: var(--coral-tint); }
+  .persona.solo .icon { background: var(--primary-tint); }
+  .persona h3 { font-size: 15.5px; font-weight: 700; margin: 0; }
+  .persona .sub { font-size: 12.5px; color: var(--ink-soft); margin-top: 1px; }
+  .persona ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+  .persona li { display: flex; gap: 9px; font-size: 14px; align-items: flex-start; }
+  .persona li .b {
+    width: 6px; height: 6px; border-radius: 50%;
+    margin-top: 7px; flex-shrink: 0;
+  }
+  .persona.agent li .b { background: var(--coral); }
+  .persona.solo li .b { background: var(--primary); }
+  .persona li strong { font-weight: 600; }
+  .persona li span.detail { display: block; color: var(--ink-soft); font-size: 12.8px; margin-top: 1px; }
+
+  .callout {
+    margin-top: 16px;
+    border-inline-start: 3px solid var(--sun);
+    background: var(--sun-tint);
+    border-radius: 0 12px 12px 0;
+    padding: 12px 14px;
+    font-size: 13.5px;
+    color: var(--ink);
+  }
+  :root[data-theme="dark"] .callout, :root:not([data-theme="light"]) .callout {
+    @media (prefers-color-scheme: dark) { color: var(--ink); }
+  }
+  .callout strong { font-family: "Rubik", sans-serif; }
+
+  /* --- Guardrails table -------------------------------------------------- */
+  table.rails { width: 100%; border-collapse: collapse; font-size: 13.8px; }
+  table.rails th, table.rails td { text-align: right; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  table.rails th { font-family: "Rubik", sans-serif; font-weight: 700; color: var(--ink-soft); font-size: 12.5px; text-transform: uppercase; letter-spacing: .03em; }
+  table.rails td:first-child { font-weight: 600; white-space: nowrap; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+  .table-wrap table { margin: 0; }
+  .table-wrap th:first-child, .table-wrap td:first-child { padding-inline-start: 16px; }
+  .table-wrap th:last-child, .table-wrap td:last-child { padding-inline-end: 16px; }
+
+  footer.foot {
+    margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--line);
+    font-size: 12.5px; color: var(--ink-soft); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+</style>
+
+<div class="page">
+
+  <header class="top">
+    <div class="mark">TC</div>
+    <div>
+      <h1>ארכיטקטורת TripCraft</h1>
+      <p>מה האפליקציה עושה, איך היא בנויה, ומה אפשר לעשות איתה כסוכן נסיעות וכטייל פרטי — נכון ל-2026-09-04.</p>
+    </div>
+  </header>
+
+  <section>
+    <p class="eyebrow">מה זה</p>
+    <h2>מלווה טיולים בעברית, ל-2 סוגי משתמשים</h2>
+    <p class="lead">
+      אפליקציית ווב mobile-first, RTL מלא, לתכנון וליווי טיול אחד — מהאשף הראשוני ועד היום בשטח.
+      כל טיול הוא רשומה פרטית בבעלות משתמש, עם הרשאות ברמת השורה במסד הנתונים — לא רק בממשק.
+      אפשר לבנות טיול לגמרי ידנית (מי שכבר סגר טיסות ומלון), או להיעזר בסוכן AI לאורך הדרך.
+    </p>
+    <div class="facts">
+      <div><div class="num">7</div><div class="lbl">מסכים לכל טיול: בית, מסלול, מומלצים, מסמכים, צ'קליסט, שאל את הסוכן, ועוד אשף יצירה בן 4 שלבים</div></div>
+      <div><div class="num">3</div><div class="lbl">כלים שהסוכן יכול להפעיל — הוספה למסלול, הוספה למומלצים, חיפוש כשרות/שבת</div></div>
+      <div><div class="num">1</div><div class="lbl">קישור שיתוף לצפייה בלבד לכל טיול — בלי התחברות, בלי גישה למסמכים</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">איך זה בנוי</p>
+    <h2>ארבע שכבות, מהדפדפן ועד מקור הידע</h2>
+    <p class="lead">כל שכבה יכולה להיכשל בלי להפיל את השאר — אם ה-AI לא זמין, האפליקציה עדיין עובדת במלואה עם נתונים שהוזנו ידנית.</p>
+
+    <div class="stack">
+      <div class="layer">
+        <div class="tag">שכבת לקוח</div>
+        <div class="items">
+          <span class="chip mono">React 18 + Vite + TypeScript</span>
+          <span class="chip mono">Tailwind v4</span>
+          <span class="chip hi">מערכת עיצוב עצמית — בלי ספריית UI חיצונית</span>
+          <span class="chip">PWA להתקנה על מסך הבית</span>
+        </div>
+      </div>
+
+      <div class="connector"><svg width="22" height="20" viewBox="0 0 22 20"><path d="M11 0v14" stroke="var(--line)" stroke-width="2"/><path d="M4 10l7 8 7-8" stroke="var(--line)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <div class="layer">
+        <div class="tag">Edge Functions — Deno, המפתח סודי בצד השרת בלבד</div>
+        <div class="items">
+          <span class="chip hi mono">ask · Claude Haiku 4.5</span>
+          <span class="chip">לולאת tool-use אמיתית, זיהוי בעלות מפורש לפני כל פעולה</span>
+        </div>
+        <div class="items" style="margin-top:8px">
+          <span class="chip hi mono">generate · Claude Sonnet 5</span>
+          <span class="chip">המלצות, מסלול, צ'קליסט, וחילוץ פרטים מתמונת דרכון</span>
+        </div>
+      </div>
+
+      <div class="connector"><svg width="22" height="20" viewBox="0 0 22 20"><path d="M11 0v14" stroke="var(--line)" stroke-width="2"/><path d="M4 10l7 8 7-8" stroke="var(--line)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <div class="layer">
+        <div class="tag">Supabase</div>
+        <div class="items">
+          <span class="chip">Postgres — RLS על כל טבלה</span>
+          <span class="chip">Auth — מייל+סיסמה, Google מוכן אך כבוי</span>
+          <span class="chip">אחסון פרטי למסמכים, גישה רק דרך signed URLs</span>
+          <span class="chip hi">agent_runs — עלות, טוקנים וזמן תגובה לכל קריאה</span>
+        </div>
+      </div>
+
+      <div class="connector"><svg width="22" height="20" viewBox="0 0 22 20"><path d="M11 0v14" stroke="var(--line)" stroke-width="2"/><path d="M4 10l7 8 7-8" stroke="var(--line)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <div class="layer accent-coral">
+        <div class="tag">מקור ידע — pgvector</div>
+        <div class="items">
+          <span class="chip hi">Voyage AI embeddings, חיפוש סמנטי</span>
+          <span class="chip">3 יעדים מכוסים: קפריסין · רומא · באטומי</span>
+        </div>
+        <div class="note">כל פריט ידע מתועד עם מקור ותאריך אימות. שאלה על יעד לא מכוסה מקבלת סירוב כן — לא ניחוש.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">שני סוגי משתמשים</p>
+    <h2>סוכן נסיעות מול טייל פרטי</h2>
+    <p class="lead">אותה אפליקציה, שני שימושים שונים לגמרי — ההבדל הוא בשלב שממנו כל אחד מתחיל.</p>
+
+    <div class="compare">
+      <div class="persona agent">
+        <div class="head">
+          <div class="icon">🧳</div>
+          <div><h3>כסוכן נסיעות</h3><div class="sub">בונה טיולים עבור לקוחות</div></div>
+        </div>
+        <ul>
+          <li><span class="b"></span><div><strong>מיתוג סוכנות</strong><span class="detail">שם וצבע מותג מוצגים בדף השיתוף שהלקוח רואה</span></div></li>
+          <li><span class="b"></span><div><strong>קישור שיתוף לצפייה בלבד</strong><span class="detail">/share/:slug — בלי התחברות, בלי גישה למסמכים הפרטיים</span></div></li>
+          <li><span class="b"></span><div><strong>שכפול טיול כתבנית</strong><span class="detail">מעתיק משתתפים, מסלול וצ'קליסט לטיול חדש, ומאפס סימוני "בוצע"</span></div></li>
+          <li><span class="b"></span><div><strong>ייבוא נוסעים בכמות</strong><span class="detail">CSV / TSV / JSON — נוח ללקוחות עם הרבה משתתפים</span></div></li>
+        </ul>
+      </div>
+
+      <div class="persona solo">
+        <div class="head">
+          <div class="icon">🧑‍💻</div>
+          <div><h3>כטייל פרטי, עם הזמנות סגורות</h3><div class="sub">כבר יש כרטיסי טיסה ומלון</div></div>
+        </div>
+        <ul>
+          <li><span class="b"></span><div><strong>שלב "לוגיסטיקה" באשף</strong><span class="detail">הזנה ידנית מלאה: חברת תעופה, מספר טיסה, שדות, שעות, טרמינלים, מושבים, מזוודות</span></div></li>
+          <li><span class="b"></span><div><strong>פרטי מלון מלאים</strong><span class="detail">שם, כתובת, צ'ק-אין/אאוט, טלפון, קישור להזמנה, וגם השכרת רכב</span></div></li>
+          <li><span class="b"></span><div><strong>ה-AI לא חובה כדי להתחיל</strong><span class="detail">אפשר לבנות טיול שלם רק עם נתונים אמיתיים שכבר יש, בלי לגעת בסוכן בכלל</span></div></li>
+          <li><span class="b"></span><div><strong>הסוכן עדיין שימושי אחר כך</strong><span class="detail">שאלות על המסלול הקיים, המלצות נקודתיות, הוספה בכפוף לאישור</span></div></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>לשאלה שנשאלה במפורש:</strong> כן — אדם פרטי שכבר סגר טיסה ומלון לא צריך "לרמות" את האשף או להשתמש ב-AI כדי להתחיל.
+      שלב 3 באשף נבנה בדיוק בשביל להזין את הפרטים האמיתיים האלה ישירות, ואז שאר האפליקציה (מסלול, מסמכים, צ'קליסט, שיתוף) עובדת סביבם.
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">מה שומר על זה בטוח</p>
+    <h2>גבולות שנאכפים במסד הנתונים, לא רק בקוד</h2>
+    <div class="table-wrap">
+      <table class="rails">
+        <thead><tr><th>כלל</th><th>איך זה נאכף</th></tr></thead>
+        <tbody>
+          <tr><td>כל טיול נראה רק לבעליו</td><td>RLS על כל טבלה, לפי <span class="mono">owns_trip()</span> — לא רק בדיקה בממשק</td></tr>
+          <tr><td>מסמכים פרטיים לגמרי</td><td>דלי אחסון סגור, גישה רק דרך signed URLs לזמן מוגבל — גם בטיול משותף</td></tr>
+          <tr><td>הסוכן לא נוגע בתפקידים או במסמכים</td><td>שלושת הכלים כותבים רק ל-<span class="mono">itinerary_items</span> ו-<span class="mono">suggestions</span></td></tr>
+          <tr><td>כתיבה מהסוכן דורשת אישור אדם</td><td>הכלי רק מציע פעולה; הכתיבה בפועל קורית רק אחרי לחיצת אישור בכרטיס נפרד</td></tr>
+          <tr><td>תקציב ה-AI מוגן</td><td>תקרת הוצאה יומית למשתמש, ולוג עלות/טוקנים לכל קריאה</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>TripCraft · בריף ארכיטקטורה פנימי</span>
+    <span>מבוסס על מצב הריפו ב-2026-09-04</span>
+  </footer>
+
+</div>

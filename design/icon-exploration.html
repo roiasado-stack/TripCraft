@@ -1,0 +1,221 @@
+<title>סימני TripCraft</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=Heebo:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ground: #f5fbfa;
+    --surface: #ffffff;
+    --surface-2: #eef8f6;
+    --ink: #10302d;
+    --ink-soft: #587471;
+    --line: #d9ece9;
+    --teal: #12b3b0;
+    --teal-deep: #0b5f68;
+    --sea: #3ec4c9;
+    --coral: #ee6c4d;
+    --coral-tint: #fce6dd;
+    --sun: #f2c14e;
+    --sun-tint: #fdf1d9;
+    --shadow: 0 1px 2px rgba(16,48,45,.05), 0 10px 26px -14px rgba(16,48,45,.22);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --ground: #0a1e1c; --surface: #0f2926; --surface-2: #123330;
+      --ink: #eaf6f4; --ink-soft: #9dc0bc; --line: #1c3f3b;
+      --teal: #35c9c1; --teal-deep: #7fdbd3; --sea: #52d3d0;
+      --coral: #ff8a6b; --coral-tint: #3a2018; --sun: #f5ce6b; --sun-tint: #362b14;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -14px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0a1e1c; --surface: #0f2926; --surface-2: #123330;
+    --ink: #eaf6f4; --ink-soft: #9dc0bc; --line: #1c3f3b;
+    --teal: #35c9c1; --teal-deep: #7fdbd3; --sea: #52d3d0;
+    --coral: #ff8a6b; --coral-tint: #3a2018; --sun: #f5ce6b; --sun-tint: #362b14;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -14px rgba(0,0,0,.55);
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--ground); }
+  .page {
+    direction: rtl;
+    font-family: "Heebo", system-ui, sans-serif;
+    color: var(--ink);
+    max-width: 880px;
+    margin-inline: auto;
+    padding: 28px 20px 90px;
+    line-height: 1.6;
+  }
+  h1, h2, h3 { font-family: "Rubik", sans-serif; color: var(--ink); text-wrap: balance; }
+
+  header.top { padding-bottom: 20px; margin-bottom: 30px; border-bottom: 1px solid var(--line); }
+  header.top h1 { font-size: 21px; font-weight: 800; margin: 0 0 6px; }
+  header.top p { margin: 0; color: var(--ink-soft); font-size: 14.5px; max-width: 62ch; }
+
+  .critique {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: var(--line); border: 1px solid var(--line); border-radius: 14px;
+    overflow: hidden; margin-top: 18px;
+  }
+  .critique > div { background: var(--surface); padding: 12px 14px; font-size: 12.8px; color: var(--ink-soft); }
+  .critique strong { display: block; font-family: "Rubik", sans-serif; font-size: 12.5px; color: var(--teal-deep); margin-bottom: 3px; }
+
+  .concept { margin-bottom: 48px; }
+  .concept .eyebrow { font-family: "Rubik", sans-serif; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--teal-deep); margin: 0 0 4px; }
+  .concept h2 { font-size: 18px; font-weight: 700; margin: 0 0 6px; }
+  .concept p.desc { color: var(--ink-soft); font-size: 14px; margin: 0 0 18px; max-width: 60ch; }
+
+  .row { display: flex; align-items: flex-end; gap: 22px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }
+  .sample { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .sample .label { font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .tile { border-radius: 22%; display: grid; place-items: center; box-shadow: var(--shadow); }
+  .tile.lg { width: 128px; height: 128px; border-radius: 28px; }
+  .tile.md { width: 64px; height: 64px; border-radius: 15px; }
+  .tile.sm { width: 40px; height: 40px; border-radius: 10px; }
+  .tile.xs { width: 24px; height: 24px; border-radius: 6px; }
+  .tile.mono { width: 40px; height: 40px; border-radius: 10px; background: var(--surface-2) !important; border: 1px solid var(--line); }
+
+  .wordmark-check { margin-top: 14px; display: flex; align-items: center; gap: 10px; }
+  .wordmark-check svg { flex-shrink: 0; }
+  .wordmark-check .wname { font-family: "Rubik", sans-serif; font-weight: 800; font-size: 20px; }
+  .wordmark-check .wname .b1 { color: var(--teal-deep); }
+  .wordmark-check .wname .b2 { color: var(--coral); }
+
+  footer.foot { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--ink-soft); }
+</style>
+
+<div class="page">
+
+  <header class="top">
+    <h1>סימנים חדשים לאייקון TripCraft</h1>
+    <p>שלוש כיוונים, כל אחד נבנה נגד אותם קריטריונים — ולא רק בגודל גדול, גם בגדלים האמיתיים שבהם האייקון נראה בפועל.</p>
+    <div class="critique">
+      <div><strong>לא קלישאה</strong>לא מצפן / פין / הר / מטוסון — הצירוף שנמצא בכל אפליקציית טיולים גנרית</div>
+      <div><strong>קריא בקטן</strong>נבדק ב-40px ו-24px, לא רק ב-128px — שם רוב הסמלים המפורטים נשברים</div>
+      <div><strong>שייך לפלטה</strong>טורקיז + קורל + צהוב שמש — לא הפלטה הכחולה-תאגידית שנפסלה</div>
+      <div><strong>אומר "Craft"</strong>מחובר לרעיון של מלאכה/אריגה, לא רק "נסיעה" גנרית</div>
+    </div>
+  </header>
+
+  <!-- Concept 1 -->
+  <div class="concept">
+    <p class="eyebrow">כיוון 1</p>
+    <h2>מסלול מקופל</h2>
+    <p class="desc">קו עבה יחיד שמתקפל כמו שביל טיול על מפה, ומסתיים בנקודת יעד. אין פרטים פנימיים לאבד בקטן — זו צורה אחת נמשכת.</p>
+    <div class="row">
+      <div class="sample">
+        <div class="tile lg" style="background:linear-gradient(160deg,#3ec4c9,#0b5f68)">
+          <svg width="76" height="76" viewBox="0 0 64 64"><path d="M14 50 L26 34 L34 44 L50 16" stroke="#fff" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="50" cy="16" r="6" fill="#F2C14E"/></svg>
+        </div>
+        <div class="label">128px</div>
+      </div>
+      <div class="sample">
+        <div class="tile md" style="background:linear-gradient(160deg,#3ec4c9,#0b5f68)">
+          <svg width="38" height="38" viewBox="0 0 64 64"><path d="M14 50 L26 34 L34 44 L50 16" stroke="#fff" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="50" cy="16" r="6" fill="#F2C14E"/></svg>
+        </div>
+        <div class="label">64px</div>
+      </div>
+      <div class="sample">
+        <div class="tile sm" style="background:linear-gradient(160deg,#3ec4c9,#0b5f68)">
+          <svg width="24" height="24" viewBox="0 0 64 64"><path d="M14 50 L26 34 L34 44 L50 16" stroke="#fff" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="50" cy="16" r="7" fill="#F2C14E"/></svg>
+        </div>
+        <div class="label">40px</div>
+      </div>
+      <div class="sample">
+        <div class="tile xs" style="background:linear-gradient(160deg,#3ec4c9,#0b5f68)">
+          <svg width="15" height="15" viewBox="0 0 64 64"><path d="M14 50 L26 34 L34 44 L50 16" stroke="#fff" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="50" cy="16" r="8" fill="#F2C14E"/></svg>
+        </div>
+        <div class="label">24px</div>
+      </div>
+      <div class="sample">
+        <div class="tile mono">
+          <svg width="24" height="24" viewBox="0 0 64 64"><path d="M14 50 L26 34 L34 44 L50 16" stroke="#0b5f68" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/><circle cx="50" cy="16" r="7" fill="#0b5f68"/></svg>
+        </div>
+        <div class="label">מונוכרום</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Concept 2 -->
+  <div class="concept">
+    <p class="eyebrow">כיוון 2</p>
+    <h2>שתי + T ארוגה</h2>
+    <p class="desc">שני פסים עבים שנארגים זה בזה — האריגה עצמה היא ה"Craft", והצומת שלהם קורא גם כ-T (Trip/TripCraft). שני צבעים בלבד, בלי גרדיאנט תלת-ממדי.</p>
+    <div class="row">
+      <div class="sample">
+        <div class="tile lg" style="background:#12B3B0">
+          <svg width="76" height="76" viewBox="0 0 64 64"><path d="M32 12 L32 52" stroke="#fff" stroke-width="9" fill="none" stroke-linecap="round"/><path d="M16 22 L48 22" stroke="#EE6C4D" stroke-width="9" fill="none" stroke-linecap="round"/></svg>
+        </div>
+        <div class="label">128px</div>
+      </div>
+      <div class="sample">
+        <div class="tile md" style="background:#12B3B0">
+          <svg width="38" height="38" viewBox="0 0 64 64"><path d="M32 12 L32 52" stroke="#fff" stroke-width="9" fill="none" stroke-linecap="round"/><path d="M16 22 L48 22" stroke="#EE6C4D" stroke-width="9" fill="none" stroke-linecap="round"/></svg>
+        </div>
+        <div class="label">64px</div>
+      </div>
+      <div class="sample">
+        <div class="tile sm" style="background:#12B3B0">
+          <svg width="24" height="24" viewBox="0 0 64 64"><path d="M32 12 L32 52" stroke="#fff" stroke-width="11" fill="none" stroke-linecap="round"/><path d="M16 22 L48 22" stroke="#EE6C4D" stroke-width="11" fill="none" stroke-linecap="round"/></svg>
+        </div>
+        <div class="label">40px</div>
+      </div>
+      <div class="sample">
+        <div class="tile xs" style="background:#12B3B0">
+          <svg width="15" height="15" viewBox="0 0 64 64"><path d="M32 12 L32 52" stroke="#fff" stroke-width="12" fill="none" stroke-linecap="round"/><path d="M16 22 L48 22" stroke="#EE6C4D" stroke-width="12" fill="none" stroke-linecap="round"/></svg>
+        </div>
+        <div class="label">24px</div>
+      </div>
+      <div class="sample">
+        <div class="tile mono">
+          <svg width="24" height="24" viewBox="0 0 64 64"><path d="M32 12 L32 52" stroke="#0b5f68" stroke-width="11" fill="none" stroke-linecap="round"/><path d="M16 22 L48 22" stroke="#0b5f68" stroke-width="11" fill="none" stroke-linecap="round"/></svg>
+        </div>
+        <div class="label">מונוכרום</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Concept 3 -->
+  <div class="concept">
+    <p class="eyebrow">כיוון 3</p>
+    <h2>קצה כרטיס</h2>
+    <p class="desc">פינה מקופלת של כרטיס נסיעה, עם קו ניקוב מקווקו. קונקרטי כמו "נסיעה" בלי להיות מטוסון או מזוודה — וכמעט אף אפליקציית טיולים לא משתמשת בזה כסימן הראשי שלה.</p>
+    <div class="row">
+      <div class="sample">
+        <div class="tile lg" style="background:#FCF0D6">
+          <svg width="76" height="76" viewBox="0 0 64 64"><path d="M14 14 H50 V50 L38 38 L14 50 Z" fill="#12B3B0"/><path d="M14 14 L38 38" stroke="#EE6C4D" stroke-width="3" stroke-dasharray="1 6" stroke-linecap="round"/></svg>
+        </div>
+        <div class="label">128px</div>
+      </div>
+      <div class="sample">
+        <div class="tile md" style="background:#FCF0D6">
+          <svg width="38" height="38" viewBox="0 0 64 64"><path d="M14 14 H50 V50 L38 38 L14 50 Z" fill="#12B3B0"/><path d="M14 14 L38 38" stroke="#EE6C4D" stroke-width="3" stroke-dasharray="1 6" stroke-linecap="round"/></svg>
+        </div>
+        <div class="label">64px</div>
+      </div>
+      <div class="sample">
+        <div class="tile sm" style="background:#FCF0D6">
+          <svg width="24" height="24" viewBox="0 0 64 64"><path d="M14 14 H50 V50 L38 38 L14 50 Z" fill="#12B3B0"/></svg>
+        </div>
+        <div class="label">40px</div>
+      </div>
+      <div class="sample">
+        <div class="tile xs" style="background:#FCF0D6">
+          <svg width="15" height="15" viewBox="0 0 64 64"><path d="M14 14 H50 V50 L38 38 L14 50 Z" fill="#12B3B0"/></svg>
+        </div>
+        <div class="label">24px</div>
+      </div>
+      <div class="sample">
+        <div class="tile mono">
+          <svg width="24" height="24" viewBox="0 0 64 64"><path d="M14 14 H50 V50 L38 38 L14 50 Z" fill="#0b5f68"/></svg>
+        </div>
+        <div class="label">מונוכרום</div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">
+    כל שלושת הכיוונים בנויים על הפלטה הקיימת בקוד (<code>--primary #12b3b0</code>, <code>--accent #EE6C4D</code>, <code>--sun #F2C14E</code>) — אין כאן שינוי זהות, רק סימן חדש.
+  </footer>
+
+</div>

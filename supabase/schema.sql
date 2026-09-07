@@ -209,7 +209,8 @@ CREATE TABLE IF NOT EXISTS public.trip_chat_messages (
   trip_id UUID NOT NULL REFERENCES public.trips(id) ON DELETE CASCADE,
   role TEXT NOT NULL,                                -- user | assistant
   content TEXT NOT NULL,
-  cards JSONB NOT NULL DEFAULT '[]'::jsonb,          -- AgentCard[] the client can add
+  cards JSONB NOT NULL DEFAULT '[]'::jsonb,          -- AgentCard[] the client can add (legacy, pre-tool-use messages)
+  pending_actions JSONB NOT NULL DEFAULT '[]'::jsonb, -- PendingAction[] — proposed add_to_itinerary/add_suggestion tool calls, approved client-side
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 GRANT SELECT, INSERT, DELETE ON public.trip_chat_messages TO authenticated;
@@ -225,6 +226,105 @@ CREATE POLICY "owner all" ON public.trip_chat_messages FOR ALL TO authenticated
 USING (public.owns_trip(trip_id)) WITH CHECK (public.owns_trip(trip_id));
 CREATE INDEX IF NOT EXISTS trip_chat_messages_trip_idx
   ON public.trip_chat_messages (trip_id, created_at);
+
+-- Agent usage/cost logging (admin-read-only) ----------------------------------
+-- Sits OUTSIDE the loop above on purpose, same reason as trip_chat_messages:
+-- this is internal spend data, and it gets no anon grant and no "shared read"
+-- policy. Reads are further restricted to admins — a regular traveler has no
+-- reason to see spend across the whole app.
+CREATE TABLE IF NOT EXISTS public.agent_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- Nullable: passport-scan calls (generate kind="passports") happen during
+  -- participant import and aren't tied to a trip — everything else always has one.
+  trip_id UUID REFERENCES public.trips(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL,
+  kind TEXT NOT NULL,                                -- ask | generate_suggestions | generate_itinerary | generate_checklist | generate_passports
+  input_tokens INT NOT NULL DEFAULT 0,
+  output_tokens INT NOT NULL DEFAULT 0,
+  cost_usd NUMERIC(10,6) NOT NULL DEFAULT 0,
+  latency_ms INT NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'ok',                 -- ok | error
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+GRANT SELECT, INSERT ON public.agent_runs TO authenticated;
+GRANT ALL ON public.agent_runs TO service_role;
+REVOKE ALL ON public.agent_runs FROM anon;
+ALTER TABLE public.agent_runs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "own insert" ON public.agent_runs;
+CREATE POLICY "own insert" ON public.agent_runs FOR INSERT TO authenticated
+WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "admin read" ON public.agent_runs;
+CREATE POLICY "admin read" ON public.agent_runs FOR SELECT TO authenticated
+USING (public.has_role(auth.uid(), 'admin'));
+CREATE INDEX IF NOT EXISTS agent_runs_created_idx ON public.agent_runs (created_at);
+CREATE INDEX IF NOT EXISTS agent_runs_user_created_idx ON public.agent_runs (user_id, created_at);
+
+-- Self-scoped (auth.uid() only, no argument to pass someone else's id into)
+-- so an Edge Function running with the caller's own JWT can check the
+-- caller's own spend today before calling the LLM, even though "admin read"
+-- above blocks that SELECT directly.
+CREATE OR REPLACE FUNCTION public.my_agent_daily_cost_usd()
+RETURNS NUMERIC LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT COALESCE(SUM(cost_usd), 0) FROM public.agent_runs
+  WHERE user_id = auth.uid() AND created_at >= date_trunc('day', now())
+$$;
+
+-- pgvector knowledge source for find_kosher (3 destinations only, each fact
+-- sourced and dated — see migration 006 for the full rationale) -------------
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE TABLE IF NOT EXISTS public.knowledge_chunks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  destination TEXT NOT NULL,
+  category TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  source_url TEXT NOT NULL,
+  source_verified_on DATE NOT NULL,
+  embedding VECTOR(1024) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.knowledge_chunks ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.knowledge_chunks TO service_role;
+REVOKE ALL ON public.knowledge_chunks FROM anon, authenticated;
+CREATE INDEX IF NOT EXISTS knowledge_chunks_destination_idx ON public.knowledge_chunks (destination);
+CREATE OR REPLACE FUNCTION public.match_knowledge_chunks(
+  query_embedding VECTOR(1024),
+  filter_destination TEXT,
+  match_count INT DEFAULT 5,
+  min_similarity FLOAT DEFAULT 0.3
+)
+RETURNS TABLE (
+  title TEXT, content TEXT, category TEXT, source_url TEXT, source_verified_on DATE, similarity FLOAT
+)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT title, content, category, source_url, source_verified_on,
+         1 - (embedding <=> query_embedding) AS similarity
+  FROM public.knowledge_chunks
+  WHERE destination = filter_destination
+    AND 1 - (embedding <=> query_embedding) >= min_similarity
+  ORDER BY embedding <=> query_embedding
+  LIMIT match_count;
+$$;
+REVOKE EXECUTE ON FUNCTION public.match_knowledge_chunks(vector, text, int, float) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.match_knowledge_chunks(vector, text, int, float) TO authenticated;
+
+-- Log table for the n8n pre-departure-reminder automation (Day 12). Written
+-- by n8n with the service_role key — a trusted backend actor, not a user —
+-- so like agent_runs/knowledge_chunks it has zero anon/authenticated grants.
+CREATE TABLE IF NOT EXISTS public.automation_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  trip_id UUID REFERENCES public.trips(id) ON DELETE CASCADE,
+  scenario TEXT NOT NULL DEFAULT 'pre_departure_reminder',
+  status TEXT NOT NULL,
+  detail TEXT,
+  run_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.automation_logs ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.automation_logs TO service_role;
+REVOKE ALL ON public.automation_logs FROM anon, authenticated;
+CREATE INDEX IF NOT EXISTS automation_logs_trip_idx ON public.automation_logs (trip_id);
+CREATE INDEX IF NOT EXISTS automation_logs_run_at_idx ON public.automation_logs (run_at);
 
 -- Storage: private bucket for trip documents ---------------------------------
 INSERT INTO storage.buckets (id, name, public)
@@ -250,6 +350,8 @@ REVOKE EXECUTE ON FUNCTION public.update_updated_at_column() FROM PUBLIC, anon, 
 REVOKE EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.owns_trip(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.trip_is_shared(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.my_agent_daily_cost_usd() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.owns_trip(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.trip_is_shared(uuid) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.my_agent_daily_cost_usd() TO authenticated;
