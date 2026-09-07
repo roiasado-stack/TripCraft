@@ -2,8 +2,15 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { AgentRun } from "@/lib/types";
+import type { AgentRun, StaleKnowledgeChunk } from "@/lib/types";
 import { Badge, Card, EmptyState, FullSpinner } from "@/components/ui";
+import { LinkChip } from "@/components/MapLink";
+
+// A curated fact re-checked less recently than this shows up as "overdue for
+// re-verification" — the manual counterpart to a cron job we deliberately
+// didn't build (auto-refreshing kosher/Chabad facts unattended would silently
+// break the "source_verified_on = a human actually checked this" guarantee).
+const STALE_THRESHOLD_MONTHS = 6;
 
 // Visible warning on this screen when today's total spend crosses this —
 // separate from DAILY_CAP_USD in the Edge Functions, which blocks a single
@@ -27,19 +34,24 @@ function startOfTodayIso(): string {
 export default function AdminMonitoringPage() {
   const navigate = useNavigate();
   const [runs, setRuns] = useState<AgentRun[]>([]);
+  const [staleChunks, setStaleChunks] = useState<StaleKnowledgeChunk[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     (async () => {
-      const { data } = await supabase
-        .from("agent_runs")
-        .select("*")
-        .gte("created_at", startOfTodayIso())
-        .order("created_at", { ascending: false })
-        .limit(500);
+      const [{ data: runsData }, { data: staleData }] = await Promise.all([
+        supabase
+          .from("agent_runs")
+          .select("*")
+          .gte("created_at", startOfTodayIso())
+          .order("created_at", { ascending: false })
+          .limit(500),
+        supabase.rpc("stale_knowledge_chunks", { threshold_months: STALE_THRESHOLD_MONTHS }),
+      ]);
       if (!active) return;
-      setRuns((data as AgentRun[]) ?? []);
+      setRuns((runsData as AgentRun[]) ?? []);
+      setStaleChunks((staleData as StaleKnowledgeChunk[]) ?? []);
       setLoading(false);
     })();
     return () => {
@@ -79,6 +91,31 @@ export default function AdminMonitoringPage() {
           </p>
         </Card>
       )}
+
+      <Card className="mb-4 p-4">
+        <h2 className="mb-1 font-bold">מקור הידע · דורש רענון</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          עובדות שלא אומתו מול המקור מעל {STALE_THRESHOLD_MONTHS} חודשים. זה לא מתעדכן לבד בכוונה —
+          מישהו צריך לבדוק שהמידע עדיין נכון ולהריץ מחדש את seed-knowledge.ts.
+        </p>
+        {staleChunks.length === 0 ? (
+          <p className="text-sm text-muted-foreground">הכל מאומת לאחרונה 👍</p>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {staleChunks.map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-2 border-b border-border pb-2.5 text-sm last:border-0 last:pb-0">
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{c.title}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {c.destination} · {c.category} · אומת לפני {c.days_stale} ימים
+                  </div>
+                </div>
+                <LinkChip url={c.source_url} label="מקור" />
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {runs.length === 0 ? (
         <EmptyState emoji="📊" title="אין קריאות היום" description="ברגע שמישהו ישתמש בסוכן או ביצירת תוכן, זה יופיע כאן." />

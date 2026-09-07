@@ -193,6 +193,18 @@ export interface AgentRun {
   created_at: string;
 }
 
+/** One row from `stale_knowledge_chunks()` — a curated fact overdue for
+ *  re-verification. Admin-read-only, same as AgentRun. */
+export interface StaleKnowledgeChunk {
+  id: string;
+  destination: string;
+  category: string;
+  title: string;
+  source_url: string;
+  source_verified_on: string;
+  days_stale: number;
+}
+
 /** A tool call the agent proposed but did not execute — shown as an approval
  *  card; the actual write only happens if the user confirms it. */
 export interface PendingAction {

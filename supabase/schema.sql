@@ -309,6 +309,37 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.match_knowledge_chunks(vector, text, int, float) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.match_knowledge_chunks(vector, text, int, float) TO authenticated;
 
+-- Freshness signal for the curated knowledge base: source_verified_on already
+-- records when a human last checked each fact. This surfaces chunks overdue
+-- for re-verification (admin-only) without ever auto-trusting unverified
+-- content — see migration 008.
+CREATE OR REPLACE FUNCTION public.stale_knowledge_chunks(threshold_months INT DEFAULT 6)
+RETURNS TABLE (
+  id UUID,
+  destination TEXT,
+  category TEXT,
+  title TEXT,
+  source_url TEXT,
+  source_verified_on DATE,
+  days_stale INT
+)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT public.has_role(auth.uid(), 'admin') THEN
+    RAISE EXCEPTION 'forbidden';
+  END IF;
+
+  RETURN QUERY
+  SELECT k.id, k.destination, k.category, k.title, k.source_url, k.source_verified_on,
+         (CURRENT_DATE - k.source_verified_on)::INT AS days_stale
+  FROM public.knowledge_chunks k
+  WHERE k.source_verified_on < (CURRENT_DATE - (threshold_months || ' months')::INTERVAL)
+  ORDER BY k.source_verified_on ASC;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.stale_knowledge_chunks(int) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.stale_knowledge_chunks(int) TO authenticated;
+
 -- Log table for the n8n pre-departure-reminder automation (Day 12). Written
 -- by n8n with the service_role key — a trusted backend actor, not a user —
 -- so like agent_runs/knowledge_chunks it has zero anon/authenticated grants.
