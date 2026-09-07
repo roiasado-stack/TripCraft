@@ -101,7 +101,11 @@ export default function TripsListPage() {
       ) : (
         <div className="flex flex-col gap-3.5">
           {trips.map((trip) => (
-            <TripCard key={trip.id} trip={trip} />
+            <TripCard
+              key={trip.id}
+              trip={trip}
+              onDeleted={(id) => setTrips((prev) => prev.filter((t) => t.id !== id))}
+            />
           ))}
         </div>
       )}
