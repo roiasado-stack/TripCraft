@@ -1,0 +1,196 @@
+<title>TripCraft — סיכום למרצה</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=Heebo:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ground: #f4faf9; --surface: #ffffff; --surface-2: #eef8f6;
+    --ink: #10302d; --ink-soft: #55736f; --line: #d9ece9;
+    --teal: #12b3b0; --teal-deep: #0b6f6d; --coral: #ee6c4d; --coral-tint: #fce6dd;
+    --sun: #f2c14e; --sun-tint: #fdf1d9;
+    --good: #1a9c6b; --good-tint: #e2f5ec;
+    --warn: #b8860b; --warn-tint: #fdf1d9;
+    --bad: #c0392b; --bad-tint: #fbe6e2;
+    --shadow: 0 1px 2px rgba(16,48,45,.05), 0 10px 26px -14px rgba(16,48,45,.2);
+  }
+  :root:not([data-theme="light"]) { @media (prefers-color-scheme: dark) {
+    --ground: #0a1e1c; --surface: #0f2926; --surface-2: #123330;
+    --ink: #eaf6f4; --ink-soft: #9dc0bc; --line: #1c3f3b;
+    --teal: #35c9c1; --teal-deep: #7fdbd3; --coral: #ff8a6b; --coral-tint: #3a2018;
+    --sun: #f5ce6b; --sun-tint: #362b14;
+    --good: #4ad493; --good-tint: #103825; --warn: #f0c250; --warn-tint: #3a2e14;
+    --bad: #ff7a68; --bad-tint: #3a1e18;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -14px rgba(0,0,0,.55);
+  }}
+  :root[data-theme="dark"] {
+    --ground: #0a1e1c; --surface: #0f2926; --surface-2: #123330;
+    --ink: #eaf6f4; --ink-soft: #9dc0bc; --line: #1c3f3b;
+    --teal: #35c9c1; --teal-deep: #7fdbd3; --coral: #ff8a6b; --coral-tint: #3a2018;
+    --sun: #f5ce6b; --sun-tint: #362b14;
+    --good: #4ad493; --good-tint: #103825; --warn: #f0c250; --warn-tint: #3a2e14;
+    --bad: #ff7a68; --bad-tint: #3a1e18;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 26px -14px rgba(0,0,0,.55);
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--ground); }
+  .page { direction: rtl; font-family: "Heebo", system-ui, sans-serif; color: var(--ink); max-width: 880px; margin-inline: auto; padding: 26px 20px 90px; line-height: 1.62; }
+  h1, h2, h3 { font-family: "Rubik", sans-serif; color: var(--ink); text-wrap: balance; }
+
+  header.top { display: flex; align-items: center; gap: 14px; padding-bottom: 20px; margin-bottom: 26px; border-bottom: 1px solid var(--line); }
+  .mark { width: 46px; height: 46px; border-radius: 14px; background: linear-gradient(135deg, var(--teal), var(--teal-deep)); display: grid; place-items: center; color: #fff; font-family: "Rubik", sans-serif; font-weight: 800; font-size: 19px; box-shadow: var(--shadow); flex-shrink: 0; }
+  header.top h1 { font-size: 20px; font-weight: 800; margin: 0 0 2px; }
+  header.top p { margin: 0; color: var(--ink-soft); font-size: 13.5px; }
+
+  section { margin-bottom: 38px; }
+  .eyebrow { font-family: "Rubik", sans-serif; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--teal-deep); margin: 0 0 6px; }
+  section > h2 { font-size: 18px; font-weight: 700; margin: 0 0 12px; }
+  section > p.lead { color: var(--ink-soft); font-size: 14.5px; margin: 0 0 16px; max-width: 64ch; }
+
+  .live-strip { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; box-shadow: var(--shadow); font-size: 13.5px; margin-bottom: 30px; }
+  .live-strip .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); flex-shrink: 0; box-shadow: 0 0 0 3px var(--good-tint); }
+  .live-strip a { color: var(--teal-deep); font-weight: 600; text-decoration: none; direction: ltr; display: inline-block; }
+  .live-strip a:hover { text-decoration: underline; }
+
+  .screens { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  @media (max-width: 620px) { .screens { grid-template-columns: repeat(2, 1fr); } }
+  .screen-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); }
+  .screen-card .emoji { font-size: 20px; margin-bottom: 6px; }
+  .screen-card .name { font-family: "Rubik", sans-serif; font-weight: 700; font-size: 13.5px; margin-bottom: 3px; }
+  .screen-card .desc { font-size: 11.8px; color: var(--ink-soft); line-height: 1.4; }
+
+  table.modules { width: 100%; border-collapse: collapse; font-size: 13.6px; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
+  .table-wrap table { margin: 0; }
+  table.modules th, table.modules td { text-align: right; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.modules tr:last-child td { border-bottom: none; }
+  table.modules th { font-family: "Rubik", sans-serif; font-weight: 700; color: var(--ink-soft); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; }
+  table.modules td:first-child { font-weight: 600; white-space: nowrap; }
+  .status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .status.done { background: var(--good-tint); color: var(--good); }
+  .status.partial { background: var(--warn-tint); color: var(--warn); }
+  .status.open { background: var(--bad-tint); color: var(--bad); }
+
+  .fact-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  @media (max-width: 620px) { .fact-grid { grid-template-columns: repeat(2, 1fr); } }
+  .fact-grid > div { background: var(--surface); padding: 14px 16px; }
+  .fact-grid .num { font-family: "Rubik", sans-serif; font-weight: 800; font-size: 21px; color: var(--teal-deep); font-variant-numeric: tabular-nums; }
+  .fact-grid .lbl { font-size: 11.8px; color: var(--ink-soft); margin-top: 2px; }
+
+  .gap-list { display: flex; flex-direction: column; gap: 8px; }
+  .gap-item { display: flex; gap: 10px; align-items: flex-start; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font-size: 13.5px; box-shadow: var(--shadow); }
+  .gap-item .b { width: 6px; height: 6px; border-radius: 50%; background: var(--coral); margin-top: 7px; flex-shrink: 0; }
+
+  .q-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow); margin-bottom: 14px; }
+  .q-card .qnum { font-family: "Rubik", sans-serif; font-weight: 800; font-size: 12px; color: var(--coral); margin-bottom: 6px; }
+  .q-card .qtext { font-family: "Rubik", sans-serif; font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .q-card .qanswer { font-size: 13.8px; color: var(--ink-soft); border-inline-start: 3px solid var(--sun); background: var(--sun-tint); border-radius: 0 10px 10px 0; padding: 9px 12px; }
+  .q-card .qanswer strong { font-family: "Rubik", sans-serif; color: var(--ink); }
+
+  footer.foot { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12.3px; color: var(--ink-soft); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+</style>
+
+<div class="page">
+  <header class="top">
+    <div class="mark">TC</div>
+    <div>
+      <h1>TripCraft — סיכום לפגישה עם המרצה</h1>
+      <p>פרויקט גמר, AI Agents &amp; Automation Specialist · מצב נכון להיום, 2026-09-07</p>
+    </div>
+  </header>
+
+  <div class="live-strip">
+    <span class="dot"></span>
+    <span>באוויר עכשיו:</span>
+    <a href="https://tripcraft-lac.vercel.app" dir="ltr">tripcraft-lac.vercel.app</a>
+    <span>— אפשר לפתוח בטלפון תוך כדי הפגישה</span>
+  </div>
+
+  <section>
+    <p class="eyebrow">מה זה</p>
+    <h2>מלווה טיולים בעברית, מוצר אמיתי לא פרויקט הדגמה</h2>
+    <p class="lead">
+      אפליקציית ווב mobile-first, RTL מלא, לתכנון וליווי טיול — מהאשף הראשוני ועד היום בשטח.
+      חשבונות משתמשים אמיתיים, מסד נתונים עם הרשאות ברמת השורה, אחסון מסמכים פרטי, וסוכן AI עם כלים ומקור ידע.
+      נבנה ונפרס באופן עצמאי (לא ב-Lovable או פלטפורמה דומה) — Supabase + Vercel, בבעלות מלאה.
+    </p>
+    <div class="screens">
+      <div class="screen-card"><div class="emoji">🧭</div><div class="name">אשף יצירה</div><div class="desc">4 שלבים: יעד, משתתפים, לוגיסטיקה (טיסות/מלונות), סיכום</div></div>
+      <div class="screen-card"><div class="emoji">🏠</div><div class="name">בית</div><div class="desc">ספירה לאחור, טיסה קרובה, מה קורה היום</div></div>
+      <div class="screen-card"><div class="emoji">🗺️</div><div class="name">מסלול</div><div class="desc">פריטים לפי יום, שעה, קטגוריה ומיקום</div></div>
+      <div class="screen-card"><div class="emoji">✨</div><div class="name">מומלצים</div><div class="desc">אטרקציות ומסעדות, סינון, "אהבתי"</div></div>
+      <div class="screen-card"><div class="emoji">📄</div><div class="name">מסמכים</div><div class="desc">אחסון פרטי, signed URLs בלבד</div></div>
+      <div class="screen-card"><div class="emoji">✅</div><div class="name">צ'קליסט</div><div class="desc">משותף+אישי, רשימה חכמה אוטומטית</div></div>
+      <div class="screen-card"><div class="emoji">💬</div><div class="name">שאל את הסוכן</div><div class="desc">צ'אט AI עם כלים, אישור אנושי לפני כתיבה</div></div>
+      <div class="screen-card"><div class="emoji">📊</div><div class="name">מוניטורינג (admin)</div><div class="desc">עלות, טוקנים, שיעור שגיאות — פנימי בלבד</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">מיפוי מול הסילבוס</p>
+    <h2>שינוי אמיתי מהשבוע שעבר — לא רק תוספות קוסמטיות</h2>
+    <p class="lead">בסקירה הקודמת (לפני כשבוע) Evaluation, RAG, Monitoring וה-Agent סומנו כחסרים או חלקיים. כל ארבעתם נבנו ואומתו בפועל השבוע.</p>
+    <div class="table-wrap">
+      <table class="modules">
+        <thead><tr><th>דרישה</th><th>סטטוס</th><th>מה קיים בפועל</th></tr></thead>
+        <tbody>
+          <tr><td>Evaluation</td><td><span class="status done">✓ הושלם</span></td><td>30 שאלות בעברית, סקריפט רגרסיה (<code>npm run evals</code>), baseline שמור, ציון: 100% דיוק, עד 90–100% סירוב נכון, 0–3% הזיות</td></tr>
+          <tr><td>Monitoring</td><td><span class="status done">✓ הושלם</span></td><td>טבלת <code>agent_runs</code> (עלות/טוקנים/זמן לכל קריאה), תקרה יומית למשתמש, מסך admin-only</td></tr>
+          <tr><td>Agent + כלים</td><td><span class="status done">✓ הושלם</span></td><td>לולאת tool-use אמיתית, 3 כלים, כל כתיבה מוצגת כרטיס אישור לפני ביצוע</td></tr>
+          <tr><td>מקור ידע (RAG)</td><td><span class="status done">✓ הושלם</span></td><td>pgvector + embeddings, 3 יעדים מתועדים ומקוריים (קפריסין/רומא/באטומי), סירוב כן ליעד לא מכוסה</td></tr>
+          <tr><td>אוטומציה (n8n)</td><td><span class="status partial">◐ חלקי</span></td><td>תרחיש מלא נבנה ואומת ידנית (מייל אמיתי + רשומת לוג) — נשאר: retry/alert ו-activation</td></tr>
+          <tr><td>תהליך עסקי אמיתי</td><td><span class="status open">○ פתוח</span></td><td>תלוי בסוכן נסיעות חיצוני שטרם השיב — לא ניתן לדווח "בוצע" בלי טיול אמיתי</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">מספרים אמיתיים, לא הערכות</p>
+    <h2>מה שנמדד בפועל</h2>
+    <div class="fact-grid">
+      <div><div class="num">30/30</div><div class="lbl">שאלות evals רצות בפקודה אחת, ציון אוטומטי</div></div>
+      <div><div class="num">3</div><div class="lbl">כלים לסוכן: הוספה למסלול, המלצות, חיפוש כשרות/שבת</div></div>
+      <div><div class="num">100%</div><div class="lbl">כתיבות מהסוכן עוברות דרך כרטיס אישור אנושי — אף כתיבה לא אוטומטית</div></div>
+      <div><div class="num">2</div><div class="lbl">ממצאי אבטחה אמיתיים שנמצאו ותוקנו תוך כדי (לא רק מתוכננים)</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">מוצהר בפתיחות</p>
+    <h2>מה שעדיין לא סגור</h2>
+    <div class="gap-list">
+      <div class="gap-item"><span class="b"></span><div><strong>אוטומציית n8n</strong> — התרחיש עובד, חסר טיפול כשל (retry+alert) והפעלה סופית</div></div>
+      <div class="gap-item"><span class="b"></span><div><strong>תהליך עסקי אמיתי</strong> — אין עדיין משתמש/טיול אמיתי; תלוי בגורם חיצוני שלא בשליטתי</div></div>
+      <div class="gap-item"><span class="b"></span><div><strong>מודול 04 (מודלים מקומיים)</strong> — לא התחיל; מתוכנן לימי המרווח בסוף הלוח, אם יישאר זמן</div></div>
+      <div class="gap-item"><span class="b"></span><div><strong>מודול 11 (אקוסיסטם ענן)</strong> — מסמך עמוד אחד, טרם נכתב</div></div>
+      <div class="gap-item"><span class="b"></span><div><strong>מקור הידע מוגבל בכוונה</strong> — 3 יעדים בלבד, ולא היעדים שסוכן הנסיעות בהכרח מוכר בפועל (עדיין ממתין לתשובתו)</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">מה שאני צריך ממך</p>
+    <h2>שלוש שאלות, עם הצעת תשובה לצד כל אחת</h2>
+
+    <div class="q-card">
+      <div class="qnum">שאלה חוסמת — נשאלת ראשונה</div>
+      <div class="qtext">עבודה מול Claude Code כשותף פיתוח — לגיטימית, ואיך לתעד?</div>
+      <div class="qanswer"><strong>הצעה:</strong> לגיטימית, בתיעוד ההחלטות והביקורת שלי על כל שלב בקובץ נפרד בריפו (לא רק קוד שנוצר, אלא גם איפה בדקתי, דחיתי או תיקנתי).</div>
+    </div>
+
+    <div class="q-card">
+      <div class="qnum">שאלה 2</div>
+      <div class="qtext">Agent — נדרש tool-use שכותב, או שסוכן ייעוץ מספיק?</div>
+      <div class="qanswer"><strong>הצעה:</strong> tool-use עם אישור אדם לפני כל כתיבה — וזה כבר מומש ופועל, לא רק תוכנית. אפשר להדגים חי בפגישה.</div>
+    </div>
+
+    <div class="q-card">
+      <div class="qnum">שאלה 3</div>
+      <div class="qtext">ROI על מוצר בלי לקוחות משלמים — איך מודדים?</div>
+      <div class="qanswer"><strong>הצעה:</strong> מדידת זמן בניית מסלול אצל סוכן נסיעות אחד, לפני מול אחרי, כטווח עם הנחות מוצהרות וממוספרות — ברגע שהסוכן ישיב.</div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>רועי אסדו · TripCraft</span>
+    <span>מבוסס על מצב הריפו וה-evals ב-2026-09-07</span>
+  </footer>
+</div>
