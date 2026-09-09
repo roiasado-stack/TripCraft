@@ -9,6 +9,7 @@ import { useTrip } from "./TripLayout";
 import { TripHeader } from "@/components/TripHeader";
 import { TripUpdates } from "@/components/TripUpdates";
 import { PhotoAlbumCard } from "@/components/PhotoAlbumCard";
+import { GuideCard } from "@/components/GuideCard";
 import { Button, Card, Spinner } from "@/components/ui";
 import {
   daysUntil,
@@ -174,6 +175,8 @@ export default function HomeTab() {
         </Link>
         <Stat icon={<CalendarDays className="size-5" />} value={duration ?? "—"} label="ימים" />
       </div>
+
+      <GuideCard trip={trip} />
 
       <TripUpdates tripId={trip.id} />
 

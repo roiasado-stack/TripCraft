@@ -36,7 +36,7 @@ type TransferDraft = { kind: string; provider: string; pickup_location: string; 
 const STEPS = ["יעד", "משתתפים", "לוגיסטיקה", "סיכום"];
 
 export default function WizardPage() {
-  const { user } = useAuth();
+  const { user, isAgent } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
@@ -51,6 +51,10 @@ export default function WizardPage() {
   const [tripType, setTripType] = useState<string>("family");
   const [budget, setBudget] = useState<string>("mid");
   const [emoji, setEmoji] = useState<string>("🌴");
+  // Agent-only, and only for an organized trip — a private traveler planning
+  // their own trip has no "guide" to name. See migration 009.
+  const [guideName, setGuideName] = useState("");
+  const [guidePhone, setGuidePhone] = useState("");
 
   // step 1
   const [participants, setParticipants] = useState<PartDraft[]>([]);
@@ -88,6 +92,8 @@ export default function WizardPage() {
           trip_type: tripType,
           budget_level: budget,
           cover_emoji: emoji,
+          guide_name: isAgent && tripType === "organized" ? guideName.trim() || null : null,
+          guide_phone: isAgent && tripType === "organized" ? guidePhone.trim() || null : null,
         })
         .select()
         .single();
@@ -199,7 +205,11 @@ export default function WizardPage() {
 
       {step === 0 && (
         <StepBasics
-          {...{ destination, setDestination, title, setTitle, startDate, setStartDate, endDate, setEndDate, tripType, setTripType, budget, setBudget, emoji, setEmoji, duration }}
+          {...{
+            destination, setDestination, title, setTitle, startDate, setStartDate, endDate, setEndDate,
+            tripType, setTripType, budget, setBudget, emoji, setEmoji, duration,
+            isAgent, guideName, setGuideName, guidePhone, setGuidePhone,
+          }}
         />
       )}
       {step === 1 && (
@@ -287,6 +297,11 @@ function StepBasics(p: {
   emoji: string;
   setEmoji: (v: string) => void;
   duration: number | null;
+  isAgent: boolean;
+  guideName: string;
+  setGuideName: (v: string) => void;
+  guidePhone: string;
+  setGuidePhone: (v: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-5">
@@ -332,6 +347,29 @@ function StepBasics(p: {
           ))}
         </div>
       </div>
+
+      {/* Agent-only, and only for an organized trip: a private traveler
+          planning their own trip has no "guide" to name. */}
+      {p.isAgent && p.tripType === "organized" && (
+        <div className="flex flex-col gap-3 rounded-3xl border border-dashed border-primary/40 bg-primary-soft/40 p-4">
+          <div>
+            <Label className="mb-0">מדריך הטיול</Label>
+            <p className="text-xs text-muted-foreground">יופיע ללקוח עם קישור וואטסאפ ישיר.</p>
+          </div>
+          <Field label="שם המדריך">
+            <Input value={p.guideName} onChange={(e) => p.setGuideName(e.target.value)} placeholder="לדוגמה: יוסי כהן" />
+          </Field>
+          <Field label="טלפון (וואטסאפ)">
+            <Input
+              type="tel"
+              dir="ltr"
+              value={p.guidePhone}
+              onChange={(e) => p.setGuidePhone(e.target.value)}
+              placeholder="050-1234567"
+            />
+          </Field>
+        </div>
+      )}
 
       <div>
         <Label>תקציב</Label>

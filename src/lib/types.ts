@@ -26,6 +26,8 @@ export interface Trip {
   budget_level: string | null;
   notes: string | null;
   cover_emoji: string | null;
+  guide_name: string | null;
+  guide_phone: string | null;
   is_shared: boolean;
   share_slug: string | null;
   is_template: boolean;

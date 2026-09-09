@@ -79,6 +79,9 @@ CREATE TABLE IF NOT EXISTS public.trips (
   budget_level TEXT,
   notes TEXT,
   cover_emoji TEXT DEFAULT '🌴',
+  -- Guide contact for an agent-run "organized" trip — see migration 009.
+  guide_name TEXT,
+  guide_phone TEXT,
   is_shared BOOLEAN NOT NULL DEFAULT false,
   share_slug TEXT UNIQUE DEFAULT encode(gen_random_bytes(9),'hex'),
   is_template BOOLEAN NOT NULL DEFAULT false,

@@ -5,6 +5,7 @@ import type { Flight, ItineraryItem, Stay, Suggestion, Trip } from "@/lib/types"
 import { Card, FullSpinner } from "@/components/ui";
 import { TripUpdates } from "@/components/TripUpdates";
 import { PhotoAlbumCard } from "@/components/PhotoAlbumCard";
+import { GuideCard } from "@/components/GuideCard";
 import { MapLink } from "@/components/MapLink";
 import { resolveMapUrl } from "@/lib/maps";
 import {
@@ -92,6 +93,8 @@ export default function SharePage() {
           </p>
         )}
       </div>
+
+      <GuideCard trip={trip} />
 
       {/* Read-only announcements and the shared album: what a client most
           wants from a link an agent sent them. */}

@@ -78,6 +78,19 @@ export function vegetarianSearchUrl(destination?: string | null): string | null 
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`vegetarian vegan restaurant ${d}`)}`;
 }
 
+/**
+ * A tap-to-chat WhatsApp link for a guide/contact phone number. Accepts local
+ * Israeli formats (05X-XXXXXXX, with or without spaces/dashes) and anything
+ * already in international form — wa.me needs digits only, country code first.
+ */
+export function whatsappUrl(phone?: string | null): string | null {
+  const digits = (phone ?? "").replace(/[^\d+]/g, "");
+  if (!digits) return null;
+  const withCountryCode = digits.startsWith("0") ? `972${digits.slice(1)}` : digits.replace(/^\+/, "");
+  if (withCountryCode.length < 8) return null;
+  return `https://wa.me/${withCountryCode}`;
+}
+
 /** Best-effort place link for a saved row: explicit map_url wins. */
 export function resolveMapUrl(
   explicit: string | null | undefined,
