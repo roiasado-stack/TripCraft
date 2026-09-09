@@ -13,14 +13,7 @@ export function BrandLogo({
   const title = size === "lg" ? "text-2xl" : size === "sm" ? "text-base" : "text-xl";
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <div
-        className={cn(
-          "grid place-items-center rounded-2xl bg-gradient-sunset shadow-pop",
-          box,
-        )}
-      >
-        <span>🌴</span>
-      </div>
+      <img src="/favicon.svg" alt="TripCraft" className={cn("shrink-0 rounded-2xl shadow-pop", box)} />
       {withText && (
         <div className="leading-tight">
           <div className={cn("font-extrabold tracking-tight", title)}>
