@@ -1,0 +1,68 @@
+{
+  "name": "TripCraft — התראת כשל אוטומציה",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fd059cba-797b-47d4-a12c-2e68f4f00489",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "fromEmail": "roi.asado@gmail.com",
+        "toEmail": "roi.asado@gmail.com",
+        "subject": "⚠️ כשל בתרחיש התזכורת של TripCraft",
+        "html": "=התרחיש \"TripCraft — תזכורת שבוע לפני יציאה\" נכשל אחרי כל הניסיונות החוזרים.\\n\\nשגיאה: {{ $json.execution.error.message }}\\n\\nבדוק ב-n8n: {{ $json.execution.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "420fcb72-fdba-435f-bdbd-56e3826171dc",
+      "name": "Send an Email",
+      "webhookId": "3447fda5-6f78-4aa3-a51e-26b6b7981be8",
+      "credentials": {
+        "smtp": {
+          "id": "VKcQgYbt3Sf3vzMs",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "51dabd9e-b8e3-499c-a7e2-185eb1732d63",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0e72a4b5a63c0dcd4cd58b9a0596f2f854901b5bb3d1d2ea5fe333077b07dc42"
+  },
+  "nodeGroups": [],
+  "id": "IqsOTO3ML4FRTfRA",
+  "tags": []
+}

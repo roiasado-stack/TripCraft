@@ -17,7 +17,7 @@
   --body:"Heebo",system-ui,sans-serif;
 }
 *,*::before,*::after{box-sizing:border-box}
-html{font-size:clamp(12px,min(2.05vh,1.16vw),25px);background:#0B161B;direction:rtl}
+html{font-size:clamp(13px,min(2.22vh,1.26vw),27px);background:#0B161B;direction:rtl}
 body{
   margin:0;background:var(--ink);color:var(--text);
   font-family:var(--body);font-weight:300;line-height:1.55;
@@ -46,13 +46,13 @@ b,strong{font-weight:600;color:#F4FAFB}
 .eyebrow::after{content:"";flex:1;height:1px;background:linear-gradient(to left,var(--line),transparent)}
 h2.title{font-size:2.4rem;letter-spacing:-.012em;margin-bottom:.4rem;flex:none}
 .lede{font-size:1.08rem;color:var(--muted);max-width:66ch;flex:none}
-.slide-body{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:1.1rem;padding:1.1rem 0 .2rem}
+.slide-body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:1.1rem;padding:1.1rem 0 .2rem}
 .slide-body.top{justify-content:flex-start}
 .foot{flex:none;font-size:.9rem;color:var(--dim);border-top:1px solid var(--line-soft);padding-top:.75rem}
 .foot b{color:var(--teal-soft);font-weight:500}
 
 /* primitives */
-.grid{display:grid;gap:.95rem;min-height:0}
+.grid{display:grid;gap:.95rem}
 .g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)}
 .g4{grid-template-columns:repeat(4,1fr)} .g5{grid-template-columns:repeat(5,1fr)}
 .card{
@@ -80,13 +80,13 @@ ul.list li b{color:var(--text);font-weight:500}
 
 /* tables */
 .tw{overflow:auto;min-height:0;border:1px solid var(--line-soft);border-radius:.85rem;background:var(--surface)}
-table{width:100%;border-collapse:collapse;font-size:.92rem}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
 thead th{
   position:sticky;top:0;background:var(--surface-2);color:var(--teal-soft);
-  font-family:var(--disp);font-weight:500;font-size:.79rem;letter-spacing:.07em;
-  text-align:start;padding:.55rem .85rem;border-bottom:1px solid var(--line);white-space:nowrap;
+  font-family:var(--disp);font-weight:500;font-size:.74rem;letter-spacing:.07em;
+  text-align:start;padding:.4rem .75rem;border-bottom:1px solid var(--line);white-space:nowrap;
 }
-tbody td{padding:.5rem .85rem;border-bottom:1px solid var(--line-soft);color:var(--muted);vertical-align:top}
+tbody td{padding:.36rem .75rem;border-bottom:1px solid var(--line-soft);color:var(--muted);vertical-align:top}
 tbody tr:last-child td{border-bottom:0}
 tbody td:first-child{color:var(--text);font-weight:500}
 td.n{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--sun)}
@@ -123,18 +123,14 @@ td.nw{white-space:nowrap}
 .tl .t b{color:var(--text);font-weight:500}
 
 /* module map */
-.mods{display:grid;grid-template-columns:repeat(3,1fr);gap:.9rem;min-height:0}
-.modcol{display:flex;flex-direction:column;gap:.5rem;min-height:0}
-.modhead{display:flex;align-items:baseline;gap:.55rem;font-family:var(--disp);font-size:.95rem;padding-bottom:.45rem;border-bottom:1px solid var(--line-soft)}
-.modhead .c{font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
-.mod{background:var(--surface);border:1px solid var(--line-soft);border-inline-start:2px solid var(--l);border-radius:.55rem;padding:.5rem .7rem}
-.mod .m{font-size:.93rem;color:var(--text);font-weight:500}
-.mod .m i{font-style:normal;color:var(--dim);font-size:.82rem;font-variant-numeric:tabular-nums;margin-inline-end:.35rem}
-.mod .w{font-size:.85rem;color:var(--muted);margin-top:.1rem}
-.col-t{--l:var(--teal)} .col-s{--l:var(--sun)} .col-c{--l:var(--coral)}
-.col-t .modhead,.col-t .modhead .c{color:var(--teal)}
-.col-s .modhead,.col-s .modhead .c{color:var(--sun)}
-.col-c .modhead,.col-c .modhead .c{color:var(--coral)}
+.modgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:.6rem;min-height:0}
+.modcard{background:var(--surface);border:1px solid var(--line-soft);border-inline-start:3px solid var(--l);border-radius:.6rem;padding:.55rem .7rem;display:flex;flex-direction:column;gap:.2rem}
+.modcard .m{font-size:.86rem;color:var(--text);font-weight:500;line-height:1.28}
+.modcard .m i{font-style:normal;color:var(--dim);font-size:.75rem;font-variant-numeric:tabular-nums;margin-inline-end:.32rem}
+.modcard .w{font-size:.76rem;color:var(--muted);line-height:1.35}
+.modcard.ok{--l:var(--teal)}
+.modcard.part{--l:var(--sun)}
+.modcard.no{--l:var(--coral)}
 
 /* requirement strip */
 .reqs{display:grid;grid-template-columns:repeat(6,1fr);gap:.7rem}
@@ -161,6 +157,12 @@ td.nw{white-space:nowrap}
 .layer ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:.28rem}
 .layer li{font-size:.88rem;color:var(--muted)}
 .arrow{align-self:center;color:var(--teal-deep);font-size:1.3rem;flex:none;line-height:1}
+
+/* automation flow */
+.flow{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.5rem}
+.flow .step{background:var(--surface);border:1px solid var(--line-soft);border-radius:.75rem;padding:.7rem .95rem;min-width:8.4rem;text-align:center}
+.flow .step .n{font-family:var(--disp);font-size:.7rem;letter-spacing:.06em;color:var(--teal);margin-bottom:.3rem}
+.flow .step .t{font-size:.86rem;color:var(--text);line-height:1.35}
 
 /* cover */
 .cover{justify-content:center}
@@ -208,7 +210,7 @@ td.nw{white-space:nowrap}
 /* Narrow screens: the deck is built for a 16:9 stage, so on a phone or
    tablet the columns collapse and each slide scrolls on its own. */
 @media (max-width:900px){
-  html{font-size:clamp(12px,2.6vw,17px)}
+  html{font-size:clamp(13px,3vw,18.5px)}
   .slide{padding:2.6rem 1.6rem 3.4rem;justify-content:flex-start}
   /* let content take its natural height and scroll, instead of being squeezed */
   .slide-body{flex:none;min-height:auto;justify-content:flex-start}
@@ -247,13 +249,13 @@ td.nw{white-space:nowrap}
 <section class="slide cover" data-t="שער">
   <div class="eyebrow">היחידה ללימודי חוץ · AI Agents &amp; Automation Specialist</div>
   <div class="brand">TripCraft</div>
-  <p class="sub">מלווה טיולים בעברית למשפחות ולסוכני נסיעות — מהמחקר, דרך הבנייה, ועד השאלות שנשארו פתוחות.</p>
-  <div class="q">האם זה מתאים כפרויקט גמר?</div>
+  <p class="sub">מלווה טיולים בעברית למשפחות ולסוכני נסיעות — מהמחקר והבנייה, דרך תהליך עסקי אמיתי, ועד סוכן AI עם כלים, מקור ידע ואוטומציה.</p>
+  <div class="q">מוצר עובד. האם הוא גם פרויקט הגמר הנכון?</div>
   <div class="meta">
-    <div><b>מגיש</b>רועי אסאדו</div>
-    <div><b>תאריך</b>2 בספטמבר 2026</div>
-    <div><b>היקף</b>13 קומיטים · 18 ימים · ~8,000 שורות</div>
-    <div><b>סטטוס</b>עובד מקומית · טרם עלה לאוויר</div>
+    <div><b>מגיש</b>רועי אסדו</div>
+    <div><b>תאריך</b>7 בספטמבר 2026</div>
+    <div><b>היקף</b>17 קומיטים · 22 ימים · כ-10,400 שורות קוד</div>
+    <div><b>סטטוס</b>Evaluation, Monitoring, RAG, סוכן עם כלים ואוטומציית n8n חיה — כולם פעילים · טרם פרוס לאוויר</div>
   </div>
 </section>
 
@@ -261,12 +263,12 @@ td.nw{white-space:nowrap}
 <section class="slide" data-t="מה אני מבקש להחליט">
   <div class="eyebrow">למה אני כאן</div>
   <h2 class="title">שלוש שאלות, לא מצגת מכירה</h2>
-  <p class="lede">בניתי מוצר עובד. מה שאני לא יודע זה אם הוא הפרויקט הנכון להגיש — והמצגת הזו מציגה גם את מה שחסר בו.</p>
+  <p class="lede">בניתי מוצר עובד, קיבלתי החלטה, וסגרתי את רוב הפערים הטכניים שסימנתי לפני חמישה ימים. המצגת הזו היא הדו״ח על מה שהשתנה — כולל מה שעדיין לא.</p>
   <div class="slide-body">
     <div class="grid g3">
       <div class="card teal">
         <h3><span class="chip t">01</span> התאמה</h3>
-        <p>האם TripCraft בהיקפו הנוכחי מתאים כפרויקט גמר — או שעדיף פרויקט אוטומציה ממוקד וקטן יותר, שמדגים את כל מודולי הקורס בצורה נקייה?</p>
+        <p><b>הכרעתי בעצמי: כן.</b> TripCraft מכסה 13–14 ממודולי הסילבוס לעומת 12 בחלופה שנשקלה, ותלוי רק בי. השאלה שנשארת: האם ההיקף שכבר נבנה מספיק, או שעדיין חסר משהו מהותי.</p>
       </div>
       <div class="card sun">
         <h3><span class="chip s">02</span> פערים</h3>
@@ -278,7 +280,7 @@ td.nw{white-space:nowrap}
       </div>
     </div>
   </div>
-  <div class="foot">מבנה המצגת: <b>הבעיה והשוק</b> (3–7) · <b>איך זה נבנה</b> (8–16) · <b>מיפוי מול הסילבוס והפערים</b> (17–18) · <b>תוכנית פעולה ושאלון</b> (19–20)</div>
+  <div class="foot">מבנה המצגת: <b>הבעיה והשוק</b> · <b>איך זה נבנה, כולל מה שנוסף השבוע</b> · <b>מיפוי מול הסילבוס והפערים</b> · <b>סטטוס מול לוח הזמנים והשאלות שנותרו</b></div>
 </section>
 
 <!-- 3 ─────────────────────────────────────────────────────────── -->
@@ -355,7 +357,7 @@ td.nw{white-space:nowrap}
       <div class="card sun">
         <h3><span class="chip s">גבוה</span> פוגע בהצעת הערך</h3>
         <ul class="list sun">
-          <li><b>ה-AI שלי ייוולד מיושן.</b> כלים על ידע סטטי מפספסים סגירות ושינויי מחיר. Layla ו-Mindtrip מחוברים לחיפוש חי</li>
+          <li><b>ה-AI שלי ייוולד מיושן — חלקית נסגר.</b> לשלושה יעדים (קפריסין, רומא, באטומי) יש עכשיו מקור ידע מצוטט ומתועד-תאריך; מחוצה להם עדיין רק ידע סטטי של המודל. Layla ו-Mindtrip עדיין מחוברים לחיפוש חי, בכל יעד</li>
           <li><b>אין הזמנה ואין עמלות.</b> אין נתיב הכנסה, ואין תשובה לשאלה למה מישהו ישלם</li>
           <li><b>אין עבודה משותפת.</b> תכנון משפחתי הוא רב-משתתפים; אני נותן קישור לצפייה בלבד</li>
           <li><b>תשתית לא מוכנה.</b> תוכנית חינמית שנרדמת, בלי גיבויים, מפתח אחד</li>
@@ -403,13 +405,13 @@ td.nw{white-space:nowrap}
       <div class="card teal"><h3><span class="chip t">ייחודי</span> קריאת שוברים בעברית</h3><p>במקום לחקות את סריקת ה-Gmail של TripIt — לקרוא את ה-PDF בעברית שסוכן ישראלי שולח, ולהפוך אותו למסלול. פותר את ״הכל מוקלד ביד״ דווקא איפה שהמתחרים העולמיים לא מכסים.</p></div>
     </div>
   </div>
-  <div class="foot">שניים מהארבעה הם בדיוק המקום שבו <b>אוטומציה ו-RAG</b> נכנסים למוצר — ראו שקופית 19.</div>
+  <div class="foot">שניים מהארבעה הם בדיוק המקום שבו <b>אוטומציה ו-RAG</b> נכנסים למוצר. ה-RAG כבר בנוי, לשלושה יעדים; האוטומציה עדיין לא.</div>
 </section>
 
 <!-- 8 ─────────────────────────────────────────────────────────── -->
 <section class="slide" data-t="התהליך">
   <div class="eyebrow">התהליך</div>
-  <h2 class="title">18 ימים, 13 קומיטים</h2>
+  <h2 class="title">22 ימים, 17 קומיטים</h2>
   <p class="lede">התהליך לא היה ליניארי, וזה החלק המעניין: מחקר השוק נעשה אחרי שהמוצר כבר עבד — והוא ששינה את הבידול ואת סדר העדיפויות.</p>
   <div class="slide-body">
     <div class="tl">
@@ -418,6 +420,8 @@ td.nw{white-space:nowrap}
       <div class="ph"><div class="d">18–19.8</div><div class="t"><b>עצירה: מחקר שוק ואסטרטגיה.</b> 6 חיפושים, 8 מתחרים, 11 מקורות. כאן התברר שהתאמה-לפי-גיל כבר לא בידול, ושהבידול האמיתי הוא לוגיסטיקה, כשרות ושבת. אחר כך: חמישה כיווני לוגו ובחירת סימן המותג</div></div>
       <div class="ph"><div class="d">1.9</div><div class="t"><b>מוסכמות קוד</b> (CLAUDE.md), ואז <b>סוכן השיחה</b> — ובדרך שני ממצאי אבטחה שלא היו במשימה</div></div>
       <div class="ph"><div class="d">2.9</div><div class="t"><b>כיוון עיצובי חדש</b> (15 מסכים על קנבס), <b>התקנה למסך הבית</b> (PWA), ולבסוף <b>תיקון ארבעה באגים</b> שהתגלו רק כשהמסך נפתח בטלפון אמיתי</div></div>
+      <div class="ph"><div class="d">3.9</div><div class="t"><b>ההחלטה וההיערכות.</b> מגישים את TripCraft; נכתב <code>FINAL-PROJECT-BRIEF.md</code> — לוח 16 יום מול דרישת מודול 15</div></div>
+      <div class="ph"><div class="d">7.9</div><div class="t"><b>יום עבודה מרוכז אחד.</b> Evaluation (30 שאלות), Monitoring (<code>agent_runs</code> + מסך פנימי), סוכן עם 3 כלים ואישור אדם, מקור ידע RAG לשלושה יעדים, ממצא אבטחה שלישי תוקן, ואייקון חדש. אחר כך: מחיקת טיול, ודגל לעובדות ידע שהתיישנו</div></div>
     </div>
   </div>
   <div class="foot">מה שאני לוקח מזה: <b>לבנות קודם, לחקור מיד אחרי, ולהיות מוכן לשנות את הסיפור.</b> אילו החלטתי על הבידול ביום הראשון, הייתי מפתח את הפיצ׳ר הלא נכון.</div>
@@ -441,29 +445,30 @@ td.nw{white-space:nowrap}
       </div>
       <div class="arrow">‹</div>
       <div class="layer">
-        <div class="lh">BACKEND · SUPABASE</div><div class="ln">Auth · Postgres · Storage</div>
+        <div class="lh">BACKEND · SUPABASE</div><div class="ln">Auth · Postgres · Storage · pgvector</div>
         <ul>
-          <li><b>13 טבלאות</b>, RLS על כל אחת</li>
+          <li><b>15 טבלאות</b>, RLS על כל אחת</li>
           <li>תפקידים בטבלה נפרדת + SECURITY DEFINER</li>
           <li>דלי אחסון פרטי למסמכים, signed URLs</li>
-          <li>קריאה ל-anon רק לטיול משותף</li>
+          <li><code>agent_runs</code> ו-<code>knowledge_chunks</code> חדשות — בלי הרשאות anon/authenticated בכלל</li>
         </ul>
       </div>
       <div class="arrow">‹</div>
       <div class="layer">
-        <div class="lh">AI · EDGE FUNCTIONS</div><div class="ln">Deno · Claude Haiku 4.5</div>
+        <div class="lh">AI · EDGE FUNCTIONS</div><div class="ln">Deno · Claude Sonnet 5 + Haiku 4.5</div>
         <ul>
-          <li><code>generate</code> — מומלצים, מסלול, צ׳קליסט</li>
-          <li><code>ask</code> — סוכן שיחה בהקשר הטיול</li>
-          <li>המפתח סוד בצד השרת בלבד</li>
-          <li>בדיקת בעלות מפורשת לפני כל קריאה</li>
+          <li><code>generate</code> (Sonnet 5) — מומלצים, מסלול, צ׳קליסט, קריאת דרכונים</li>
+          <li><code>ask</code> (Haiku 4.5) — לולאת tool-use אמיתית, לא רק שאלה-תשובה</li>
+          <li>שלושה כלים; כתיבה למסד רק אחרי אישור אדם</li>
+          <li>המפתח סוד בצד השרת; תקרת הוצאה יומית ולוג עלות לכל קריאה</li>
         </ul>
       </div>
     </div>
-    <div class="grid g3">
+    <div class="grid g4">
       <div class="card"><h3>שני קהלים, שני נתיבים</h3><p><code>/share/:slug</code> מוגש ל<b>אנונימיים</b> בקריאה בלבד; כל השאר מאחורי <code>ProtectedRoute</code>. כל טבלה חדשה חייבת להחליט לאיזה נתיב היא שייכת.</p></div>
       <div class="card"><h3>נשאר שמיש בלי AI</h3><p>אם ה-Edge Function לא נפרסה — האפליקציה מציגה הודעה בעברית ולא קורסת. ״רשימה מומלצת״ בצ׳קליסט עובדת לגמרי בלי שרת.</p></div>
       <div class="card"><h3>אין ORM ואין טיפוסים מיוצרים</h3><p>הלקוח לא מוטפס בכוונה; צורת השורה נקבעת בנקודת הקריאה מול <code>@/lib/types</code>. פחות קסם, יותר שליטה.</p></div>
+      <div class="card teal"><h3>מקור ידע, לא ניחוש</h3><p>pgvector + Voyage AI, 12 קטעי ידע בשלושה יעדים. שאלה מחוץ לכיסוי מקבלת סירוב כן, לא ניחוש — כל תשובה מצטטת מקור ותאריך אימות.</p></div>
     </div>
   </div>
 </section>
@@ -485,7 +490,7 @@ td.nw{white-space:nowrap}
         <figcaption><b>צ׳קליסט</b> משותף ואישי · ״רשימה מומלצת״ נבנית מהמשתתפים בלי שרת</figcaption></figure>
     </div>
   </div>
-  <div class="foot">זה העיצוב שרץ היום בקוד. <b>הכיוון הכהה משקופית 16 קיים כעיצוב בלבד</b> וטרם מומש — פער מוצהר, לא מוסתר.</div>
+  <div class="foot">זה העיצוב שרץ היום בקוד. <b>הכיוון הכהה קיים כעיצוב בלבד</b> וטרם מומש — פער מוצהר, לא מוסתר.</div>
 </section>
 
 <!-- 11 ────────────────────────────────────────────────────────── -->
@@ -518,80 +523,131 @@ td.nw{white-space:nowrap}
   <p class="lede">מוצר, לא דמו: חשבונות משתמשים, מסד נתונים, אחסון קבצים פרטי, והרשאות ברמת השורה.</p>
   <div class="slide-body">
     <div class="grid g3">
-      <div class="card"><h3><span class="chip t">01</span> אשף יצירת טיול</h3><p>ארבעה שלבים: יעד ותאריכים · משתתפים עם גיל מדויק או טווח ותשע העדפות (חוף, אוכל, קניות, היסטוריה, לילה, ספורט, נגישות, כשרות, צמחוני) · טיסות, לינה והעברות · סיכום.</p></div>
-      <div class="card"><h3><span class="chip t">02</span> חמישה מסכי טיול</h3><p><b>בית</b> — ספירה לאחור, הטיסה הקרובה, מה קורה היום · <b>מסלול</b> לפי ימים · <b>מומלצים</b> עם סינון ו״אהבתי״ · <b>מסמכים</b> · <b>צ׳קליסט</b> משותף ואישי.</p></div>
-      <div class="card"><h3><span class="chip t">03</span> לסוכני נסיעות</h3><p>קישור שיתוף לצפייה בלבד ללא התחברות · מיתוג הסוכנות (שם וצבע) בדף המשותף · שכפול טיול כתבנית שמעתיק משתתפים, מסלול וצ׳קליסט ומאפס סימונים.</p></div>
-      <div class="card"><h3><span class="chip t">04</span> ייבוא נתונים</h3><p>מסלול מ-CSV/TSV/JSON · נוסעים בהדבקה או מקובץ Excel — 11 נוסעים בהדבקה אחת במקום הקלדה. זו הייתה התשובה הראשונה שלי ל״הכל מוקלד ביד״.</p></div>
-      <div class="card"><h3><span class="chip t">05</span> חכם בלי AI</h3><p>״רשימה מומלצת״ בונה צ׳קליסט מותאם למשתתפים (תינוקות, ילדים, חוף, ספורט, נגישות, כשרות) <b>ללא שום קריאת שרת</b> · רשימת פרה-פלייט נגזרת מהנוסעים ומהטיסות.</p></div>
-      <div class="card"><h3><span class="chip t">06</span> מסמכים ומדיה</h3><p>העלאה מהמחשב או צילום ישיר לאחסון פרטי, או קישור חיצוני (Drive/Dropbox/OneDrive). כל מסמך משויך לקטגוריה ולנוסע. גם בטיול משותף — המסמכים לא נחשפים.</p></div>
+      <div class="card"><h3><span class="chip t">01</span> אשף יצירת טיול</h3><p>ארבעה שלבים: יעד ותאריכים · משתתפים עם גיל ותשע העדפות (חוף, אוכל, היסטוריה, כשרות ועוד) · טיסות, לינה והעברות · סיכום.</p></div>
+      <div class="card"><h3><span class="chip t">02</span> חמישה מסכי טיול</h3><p><b>בית</b> — ספירה לאחור, הטיסה הקרובה, מה קורה היום · <b>מסלול</b> לפי ימים · <b>מומלצים</b> עם סינון · <b>מסמכים</b> · <b>צ׳קליסט</b> משותף ואישי.</p></div>
+      <div class="card"><h3><span class="chip t">03</span> לסוכני נסיעות</h3><p>קישור שיתוף לצפייה בלבד ללא התחברות · מיתוג הסוכנות בדף המשותף · שכפול טיול כתבנית שמעתיק משתתפים, מסלול וצ׳קליסט ומאפס סימונים.</p></div>
+      <div class="card"><h3><span class="chip t">04</span> ייבוא נתונים</h3><p>מסלול מ-CSV/TSV/JSON · נוסעים בהדבקה או מקובץ Excel — 11 נוסעים בהדבקה אחת במקום הקלדה.</p></div>
+      <div class="card"><h3><span class="chip t">05</span> חכם בלי AI</h3><p>״רשימה מומלצת״ בונה צ׳קליסט מותאם למשתתפים <b>ללא שום קריאת שרת</b> · רשימת פרה-פלייט נגזרת מהנוסעים ומהטיסות.</p></div>
+      <div class="card"><h3><span class="chip t">06</span> מסמכים ומדיה</h3><p>העלאה מהמחשב/צילום ישיר לאחסון פרטי, או קישור חיצוני. משויך לקטגוריה ולנוסע — לא נחשף גם בטיול משותף.</p></div>
+      <div class="card teal"><h3><span class="chip s">07</span> סוכן עם כלים</h3><p>מציע להוסיף פריט למסלול, המלצה, או לחפש כשרות. כל כתיבה מוצגת ככרטיס אישור; שום דבר לא נכתב בלי לחיצה מפורשת.</p></div>
+      <div class="card teal"><h3><span class="chip s">08</span> מקור ידע לכשרות ושבת</h3><p>חיפוש סמנטי (pgvector + Voyage AI) לשלושה יעדים. כל תשובה מצטטת מקור ותאריך; שאלה מחוץ לכיסוי מקבלת ״אין לי מידע על זה״.</p></div>
+      <div class="card teal"><h3><span class="chip s">09</span> Monitoring ו-Evaluation</h3><p>מסך פנימי לעלות/טוקנים/שגיאות ליום, תקרת הוצאה ודגל לידע שהתיישן · 30 שאלות בדיקה עם ריצת בסיס שמורה.</p></div>
     </div>
   </div>
-  <div class="foot">בנוסף: מצב כהה מלא · עדכונים לקבוצה · אלבום תמונות · קישורי ניווט לכל אתר ומסעדה · התקנה למסך הבית.</div>
+  <div class="foot">בנוסף: מצב כהה מלא · עדכונים לקבוצה · אלבום תמונות · מחיקת טיול · התקנה למסך הבית · תזכורת שבועית אוטומטית ב-n8n.</div>
 </section>
 
 <!-- 12 ────────────────────────────────────────────────────────── -->
-<section class="slide" data-t="הסוכן — איך חשבתי">
+<section class="slide" data-t="הסוכן">
   <div class="eyebrow">הסוכן</div>
-  <h2 class="title">ארבע החלטות לפני שורת קוד</h2>
-  <p class="lede">האפליקציה כבר ידעה לייצר תוכן — כפתור שמייצר אצווה וכותב לטבלה. לא הייתה דרך לשאול שאלה. המטרה: מנוע שיחה שעונה בהקשר של טיול ספציפי.</p>
+  <h2 class="title">מסוכן שעונה לסוכן שפועל</h2>
+  <p class="lede">מנוע שיחה שעונה בהקשר של טיול ספציפי, עם לולאת tool-use אמיתית של Anthropic — ואף פעם לא כותב למסד בלי שמישהו לוחץ אישור.</p>
   <div class="slide-body">
-    <div class="grid" style="grid-template-columns:1.45fr 1fr">
-      <div class="tw">
-        <table>
-          <thead><tr><th>שאלה</th><th>ההחלטה</th><th>מה נדחה ולמה</th></tr></thead>
-          <tbody>
-            <tr><td>יכולות</td><td class="nw">תשובה + כרטיסים להוספה</td><td>סוכן שכותב לבד למסד — דורש לולאת tool-use ומאפשר כתיבה בלי אישור המשתמש</td></tr>
-            <tr><td>גישה</td><td class="nw">בעל הטיול בלבד</td><td>פתיחה לגולשים אנונימיים — אנדפוינט LLM פתוח על חשבון מפתח אחד</td></tr>
-            <tr><td>היסטוריה</td><td class="nw">טבלה ייעודית</td><td>שמירה בזיכרון הדפדפן — השיחה נמחקת בכל רענון</td></tr>
-            <tr><td>מודל</td><td class="nw">claude-haiku-4-5</td><td>מודלים חזקים יותר — פי 5 בעלות, בלי הצדקה לשאלות קצרות</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="card sun">
-        <h3><span class="chip s">₪</span> שאלת הגישה היא שאלה כספית</h3>
-        <p>המפתח הוא סוד יחיד בצד השרת — כל קריאה של כל אדם נופלת על בעל הפרויקט. אין חיוב פר-משתמש. לכן ״מי יכול לשאול״ הוכרע לפי עלות ולא לפי נוחות.</p>
-        <div class="tw" style="margin-top:.3rem">
-          <table>
-            <thead><tr><th>מודל</th><th>לשאלה</th><th>20 נפשות × 5 שאלות ביום</th></tr></thead>
-            <tbody>
-              <tr><td>Haiku 4.5</td><td class="n">~2 אג׳</td><td class="n">~$18 / חודש</td></tr>
-              <tr><td>Sonnet 5</td><td class="n">~4 אג׳</td><td class="n">~$40 / חודש</td></tr>
-              <tr><td>Opus 5</td><td class="n">~10 אג׳</td><td class="n">~$100 / חודש</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <div class="grid g3">
+      <div class="card teal"><h3><code>add_to_itinerary</code></h3><p>מציע פריט למסלול — תאריך, שעה, כותרת ומיקום. חוזר כ-<code>pendingAction</code>; לא נכתב עד אישור.</p></div>
+      <div class="card teal"><h3><code>add_suggestion</code></h3><p>מציע המלצה לאטרקציה או מסעדה. אותו שער אישור בדיוק.</p></div>
+      <div class="card teal"><h3><code>find_kosher</code></h3><p>הכלי היחיד שרץ מיד, בלי אישור — הוא רק קורא ממקור הידע (RAG), לא כותב לשום מקום.</p></div>
     </div>
     <div class="grid g3">
-      <div class="card"><h3>חסרת מצב</h3><p>הפונקציה מחזירה תשובה בלבד; הקליינט שומר את שני התורות. מצמצם את שטח הפנים של קוד שרץ עם הרשאות.</p></div>
-      <div class="card"><h3>Structured Output</h3><p>המודל מתבקש להחזיר JSON — תשובה ועד חמישה כרטיסי המלצה עם כפתורי הוספה למומלצים או למסלול.</p></div>
-      <div class="card"><h3>נפילה רכה</h3><p>אם פיענוח ה-JSON נכשל, הטקסט הגולמי מוחזר כתשובה במקום שגיאה — שיחה לא נשברת בגלל פסיק חסר.</p></div>
+      <div class="card sun">
+        <h3><span class="chip s">השער</span> אישור אדם, לא הבטחה בפרומפט</h3>
+        <p>הכתיבה קורית רק בבקשה שנייה ונפרדת, שבודקת מחדש בעלות על הטיול לפני שהיא כותבת. זה ה-Human-in-the-loop של מודול 05, ברמת הקוד.</p>
+      </div>
+      <div class="card">
+        <h3><span class="chip m">₪</span> גישה ומודל, לפי עלות</h3>
+        <p>המפתח סוד יחיד בצד השרת — לכן רק בעל הטיול שואל, ומודל התשובה הוא <code>claude-haiku-4-5</code>: כ-2 אג׳ לשאלה, פי 5 פחות מ-Sonnet.</p>
+      </div>
+      <div class="card">
+        <h3>Structured Output, אותה לוגיקה בכל מקום</h3>
+        <p>הפונקציה חסרת מצב ומחזירה JSON מובנה בלבד. הגדרות הכלים והפרומפט משותפות בין <code>ask/prompt.ts</code> ל-<code>evals/run.ts</code>.</p>
+      </div>
     </div>
   </div>
+  <div class="foot"><code>generate</code> קיבל אותו תיקון בעלות: בדיקת בעלות מפורשת שהחליפה שאילתה שהצליחה גם מול טיול משותף של מישהו אחר — הממצא הבא.</div>
+</section>
+
+<!-- 12c ────────────────────────────────────────────────────────── -->
+<section class="slide" data-t="Evaluation ו-Monitoring">
+  <div class="eyebrow">מודולים 02 · 12 · 15</div>
+  <h2 class="title">Evaluation ו-Monitoring — מספרים שנמדדו, לא מוערכים</h2>
+  <p class="lede">הכלל שהנחה את הבנייה: אל תמציא מספרים. אלה מריצה אמיתית של 30 שאלות, ב-3.9.2026 — לא הערכה.</p>
+  <div class="slide-body">
+    <div class="grid g5">
+      <div class="card" style="align-items:center;text-align:center"><div class="stat"><div class="v">100%</div><div class="k">דיוק</div></div></div>
+      <div class="card" style="align-items:center;text-align:center"><div class="stat"><div class="v">0%</div><div class="k">שיעור הזיות</div></div></div>
+      <div class="card" style="align-items:center;text-align:center"><div class="stat"><div class="v">100%</div><div class="k">סירוב נכון</div></div></div>
+      <div class="card" style="align-items:center;text-align:center"><div class="stat"><div class="v">2.4s</div><div class="k">זמן תגובה ממוצע</div></div></div>
+      <div class="card" style="align-items:center;text-align:center"><div class="stat"><div class="v">$0.001</div><div class="k">עלות ממוצעת לשאלה</div></div></div>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <h3>30 שאלות, שלוש קטגוריות</h3>
+        <p>עשר עובדתיות על נתוני הטיול (״באיזו שעה הטיסה?״), עשר שליפה ממקור הידע (״מה כשר קרוב למלון?״), ועשר שצריכות לקבל סירוב כן (שאלה על יעד או נושא שלא מכוסה). סף מוגדר מראש: דיוק וסירוב ≥70%, הזיות ≤20%.</p>
+      </div>
+      <div class="card">
+        <h3>Monitoring — מסך אמיתי, לא רעיון</h3>
+        <p><code>agent_runs</code> רושם כל קריאה: משתמש, טיול, סוג, טוקנים, עלות, זמן תגובה, סטטוס. מסך <code>/admin/monitoring</code> מציג סכום יומי, פילוח לפי סוג ושיעור שגיאות — מוגן ב-<code>AdminRoute</code>.</p>
+      </div>
+    </div>
+    <div class="card coral">
+      <h3><span class="chip c">הגנה</span> תקרת הוצאה, לא רק תצוגה</h3>
+      <p>תקרה יומית של $2 למשתמש בכל Edge Function — כי כבר נמצא באג אמיתי (שקופית הבאגים שנתגלו רק בטלפון) שאיפשר שליחה כפולה וחיוב כפול. התראה נפרדת במסך המוניטורינג כשההוצאה היומית הכוללת חוצה $5.</p>
+    </div>
+  </div>
+  <div class="foot">אין LLM-as-judge בשלב זה — הבריף אוסר את זה במפורש עד שיישאר זמן. השוואה מול תשובה צפויה הספיקה כדי לתפוס 0 הזיות על 30 שאלות.</div>
+</section>
+
+<!-- 12d ────────────────────────────────────────────────────────── -->
+<section class="slide" data-t="אוטומציה">
+  <div class="eyebrow">מודולים 07 · 09</div>
+  <h2 class="title">תזכורת שבוע לפני יציאה, רצה מעצמה</h2>
+  <p class="lede">תרחיש ב-n8n, פעיל ומפורסם — לא הדגמה. טריגר יומי בודק אילו טיולים יוצאים בעוד בדיוק שבוע, ובונה לכל אחד תזכורת אישית עם צ׳קליסט פרה-פלייט שמותאם למי שבאמת נוסע.</p>
+  <div class="slide-body">
+    <div class="flow">
+      <div class="step"><div class="n">01 · טריגר</div><div class="t">Schedule Trigger<br>יומי, 08:00</div></div>
+      <span class="arrow">‹</span>
+      <div class="step"><div class="n">02 · שליפה</div><div class="t">טיולים שיוצאים<br>בעוד 7 ימים בדיוק</div></div>
+      <span class="arrow">‹</span>
+      <div class="step"><div class="n">03 · העשרה</div><div class="t">משתתפים וטיסות<br>לכל טיול</div></div>
+      <span class="arrow">‹</span>
+      <div class="step"><div class="n">04 · בנייה</div><div class="t">Code JS: צ׳קליסט<br>לפי גיל והעדפות</div></div>
+      <span class="arrow">‹</span>
+      <div class="step"><div class="n">05 · שליחה</div><div class="t">מייל HTML בעברית<br>לבעל הטיול</div></div>
+      <span class="arrow">‹</span>
+      <div class="step"><div class="n">06 · תיעוד</div><div class="t">רשומה ב-<code>automation_logs</code></div></div>
+    </div>
+    <div class="grid g3">
+      <div class="card teal"><h3>צ׳קליסט אמיתי, לא רשימה קבועה</h3><p>קוד JS בודק את גילאי המשתתפים והעדפותיהם ומרכיב צ׳קליסט בהתאם: חיתולים לתינוק, בגדי ים למי שסימן חוף, נעליים נוחות למי שסימן היסטוריה — אותה לוגיקת העדפות מהאשף.</p></div>
+      <div class="card sun"><h3>כשל לא נעלם בשקט</h3><p>לכל אחד מ-11 הצמתים <code>retryOnFail</code> עם המתנה בין ניסיונות, וקיים workflow ייעודי לטיפול בשגיאות — בדיוק מה שהבריף דורש: ניסיון חוזר, ואז התראה.</p></div>
+      <div class="card coral"><h3>מפתח בצד השרת, גם כאן</h3><p>n8n קורא ל-Supabase עם מפתח שרת — פועל כגורם מהימן, לא כמשתמש. אותו כלל שקבע את הארכיטקטורה מהיום הראשון: המפתח לא מגיע ללקוח.</p></div>
+    </div>
+  </div>
+  <div class="foot">Workflow פעיל ומפורסם ב-n8n, 11 צמתים. סוגר בפועל את שני המודולים שסומנו חסרים: אוטומציה על טריגר, וכלי No-Code.</div>
 </section>
 
 <!-- 13 ────────────────────────────────────────────────────────── -->
 <section class="slide" data-t="אבטחה ופרטיות">
   <div class="eyebrow">אבטחה ופרטיות</div>
-  <h2 class="title">שני ממצאים שלא היו במשימה</h2>
-  <p class="lede">כדי להחליט מי יכול לשאול את הסוכן היה צריך למפות מי בכלל רואה מה. המיפוי חשף שתי בעיות קיימות — שתיהן מאותו שורש.</p>
-  <div class="slide-body">
-    <div class="grid g2">
-      <div class="card coral"><h3><span class="chip c">ממצא 1</span> רשימת הטיולים</h3><p><b>כל משתמש רשום ראה את הטיולים המשותפים של כולם.</b> המסך שלף טיולים בלי סינון לפי בעלים, בהסתמך על RLS — אבל RLS החזיר ״הטיולים שלי <i>או</i> כל טיול משותף״.</p></div>
-      <div class="card coral"><h3><span class="chip c">ממצא 2</span> גישה ישירה לטיול</h3><p><b>כתובת ישירה פתחה את ממשק הבעלים המלא</b> — מסלול, משתתפים, טיסות, מלונות — של טיול משותף השייך לאדם אחר. כתיבה נחסמה; קריאה לא.</p></div>
+  <h2 class="title">שלושה ממצאים שלא היו במשימה</h2>
+  <p class="lede">כדי להחליט מי יכול לשאול את הסוכן היה צריך למפות מי בכלל רואה מה — והמיפוי חשף שלוש בעיות, כולן מאותו שורש.</p>
+  <div class="slide-body" style="gap:.75rem">
+    <div class="grid g3">
+      <div class="card coral"><h3><span class="chip c">ממצא 1</span> רשימת הטיולים</h3><p><b>כל משתמש רשום ראה את הטיולים המשותפים של כולם.</b> המסך שלף טיולים בלי סינון לפי בעלים — RLS החזיר ״הטיולים שלי <i>או</i> כל טיול משותף״.</p></div>
+      <div class="card coral"><h3><span class="chip c">ממצא 2</span> גישה ישירה לטיול</h3><p><b>כתובת ישירה פתחה את ממשק הבעלים המלא</b> של טיול משותף השייך לאדם אחר. כתיבה נחסמה; קריאה לא.</p></div>
+      <div class="card coral"><h3><span class="chip c">ממצא 3</span> אותו חור, בפונקציה השנייה</h3><p><b>אותה בעיה חזרה ב-<code>generate</code>.</b> כל משתמש מחובר יכול היה להריץ יצירת תוכן בתשלום על חשבון טיול שלא שלו. נמצא כשהתיקון הפך לתבנית שהושוותה מול שאר הקוד.</p></div>
     </div>
     <div class="card sun">
       <h3><span class="chip s">השורש</span> מדיניות RLS מתחברות ב-OR</h3>
-      <p>מדיניות השיתוף הוגדרה גם על <code>anon</code> וגם על <code>authenticated</code> — והיא <b>חייבת</b> לחול על שניהם, אחרת משתמש מחובר שלוחץ על קישור שיתוף לא יראה אותו. לכן המדיניות לא שונתה; התיקון הוא <b>סינון מפורש בשכבת השאילתה</b>, עם הערה בקוד שמסבירה למה הוא לא כפילות של ה-RLS.</p>
+      <p>מדיניות השיתוף חייבת לחול גם על <code>anon</code> וגם על <code>authenticated</code>, אחרת משתמש מחובר שלוחץ קישור שיתוף לא יראה אותו. לכן המדיניות לא שונתה; התיקון הוא <b>סינון מפורש בשכבת השאילתה</b>.</p>
     </div>
     <div class="grid g4">
-      <div class="card"><h3>RLS על כל 13 הטבלאות</h3><p>בעלות דרך <code>owns_trip()</code>, קריאה ציבורית רק דרך <code>trip_is_shared()</code>.</p></div>
-      <div class="card"><h3>תפקידים בטבלה נפרדת</h3><p><code>user_roles</code> עם <code>has_role()</code> מסוג SECURITY DEFINER — לא ניתן להעלות הרשאות מהלקוח.</p></div>
-      <div class="card"><h3>מסמכים פרטיים לחלוטין</h3><p>דלי סגור, גישה רק דרך signed URLs לזמן מוגבל. גם בטיול משותף הם לא נחשפים.</p></div>
-      <div class="card"><h3>שיחות הסוכן</h3><p><code>REVOKE ALL … FROM anon</code> במפורש — חריגה מהתבנית, מתועדת ב-SQL עצמו כדי שאיש לא ״יתקן״ אותה.</p></div>
+      <div class="card"><h3>RLS על כל 15 הטבלאות</h3><p><code>owns_trip()</code> לבעלות, <code>trip_is_shared()</code> לקריאה ציבורית.</p></div>
+      <div class="card"><h3>תפקידים בטבלה נפרדת</h3><p><code>user_roles</code> עם <code>has_role()</code> מסוג SECURITY DEFINER.</p></div>
+      <div class="card"><h3>מסמכים פרטיים לחלוטין</h3><p>דלי סגור, גישה רק דרך signed URLs לזמן מוגבל.</p></div>
+      <div class="card"><h3>שיחות הסוכן</h3><p><code>REVOKE ALL … FROM anon</code> במפורש — חריגה מתועדת מהתבנית.</p></div>
     </div>
   </div>
-  <div class="foot">מה שנלמד: הבדיקה הראשונה שנכתבה הייתה בעצמה שגויה — <code>has_table_privilege</code> בודק את ההרשאה, <b>לא</b> את הגישה לשורות.</div>
+  <div class="foot">מה שנלמד: תיקון נקודתי לא מספיק — צריך לחפש את אותה תבנית בכל מקום אחר שהיא יכולה לחזור בו.</div>
 </section>
 
 <!-- 14 ────────────────────────────────────────────────────────── -->
@@ -632,43 +688,34 @@ td.nw{white-space:nowrap}
       <div class="card"><h3>מצב בהיר נגזר, לא צויר מחדש</h3><p>סקריפט המרה, כדי ששני המצבים יישארו זהים מבנית. שני שינויים היו הכרחיים ולא קוסמטיים: הענבר הוכהה (ניגודיות), והזוהר הוסר (נראה ככתם). <b>הגזירה הראשונה יצאה גרועה</b> והתגלתה רק בדפדפן.</p></div>
     </div>
   </div>
-  <div class="foot">האייקונים צוירו ישירות מסימן המותג — לא הייתה במכונה ספריית המרה מ-SVG. ערכי הצבע במניפסט הומרו מ-<code>oklch()</code> דרך קנבס, <b>לא בהערכה ויזואלית</b>.</div>
+  <div class="foot">האייקונים צוירו ישירות מסימן המותג — לא הייתה במכונה ספריית המרה מ-SVG. ערכי הצבע במניפסט הומרו מ-<code>oklch()</code> דרך קנבס, <b>לא בהערכה ויזואלית</b>. אייקון האפליקציה עצמו: מצפן-בתוך-סיכה על פלטת טורקיז/קורל, אחרי שכיוון קודם עם הר הפסיק להיקרא כהר בגדלים קטנים.</div>
 </section>
 
 <!-- 16 ────────────────────────────────────────────────────────── -->
 <section class="slide" data-t="מיפוי מול הסילבוס">
   <div class="eyebrow">ההערכה העצמית</div>
   <h2 class="title">TripCraft מול 15 מודולי הקורס</h2>
-  <p class="lede">חמישה מכוסים היטב, חמישה חלקיים, חמישה חסרים. זו התמונה המלאה, כולל מה שלא נעים להראות.</p>
+  <p class="lede"><span class="chip t">11</span> מכוסה היטב · <span class="chip s">3</span> חלקי · <span class="chip c">1</span> חסר — התמונה המלאה מול הסילבוס, מודול אחר מודול.</p>
   <div class="slide-body">
-    <div class="mods">
-      <div class="modcol col-t">
-        <div class="modhead"><span class="c">5</span> מכוסה היטב</div>
-        <div class="mod"><div class="m"><i>03</i>מודלי שפה וכלי AI</div><div class="w">Claude API בצד שרת, השוואת מודלים מתועדת לפי עלות ואיכות</div></div>
-        <div class="mod"><div class="m"><i>06</i>Prompt Engineering</div><div class="w">Structured Output ב-JSON, prompt בהקשר הטיול, נפילה רכה על JSON פגום</div></div>
-        <div class="mod"><div class="m"><i>10</i>תשתיות נתונים ו-Backend</div><div class="w">Supabase Auth + Postgres + Storage · 13 טבלאות · הכי חזק בפרויקט</div></div>
-        <div class="mod"><div class="m"><i>13</i>אבטחה ופרטיות</div><div class="w">סוד בצד שרת, RLS מלא, בדיקת בעלות, שני ממצאים אמיתיים שתוקנו</div></div>
-        <div class="mod"><div class="m"><i>14</i>שימושים עסקיים</div><div class="w">תהליך עסקי אמיתי של סוכן נסיעות: בנייה, מיתוג, שליחה ללקוח, שכפול</div></div>
-      </div>
-      <div class="modcol col-s">
-        <div class="modhead"><span class="c">5</span> חלקי</div>
-        <div class="mod"><div class="m"><i>01</i>יסודות אייג׳נטים ואוטומציה</div><div class="w">יש סוכן שיחתי בהקשר; אין לולאה agentic מלאה. ההחלטה מתועדת</div></div>
-        <div class="mod"><div class="m"><i>05</i>תכנון אייג׳נטים</div><div class="w">תפקיד וגבולות מוגדרים, Human-in-the-loop מפורש (כרטיס + אישור); אין כלים</div></div>
-        <div class="mod"><div class="m"><i>07</i>חיבור למידע ולמערכות</div><div class="w">מחובר למסד הנתונים של הטיול; אין Webhooks, APIs חיצוניים או Gmail/Sheets</div></div>
-        <div class="mod"><div class="m"><i>11</i>אקוסיסטם ענן</div><div class="w">Edge Functions בענן; לא AWS Bedrock, לא Azure, לא Vertex</div></div>
-        <div class="mod"><div class="m"><i>15</i>מדידה, ROI ותיק עבודות</div><div class="w">תיק עבודות עשיר (יומן פיתוח, אסטרטגיה, פיץ׳); אין KPI ואין ROI מדוד</div></div>
-      </div>
-      <div class="modcol col-c">
-        <div class="modhead"><span class="c">5</span> חסר</div>
-        <div class="mod"><div class="m"><i>02</i>Evaluation לאייג׳נטים</div><div class="w">אין סט בדיקה, אין Expected Answers, אין בדיקת הזיות ואין Regression</div></div>
-        <div class="mod"><div class="m"><i>04</i>מודלים מקומיים ו-Private AI</div><div class="w">לא נעשה. ייתכן שגם לא רלוונטי למוצר צרכני — שאלה למרצה</div></div>
-        <div class="mod"><div class="m"><i>08</i>RAG — חיבור לידע ארגוני</div><div class="w">אין Embeddings ואין Vector DB. <b>הפער הגדול ביותר</b></div></div>
-        <div class="mod"><div class="m"><i>09</i>No-Code / Low-Code</div><div class="w">אין n8n, Make או Zapier. הכל נכתב בקוד</div></div>
-        <div class="mod"><div class="m"><i>12</i>Observability ו-Monitoring</div><div class="w">אין Traces, אין מדידת טוקנים, עלות או זמן תגובה. יש Debugging מתועד</div></div>
-      </div>
+    <div class="modgrid">
+      <div class="modcard ok"><div class="m"><i>01</i>אייג׳נטים ואוטומציה</div><div class="w">סוכן עם כלים + תרחיש n8n חי על טריגר זמן</div></div>
+      <div class="modcard ok"><div class="m"><i>02</i>Evaluation</div><div class="w">30 שאלות בעברית, 100% דיוק, 0% הזיות</div></div>
+      <div class="modcard ok"><div class="m"><i>03</i>מודלי שפה וכלי AI</div><div class="w">Sonnet 5 + Haiku 4.5, לפי עלות ותפקיד</div></div>
+      <div class="modcard no"><div class="m"><i>04</i>מודלים מקומיים</div><div class="w">לא נעשה — עדיפות נמוכה מוצהרת בבריף</div></div>
+      <div class="modcard ok"><div class="m"><i>05</i>תכנון אייג׳נטים</div><div class="w">3 כלים, Human-in-the-loop ברמת קוד</div></div>
+      <div class="modcard ok"><div class="m"><i>06</i>Prompt Engineering</div><div class="w">Structured Output, פרומפט משותף ל-prod ול-eval</div></div>
+      <div class="modcard ok"><div class="m"><i>07</i>חיבור למידע ולמערכות</div><div class="w">n8n מול Supabase API ו-SMTP, עם לוג ריצה</div></div>
+      <div class="modcard ok"><div class="m"><i>08</i>RAG</div><div class="w">pgvector + Voyage AI, 3 יעדים, מקור מצוטט</div></div>
+      <div class="modcard ok"><div class="m"><i>09</i>No-Code / Low-Code</div><div class="w">workflow חי ומפורסם ב-n8n, 11 צמתים</div></div>
+      <div class="modcard ok"><div class="m"><i>10</i>נתונים ו-Backend</div><div class="w">15 טבלאות RLS, Auth, Storage</div></div>
+      <div class="modcard part"><div class="m"><i>11</i>אקוסיסטם ענן</div><div class="w">Edge Functions + n8n; מסמך השוואה טרם נכתב</div></div>
+      <div class="modcard ok"><div class="m"><i>12</i>Observability</div><div class="w"><code>agent_runs</code>, מסך פנימי, תקרת הוצאה</div></div>
+      <div class="modcard ok"><div class="m"><i>13</i>אבטחה ופרטיות</div><div class="w">3 ממצאי אבטחה אמיתיים, נמצאו ותוקנו</div></div>
+      <div class="modcard part"><div class="m"><i>14</i>שימושים עסקיים</div><div class="w">תהליך מוגדר; אין עדיין שימוש אמיתי של לקוח</div></div>
+      <div class="modcard part"><div class="m"><i>15</i>מדידה, ROI ותיק עבודות</div><div class="w">עלות וזמן תגובה נמדדים; ROI על לקוח עדיין לא</div></div>
     </div>
   </div>
-  <div class="foot">המודולים החזקים הם דווקא אלה של <b>הנדסה ואבטחה</b>. החלשים הם אלה של <b>אייג׳נטים כדיסציפלינה</b> — וזה בדיוק לב הקורס.</div>
+  <div class="foot">המודול היחיד שנשאר חסר (04, מודלים מקומיים) מסומן בבריף כתוספת בעלות נמוכה — לא ליבת הקורס.</div>
 </section>
 
 <!-- 17 ────────────────────────────────────────────────────────── -->
@@ -678,17 +725,17 @@ td.nw{white-space:nowrap}
   <p class="lede">מודול 15 מגדיר את הפרויקט כך: <b>״פתרון AI עסקי מלא הכולל Agent, אוטומציה, מקור ידע, Evaluation, Monitoring ותהליך עסקי אמיתי״</b>.</p>
   <div class="slide-body">
     <div class="reqs">
-      <div class="req part"><div class="ic">◐</div><div class="nm">Agent</div><div class="st">שיחתי בהקשר טיול, בלי כלים ובלי לולאה</div></div>
-      <div class="req no"><div class="ic">○</div><div class="nm">אוטומציה</div><div class="st">אין תהליך שרץ מעצמו על טריגר</div></div>
-      <div class="req no"><div class="ic">○</div><div class="nm">מקור ידע</div><div class="st">אין RAG. הידע הוא מה שבמודל</div></div>
-      <div class="req no"><div class="ic">○</div><div class="nm">Evaluation</div><div class="st">אין סט בדיקה ואין מדדי איכות</div></div>
-      <div class="req no"><div class="ic">○</div><div class="nm">Monitoring</div><div class="st">אין מדידת עלות, טוקנים או כשלים</div></div>
-      <div class="req ok"><div class="ic">●</div><div class="nm">תהליך עסקי</div><div class="st">סוכן נסיעות אמיתי, מקצה לקצה</div></div>
+      <div class="req ok"><div class="ic">●</div><div class="nm">Agent</div><div class="st">לולאת tool-use אמיתית, 3 כלים, אישור אדם לכל כתיבה</div></div>
+      <div class="req ok"><div class="ic">●</div><div class="nm">אוטומציה</div><div class="st">workflow חי ב-n8n, על טריגר זמן, עם לוג</div></div>
+      <div class="req ok"><div class="ic">●</div><div class="nm">מקור ידע</div><div class="st">pgvector, 3 יעדים, כל תשובה מצטטת מקור</div></div>
+      <div class="req ok"><div class="ic">●</div><div class="nm">Evaluation</div><div class="st">30 שאלות, 100% דיוק, 0% הזיות בריצת בסיס</div></div>
+      <div class="req ok"><div class="ic">●</div><div class="nm">Monitoring</div><div class="st"><code>agent_runs</code>, מסך פנימי, תקרת הוצאה יומית</div></div>
+      <div class="req part"><div class="ic">◐</div><div class="nm">תהליך עסקי</div><div class="st">מוגדר מקצה לקצה; אין עדיין טיול לקוח אמיתי</div></div>
     </div>
     <div class="grid g3">
-      <div class="card teal"><h3>מה שיש לי ושקשה להשיג</h3><p>בעיה עסקית אמיתית עם מחקר שוק שתומך בה, מוצר עובד עם מסד נתונים ומודל הרשאות רציני, ותיק עבודות מתועד — כולל ההחלטות שנדחו והסיבות.</p></div>
-      <div class="card sun"><h3>מה שחסר ושקל יחסית להוסיף</h3><p>Evaluation ו-Monitoring הם עבודה של שבוע כל אחד, והם מוסיפים ערך אמיתי למוצר ולא רק לציון: בלעדיהם אני לא יודע אם הסוכן עונה נכון וכמה הוא עולה לי.</p></div>
-      <div class="card coral"><h3>ההודאה</h3><p>הפרויקט הזה הוא <b>מוצר עם AI בתוכו</b>, לא <b>מערכת אייג׳נטית</b>. זה הפער האמיתי, וזו השאלה שאני שם על השולחן במקום להסתיר אותה מאחורי הפיצ׳רים שכן עובדים.</p></div>
+      <div class="card teal"><h3>מה יש</h3><p>חמישה מששת רכיבי הדרישה בנויים ונמדדו: Agent עם כלים, אוטומציה חיה, מקור ידע, Evaluation ו-Monitoring — כל אחד עם מספרים אמיתיים מאחוריו, לא הצהרת כוונות.</p></div>
+      <div class="card sun"><h3>מה חסר, ולמה זה תלוי באחרים</h3><p>תהליך עסקי אמיתי דורש אדם אחר — סוכן נסיעות שמריץ טיול לקוח אמיתי דרך המערכת. זה הרכיב היחיד שתלוי במישהו חוץ ממני.</p></div>
+      <div class="card coral"><h3>ההודאה</h3><p>הפרויקט <b>מוצר עם AI בתוכו</b> שמתקרב ל<b>מערכת אייג׳נטית</b> — יש כלים, אישור אדם, מדידה, מקור ידע ואוטומציה. מה שחסר הוא לא יכולת טכנית אלא <b>שימוש אמיתי</b>: אף טיול לא שותף, אף לקוח לא השתמש.</p></div>
     </div>
   </div>
 </section>
@@ -696,67 +743,57 @@ td.nw{white-space:nowrap}
 <!-- 18 ────────────────────────────────────────────────────────── -->
 <section class="slide" data-t="תוכנית פעולה">
   <div class="eyebrow">תוכנית פעולה</div>
-  <h2 class="title">חמישה שלבים לסגירת הפערים</h2>
-  <p class="lede">הקריטריון לכל שלב: הוא חייב לסגור גם פער בסילבוס וגם פער אמיתי במוצר. אחרת זו עבודה בשביל הציון.</p>
+  <h2 class="title">לוח 16 הימים, ואיפה זה עומד</h2>
+  <p class="lede">הקריטריון לכל שלב: הוא חייב לסגור גם פער בסילבוס וגם פער אמיתי במוצר. חמישה משמונת השלבים כבר מאחורינו.</p>
   <div class="slide-body">
     <div class="tw">
       <table>
-        <thead><tr><th>שלב</th><th>מה נבנה</th><th>איזה פער במוצר זה סוגר</th><th>מודולים</th><th>הערכה</th></tr></thead>
+        <thead><tr><th>שלב בלוח</th><th>ימים</th><th>סטטוס</th><th>מה יש בפועל</th></tr></thead>
         <tbody>
-          <tr><td>א · Agent עם כלים</td><td>לולאת tool-use: <code>add_to_itinerary</code>, <code>add_suggestion</code>, <code>find_kosher</code> — כל כתיבה עוברת אישור אדם, כמו היום</td><td>הסוכן עונה אבל לא עושה. המשתמש עדיין מקליד</td><td class="nw">01 · 05</td><td class="n">~שבוע</td></tr>
-          <tr><td>ב · מקור ידע (RAG)</td><td>pgvector על Supabase: מאגר כשרות, זמני שבת, בתי חב״ד ו-POI לפי יעד · חיפוש סמנטי · ציטוט מקורות בתשובה</td><td><b>״ה-AI שלי ייוולד מיושן״</b> — הפער שסימנתי כגבוה במחקר השוק</td><td class="nw">08</td><td class="n">~שבועיים</td></tr>
-          <tr><td>ג · Evaluation</td><td>30–40 שאלות בעברית עם Expected Answers · בדיקת הזיות, דיוק tool calling ואיכות שליפה · Regression לפני כל שינוי prompt</td><td>אין לי דרך לדעת אם שינוי ב-prompt שיפר או הרס</td><td class="nw">02</td><td class="n">~שבוע</td></tr>
-          <tr><td>ד · Monitoring ו-KPI</td><td>טבלת <code>agent_runs</code>: טוקנים, עלות, זמן תגובה, שגיאות · דשבורד פנימי · KPI ומודל ROI לסוכן נסיעות</td><td>העלות נופלת עליי ואני לא מודד אותה. גם אין נתון להראות למשקיע</td><td class="nw">12 · 15</td><td class="n">~שבוע</td></tr>
-          <tr><td>ה · אוטומציה (n8n)</td><td>שובר PDF בעברית מסוכן ישראלי ← מסלול מלא, ללא הקלדה · התראות שינוי בטיסה · תזכורות לפני היציאה</td><td><b>״הכל מוקלד ביד״</b> — החסם מספר אחת שלי, ופיצ׳ר ייחודי שאף מתחרה לא עושה</td><td class="nw">07 · 09</td><td class="n">~שבוע</td></tr>
+          <tr><td>1 · פריסה לאוויר</td><td class="nw">1</td><td class="nw">○ טרם</td><td>עובד מקומית; אין עדיין כתובת חיה שנבדקה בטלפון פיזי</td></tr>
+          <tr><td>2 · Evaluation</td><td class="nw">2–3</td><td class="nw">● בוצע</td><td>30 שאלות, 100% דיוק, 0% הזיות, ריצת בסיס שמורה</td></tr>
+          <tr><td>3 · Monitoring</td><td class="nw">4–5</td><td class="nw">● בוצע</td><td><code>agent_runs</code>, מסך פנימי, תקרת $2 ליום למשתמש</td></tr>
+          <tr><td>4 · Agent עם כלים</td><td class="nw">6–8</td><td class="nw">● בוצע</td><td>3 כלים, כל כתיבה מאושרת ע״י אדם</td></tr>
+          <tr><td>5 · מקור ידע (RAG)</td><td class="nw">9–11</td><td class="nw">◐ בוצע, מצומצם</td><td>3 יעדים בלבד (קפריסין, רומא, באטומי), כמתוכנן</td></tr>
+          <tr><td>6 · אוטומציה (n8n)</td><td class="nw">12</td><td class="nw">● בוצע</td><td>workflow חי ומפורסם, 11 צמתים, כותב ל-<code>automation_logs</code></td></tr>
+          <tr><td>7 · מרווח לתיקונים</td><td class="nw">13–14</td><td class="nw">— לא הגיע התור</td><td>—</td></tr>
+          <tr><td>8 · תיק עבודות ודמו</td><td class="nw">15–16</td><td class="nw">— לא הגיע התור</td><td>—</td></tr>
         </tbody>
       </table>
     </div>
   </div>
-  <div class="foot">סדר מוצע: <b>ג׳ ← ד׳ ← א׳ ← ב׳ ← ה׳</b>. Evaluation ו-Monitoring קודם, כי בלעדיהם אין לי דרך למדוד אם שאר השלבים שיפרו משהו.</div>
+  <div class="foot">מה שנשאר לפני ההגשה: כתובת חיה, מרווח לבדיקה על מכשיר פיזי (ר׳ שקופית הבאגים), ותיק העבודות הסופי.</div>
 </section>
 
 <!-- 19 ────────────────────────────────────────────────────────── -->
 <section class="slide" data-t="השאלון למרצה">
   <div class="eyebrow">השאלון</div>
-  <h2 class="title">אחת-עשרה שאלות שיקבעו את התוכנית</h2>
-  <p class="lede">התשובות לאלה הן מה שיהפוך את שקופית 19 מהצעה לתוכנית עבודה מחייבת.</p>
+  <h2 class="title">שלוש שאלות למרצה</h2>
+  <p class="lede">עם הצעת תשובה לכל אחת — כדי לקבל מענה מהיר יותר משאלון פתוח, ולתת נקודת מוצא לדיון.</p>
   <div class="slide-body">
-    <div class="qgroups">
-      <div class="qg">
-        <h4>היקף</h4>
-        <ol>
-          <li><span>01</span>האם TripCraft בהיקפו הנוכחי מתאים כפרויקט גמר, או שעדיף פרויקט אוטומציה ממוקד יותר שמדגים את כל המודולים בצורה נקייה?</li>
-          <li><span>02</span>אם הוא מתאים — מספיק להוסיף את החסרים לתוכו, או שנדרש תרחיש עסקי נפרד לצידו?</li>
-        </ol>
+    <div class="grid g3">
+      <div class="card coral">
+        <h3><span class="chip c">חוסמת</span> שקיפות על עבודה מול Claude Code</h3>
+        <p>חלק ניכר מהקוד נכתב בעבודה מול Claude Code כשותף פיתוח, עם ההחלטות והביקורת שלי. האם זה לגיטימי בפרויקט הגמר, ואיך לתעד את זה?</p>
+        <p style="font-size:.9rem;color:var(--sun)"><b>ההצעה שלי:</b> לגיטימי, בתיעוד ההחלטות והביקורת שלי בקובץ נפרד בריפו — בדיוק כמו המצגת הזו.</p>
       </div>
-      <div class="qg">
-        <h4>עומק טכני</h4>
-        <ol>
-          <li><span>03</span>״Agent״ בדרישה — נדרש tool-use אמיתי שכותב למסד באישור, או שסוכן ייעוץ שמחזיר כרטיסים מספיק?</li>
-          <li><span>04</span>״מקור ידע״ — חייב Vector DB ו-Embeddings, או ששליפה מובנית ממסד הנתונים נחשבת?</li>
-          <li><span>05</span>Evaluation — מה המינימום המקובל? כמה שאלות בסט, אילו מדדים, והאם נדרש LLM-as-judge?</li>
-          <li><span>06</span>Monitoring — לוגים ומדידת עלות וטוקנים מספיקים, או שנדרשים Traces ודשבורד?</li>
-          <li><span>07</span>״אוטומציה״ — חובה n8n/Make, או שאוטומציה בקוד (Edge Function + Webhook) שקולה?</li>
-        </ol>
+      <div class="card sun">
+        <h3><span class="chip s">היקף</span> כמה ״Agent״ מספיק</h3>
+        <p>נבנה tool-use שכותב בפועל, עם אישור אדם לפני כל כתיבה. זו הרמה הנדרשת, או שסוכן ייעוץ בלבד היה מספיק וההשקעה הזו הייתה מיותרת?</p>
+        <p style="font-size:.9rem;color:var(--sun)"><b>ההצעה שלי:</b> tool-use עם אישור אדם היא ברירת המחדל עד תשובה אחרת — וזו כבר התוכנית שיושמה.</p>
       </div>
-      <div class="qg">
-        <h4>הגשה</h4>
-        <ol>
-          <li><span>08</span>ROI — איך מודדים ROI על מוצר שאין לו עדיין לקוחות משלמים? מקובל להציג הערכה מבוססת הנחות מוצהרות?</li>
-          <li><span>09</span>מה בדיוק נדרש בתיק העבודות, ומה אורך והיקף הדמו בכיתה?</li>
-          <li><span>10</span>מה תאריך ההגשה, ומה נדרש להגיש לפניו (אפיון? ארכיטקטורה? אבן דרך?)</li>
-        </ol>
-      </div>
-      <div class="qg">
-        <h4>שקיפות</h4>
-        <ol>
-          <li><span>11</span>חלק ניכר מהקוד נכתב בעבודה מול Claude Code כשותף פיתוח, כשההחלטות והביקורת שלי. האם זה לגיטימי בפרויקט הגמר, ואיך אתה מצפה שאתעד את זה?</li>
-        </ol>
-        <p style="font-size:.9rem;color:var(--dim);margin-top:.6rem">שאלה 11 היא זו שהכי חשוב לי לשאול — עדיף לברר אותה עכשיו מאשר בהגשה.</p>
+      <div class="card teal">
+        <h3><span class="chip t">הגשה</span> ROI בלי לקוחות משלמים</h3>
+        <p>אין מודל הכנסה ואין לקוח משלם. איך מודדים ROI על מוצר במצב הזה בלי להמציא מספר?</p>
+        <p style="font-size:.9rem;color:var(--sun)"><b>ההצעה שלי:</b> מדידת זמן בניית מסלול אצל סוכן נסיעות אחד, לפני ואחרי TripCraft — טווח עם הנחות מוצהרות וממוספרות, לא הערכת הכנסה בדויה.</p>
       </div>
     </div>
+    <div class="card">
+      <h3>שאלות נוספות שכבר הוכרעו</h3>
+      <p>היקף הפרויקט, רמת ה-Agent הנדרשת, וכל שאר ההחלטות התפעוליות הוכרעו במהלך העבודה כדי לא לעצור ולחכות לתשובה — ההחלטות והנימוקים מתועדים במלואם ב-<code>FINAL-PROJECT-BRIEF.md</code> שבריפו. אלה השלוש שנשארו כי התשובה עליהן משפיעה ישירות על מה שעוד ייבנה.</p>
+    </div>
   </div>
-  <div class="foot">תודה. <b>המצגת, יומן הפיתוח, מסמך האסטרטגיה והקוד</b> זמינים במלואם — אשמח להראות כל אחד מהם.</div>
+  <div class="foot">תודה. <b>המצגת, FINAL-PROJECT-BRIEF.md, תיקיית evals/ והקוד המלא</b> זמינים במלואם — אשמח להראות כל אחד מהם.</div>
 </section>
 
 </div>

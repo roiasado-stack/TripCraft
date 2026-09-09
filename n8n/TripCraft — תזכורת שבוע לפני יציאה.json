@@ -1,0 +1,439 @@
+{
+  "name": "TripCraft — תזכורת שבוע לפני יציאה",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -944,
+        -32
+      ],
+      "id": "79bb901d-a65c-4ac9-bdda-6652ff785513",
+      "name": "Schedule Trigger",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "=https://fclfhzuqlvdelcsrroql.supabase.co/rest/v1/trips",
+        "sendQuery": true,
+        "specifyQuery": "=keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,title,destination,start_date,user_id"
+            },
+            {
+              "name": "start_date",
+              "value": "=eq.{{ $now.plus({days: 7}).toFormat('yyyy-MM-dd') }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbGZoenVxbHZkZWxjc3Jyb3FsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjkwMDQwNiwiZXhwIjoyMTAyNDc2NDA2fQ.HUs729JlC0ZeR_Lsyj72VeAkaBEbrFUi4G8QYH4INno"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbGZoenVxbHZkZWxjc3Jyb3FsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjkwMDQwNiwiZXhwIjoyMTAyNDc2NDA2fQ.HUs729JlC0ZeR_Lsyj72VeAkaBEbrFUi4G8QYH4INno"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -736,
+        -32
+      ],
+      "id": "df16eee9-e9e2-4196-85e8-bbaa0db73f26",
+      "name": "שליפת טיולים",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const trip = $json;\nconst SUPABASE_URL = \"https://fclfhzuqlvdelcsrroql.supabase.co\";\nconst SERVICE_KEY = \"eyJhbGci•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••\";\nconst headers = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` };\n\ntry {\n  const participants = await this.helpers.httpRequest({\n    method: \"GET\",\n    url: `${SUPABASE_URL}/rest/v1/participants?trip_id=eq.${trip.id}&select=name,age,age_range,preferences`,\n    headers,\n    json: true,\n  });\n  return { json: { ok: true, participants } };\n} catch (e) {\n  return {\n    json: {\n      ok: false,\n      message: e.message,\n      httpCode: e.httpCode || null,\n      cause_status: e.cause?.response?.status || null,\n      cause_data: e.cause?.response?.data || null,\n      full: JSON.parse(JSON.stringify(e, Object.getOwnPropertyNames(e))),\n    },\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        -32
+      ],
+      "id": "df85a1ed-a6ab-4d91-9a4b-56df1f36619f",
+      "name": "העשרת נתונים ובניית צ'קליסט",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "https://fclfhzuqlvdelcsrroql.supabase.co/rest/v1/participants",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "=trip_id",
+              "value": "=eq.{{ $('שליפת טיולים').item.json.id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbGZoenVxbHZkZWxjc3Jyb3FsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjkwMDQwNiwiZXhwIjoyMTAyNDc2NDA2fQ.HUs729JlC0ZeR_Lsyj72VeAkaBEbrFUi4G8QYH4INno"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbGZoenVxbHZkZWxjc3Jyb3FsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjkwMDQwNiwiZXhwIjoyMTAyNDc2NDA2fQ.HUs729JlC0ZeR_Lsyj72VeAkaBEbrFUi4G8QYH4INno"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -368,
+        128
+      ],
+      "id": "086366d7-defd-4fe0-a8c3-cd801583a2ca",
+      "name": "בדיקת משתתפים",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "https://fclfhzuqlvdelcsrroql.supabase.co/rest/v1/flights",
+        "sendQuery": true,
+        "specifyQuery": "=keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "=direction,airline,flight_number,from_airport,to_airport,depart_at"
+            },
+            {
+              "name": "trip_id",
+              "value": "=eq.{{ $('שליפת טיולים').item.json.id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbGZoenVxbHZkZWxjc3Jyb3FsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjkwMDQwNiwiZXhwIjoyMTAyNDc2NDA2fQ.HUs729JlC0ZeR_Lsyj72VeAkaBEbrFUi4G8QYH4INno"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbGZoenVxbHZkZWxjc3Jyb3FsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjkwMDQwNiwiZXhwIjoyMTAyNDc2NDA2fQ.HUs729JlC0ZeR_Lsyj72VeAkaBEbrFUi4G8QYH4INno"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        16,
+        128
+      ],
+      "id": "eadcffec-df95-4092-a138-d1bc4cb342c6",
+      "name": "HTTP Request",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "url": "=https://fclfhzuqlvdelcsrroql.supabase.co/auth/v1/admin/users/54f5137f-54f7-46c3-8b4e-7883ecb521db",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbGZoenVxbHZkZWxjc3Jyb3FsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjkwMDQwNiwiZXhwIjoyMTAyNDc2NDA2fQ.HUs729JlC0ZeR_Lsyj72VeAkaBEbrFUi4G8QYH4INno"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbGZoenVxbHZkZWxjc3Jyb3FsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjkwMDQwNiwiZXhwIjoyMTAyNDc2NDA2fQ.HUs729JlC0ZeR_Lsyj72VeAkaBEbrFUi4G8QYH4INno"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        416,
+        128
+      ],
+      "id": "6ac64e00-52dc-404c-a379-cd7933c4bd62",
+      "name": "שליפת מייל",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {
+          "includeBinaries": false
+        }
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        128
+      ],
+      "id": "77143504-4354-4c53-93f6-d72de0e7560f",
+      "name": "איסוף משתתפים",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        208,
+        128
+      ],
+      "id": "4a3c4477-378b-4400-9656-7f00d9a0e0e7",
+      "name": "איסוף טיסות",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const trip = $('שליפת טיולים').item.json;\nconst participants = $('איסוף משתתפים').item.json.data || [];\nconst flights = $('איסוף טיסות').item.json.data || [];\nconst owner = $json; // הפלט של node \"שליפת מייל\"\n\nconst items = new Set([\n  \"דרכונים בתוקף (6+ חודשים)\", \"כרטיסי טיסה / אישורי הזמנה\", \"ביטוח נסיעות\",\n  \"מטען וכבלים לטלפון\", \"מתאם חשמל בינלאומי\", \"כסף מזומן + כרטיס אשראי\",\n  \"תרופות אישיות\", \"משקפי שמש וקרם הגנה\",\n]);\n\nconst ages = participants.map(p => p.age ?? (p.age_range ? parseInt(p.age_range) : null)).filter(a => a != null);\nif (ages.some(a => a <= 3)) [\"חיתולים ומגבונים\", \"אוכל/תחליף לתינוק\", \"עגלה או מנשא\", \"בגדים להחלפה בשפע\"].forEach(i => items.add(i));\nif (ages.some(a => a > 3 && a <= 12)) [\"צעצועים / פעילות לילדים\", \"חטיפים לדרך\", \"בגדי החלפה לילדים\"].forEach(i => items.add(i));\n\nconst prefs = new Set(participants.flatMap(p => p.preferences || []));\nif (prefs.has(\"beach\")) [\"בגדי ים\", \"מגבת חוף\", \"כפכפים\"].forEach(i => items.add(i));\nif (prefs.has(\"sport\")) [\"נעלי ספורט\", \"בגדי אימון\"].forEach(i => items.add(i));\nif (prefs.has(\"history\")) items.add(\"נעליים נוחות להליכה\");\nif (prefs.has(\"accessibility\")) items.add(\"ציוד נגישות / עזרים\");\n\nconst outbound = flights.find(f => f.direction === \"outbound\") || null;\nif (outbound?.depart_at) items.add(`צ'ק-אין אונליין (${outbound.airline || \"\"} ${outbound.flight_number || \"\"})`);\n\nconst checklist = [...items];\nconst emailHtml = `<div dir=\"rtl\" style=\"direction:rtl; text-align:right; font-family:Arial,sans-serif; font-size:15px; line-height:1.6;\">\n  <p>שלום,</p>\n  <p>הטיול שלך ל<strong>${trip.destination}</strong> יוצא בעוד שבוע (${trip.start_date})!</p>\n  <p>רשימת פרה-פלייט:</p>\n  <ul>${checklist.map(i => `<li>${i}</li>`).join(\"\")}</ul>\n  <p>נסיעה טובה!<br>TripCraft</p>\n</div>`;\n\nreturn { json: { ...trip, owner_email: owner.email, checklist, emailHtml } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        128
+      ],
+      "id": "bcd65043-6de5-4715-93c7-38ef6774ed53",
+      "name": "Code in JavaScript",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "fromEmail": "roi.asado@gmail.com",
+        "toEmail": "={{ $json.owner_email }}",
+        "subject": "=תזכורת: הטיול שלך יוצא בעוד שבוע",
+        "html": "={{ $json.emailHtml }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        784,
+        112
+      ],
+      "id": "1f164661-cb05-4286-916c-a7920b065ea1",
+      "name": "Send an Email",
+      "webhookId": "924fc9e7-035e-4adb-a5cb-8b643e58b9ba",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "smtp": {
+          "id": "VKcQgYbt3Sf3vzMs",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://fclfhzuqlvdelcsrroql.supabase.co/rest/v1/automation_logs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbGZoenVxbHZkZWxjc3Jyb3FsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjkwMDQwNiwiZXhwIjoyMTAyNDc2NDA2fQ.HUs729JlC0ZeR_Lsyj72VeAkaBEbrFUi4G8QYH4INno"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbGZoenVxbHZkZWxjc3Jyb3FsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjkwMDQwNiwiZXhwIjoyMTAyNDc2NDA2fQ.HUs729JlC0ZeR_Lsyj72VeAkaBEbrFUi4G8QYH4INno"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"trip_id\": \"{{ $('שליפת טיולים').item.json.id }}\",\n  \"scenario\": \"pre_departure_reminder\",\n  \"status\": \"ok\",\n  \"detail\": \"נשלחה תזכורת ל-{{$('Code in JavaScript').item.json.owner_email}}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1008,
+        112
+      ],
+      "id": "84ba77f1-c9df-4471-bb95-2139c12114e7",
+      "name": "כתיבת רשומת לוג",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "שליפת טיולים",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "שליפת טיולים": {
+      "main": [
+        [
+          {
+            "node": "העשרת נתונים ובניית צ'קליסט",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "בדיקת משתתפים",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "העשרת נתונים ובניית צ'קליסט": {
+      "main": [
+        [
+          {
+            "node": "בדיקת משתתפים",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "בדיקת משתתפים": {
+      "main": [
+        [
+          {
+            "node": "איסוף משתתפים",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "איסוף טיסות",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "איסוף משתתפים": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "איסוף טיסות": {
+      "main": [
+        [
+          {
+            "node": "שליפת מייל",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "שליפת מייל": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send an Email": {
+      "main": [
+        [
+          {
+            "node": "כתיבת רשומת לוג",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "IqsOTO3ML4FRTfRA",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "05b8dce3-ace2-4309-9536-b4c9864dab51",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0e72a4b5a63c0dcd4cd58b9a0596f2f854901b5bb3d1d2ea5fe333077b07dc42"
+  },
+  "nodeGroups": [],
+  "id": "3dYaUVskmDacdcsk",
+  "tags": []
+}
