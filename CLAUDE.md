@@ -60,9 +60,16 @@ There are no tests, no linter, and no formatter. Don't add them unless asked.
 should appear there needs an `anon` SELECT grant plus a `shared read` policy, and the page must
 never assume a logged-in user. Everything else sits behind `ProtectedRoute`.
 
-## Deliberately off
+## AI and Google login are live
 
-AI generation (`src/lib/ai.ts` → `supabase/functions/generate`) and Google login are wired but not
-enabled — the app must stay fully usable without them. `generateContent` returns
-`{ ok: false, error: "not_deployed" }` when the function is missing; handle that, don't crash.
+Both are deployed and enabled in production (as of 2026-09-09) — don't describe them as
+placeholder or disabled.
+- AI generation (`src/lib/ai.ts` → `supabase/functions/generate`) and the conversational agent
+  (`supabase/functions/ask`) both need `ANTHROPIC_API_KEY` set as a Supabase secret to work; a
+  missing/misconfigured secret is the actual failure mode to check for, not "not built yet."
+  `generateContent` still returns `{ ok: false, error: "not_deployed" }` if the function itself
+  is ever missing — keep handling that case rather than assuming it's always up.
+- Google login is enabled in Supabase Auth (Providers → Google), with its own OAuth client in
+  the "Travel App" Google Cloud project.
+
 There is no offline support.
