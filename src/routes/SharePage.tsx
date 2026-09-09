@@ -10,6 +10,7 @@ import { MapLink } from "@/components/MapLink";
 import { resolveMapUrl } from "@/lib/maps";
 import {
   daysBetween,
+  destinationFlag,
   formatDateTimeHeb,
   formatDayHeb,
   formatHeb,
@@ -84,7 +85,7 @@ export default function SharePage() {
 
       {/* hero */}
       <div className="mt-4 overflow-hidden rounded-4xl bg-gradient-sea p-6 text-white shadow-pop" style={accent ? { background: accent } : undefined}>
-        <div className="text-4xl">{trip.cover_emoji ?? "🌴"}</div>
+        <div className="text-4xl">{destinationFlag(trip.destination) ?? trip.cover_emoji ?? "🌍"}</div>
         <h1 className="mt-2 text-2xl font-extrabold">{trip.title}</h1>
         <p className="text-white/85">{trip.destination}</p>
         {trip.start_date && (
