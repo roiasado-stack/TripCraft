@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ChevronRight, Share2 } from "lucide-react";
 import type { Trip } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { destinationFlag } from "@/lib/trip-options";
 
 export function TripHeader({
   trip,
@@ -22,7 +23,7 @@ export function TripHeader({
         <ChevronRight className="size-5" />
       </Link>
       <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-sea text-2xl">
-        {trip.cover_emoji ?? "🌴"}
+        {destinationFlag(trip.destination) ?? trip.cover_emoji ?? "🌍"}
       </div>
       <div className="min-w-0 flex-1">
         <h1 className="truncate text-lg font-extrabold leading-tight">{trip.title}</h1>

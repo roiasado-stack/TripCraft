@@ -10,6 +10,7 @@ import {
   AGE_RANGES,
   BUDGET_LEVELS,
   COVER_EMOJIS,
+  destinationFlag,
   PREFERENCES,
   TRIP_TYPES,
   tripDuration,
@@ -659,7 +660,9 @@ function StepReview(p: {
         <p className="text-sm text-muted-foreground">בדוק שהכול נכון ולחץ ליצירת הטיול.</p>
       </div>
       <Card className="flex items-center gap-4 p-4">
-        <div className="grid size-16 place-items-center rounded-2xl bg-gradient-sea text-3xl">{p.emoji}</div>
+        <div className="grid size-16 place-items-center rounded-2xl bg-gradient-sea text-3xl">
+          {destinationFlag(p.destination) ?? p.emoji}
+        </div>
         <div>
           <div className="text-lg font-bold">{p.title || "טיול חדש"}</div>
           <div className="text-sm text-muted-foreground">{p.destination}</div>

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Calendar, MapPin, Trash2 } from "lucide-react";
 import type { Trip } from "@/lib/types";
 import { Badge, Button, Modal } from "@/components/ui";
-import { daysUntil, formatHeb, tripTypeEmoji, tripTypeLabel } from "@/lib/trip-options";
+import { daysUntil, destinationFlag, formatHeb, tripTypeEmoji, tripTypeLabel } from "@/lib/trip-options";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 
@@ -44,7 +44,7 @@ export function TripCard({ trip, onDeleted }: { trip: Trip; onDeleted?: (id: str
         className="group relative flex items-center gap-4 overflow-hidden rounded-3xl border border-border bg-card p-4 shadow-soft transition active:scale-[0.99]"
       >
         <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-gradient-sea text-3xl shadow-soft">
-          {trip.cover_emoji ?? "🌴"}
+          {destinationFlag(trip.destination) ?? trip.cover_emoji ?? "🌍"}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
