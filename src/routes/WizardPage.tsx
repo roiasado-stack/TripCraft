@@ -321,7 +321,12 @@ function StepBasics(p: {
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="יציאה">
-          <Input type="date" value={p.startDate} onChange={(e) => p.setStartDate(e.target.value)} />
+          <Input
+            type="date"
+            value={p.startDate}
+            min={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => p.setStartDate(e.target.value)}
+          />
         </Field>
         <Field label="חזרה">
           <Input type="date" value={p.endDate} min={p.startDate || undefined} onChange={(e) => p.setEndDate(e.target.value)} />

@@ -149,7 +149,11 @@ export default function DocumentsTab() {
             <LinkIcon className="size-4" /> קישור חיצוני
           </Button>
         </div>
-        <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={onPickFile} />
+        {/* No `capture` attribute: that forces iOS straight into the camera,
+            skipping its native picker sheet (Photo Library / Take Photo /
+            Browse…) — "Browse" is also how Files-provider apps like Google
+            Drive show up as an upload source, so this covers both. */}
+        <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={onPickFile} />
       </Card>
 
       {/* filter */}
