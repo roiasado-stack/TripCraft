@@ -168,13 +168,13 @@ export function ImportParticipants({
             סריקת דרכונים מתמונה
           </Button>
           <p className="-mt-1 text-center text-xs text-muted-foreground">
-            צלם או בחר עד 8 דרכונים — נזהה שם וגיל אוטומטית. דורש הפעלת AI.
+            צלם, או בחר עד 8 תמונות/מסמכי PDF מהגלריה, מהקבצים או מ-Google Drive — נזהה שם וגיל
+            אוטומטית. דורש הפעלת AI.
           </p>
           <input
             ref={passportRef}
             type="file"
-            accept="image/*"
-            capture="environment"
+            accept="image/*,application/pdf"
             multiple
             hidden
             onChange={onPassports}

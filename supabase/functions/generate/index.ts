@@ -241,13 +241,17 @@ Deno.serve(async (req) => {
         });
       }
 
-      const content: unknown[] = images.map((img) => ({
-        type: "image",
-        source: { type: "base64", media_type: img.media_type, data: img.data },
-      }));
+      const content: unknown[] = images.map((img) =>
+        img.media_type === "application/pdf"
+          ? { type: "document", source: { type: "base64", media_type: img.media_type, data: img.data } }
+          : { type: "image", source: { type: "base64", media_type: img.media_type, data: img.data } },
+      );
+      const today = new Date().toISOString().slice(0, 10);
       content.push({
         type: "text",
-        text: `אלה תמונות של דרכונים. עבור כל דרכון, חלץ את שם בעל הדרכון ואת גילו הנוכחי (חשב מתאריך הלידה מול היום).
+        text: `אלה תמונות של דרכונים. עבור כל דרכון, חלץ את שם בעל הדרכון ואת תאריך הלידה שלו (Date of Birth בעמוד הנתונים), וחשב ממנו את הגיל הנוכחי.
+
+היום הוא ${today}. חשב גיל = השנה הנוכחית פחות שנת הלידה, ואם יום-והחודש של יום ההולדת עוד לא הגיעו השנה (ביחס ל-${today}) — הפחת עוד 1.
 
 החזר JSON בלבד, ללא טקסט נוסף:
 {"items":[{"name":"שם מלא בעברית אם אפשר, אחרת כפי שמופיע","age":34}]}
@@ -255,7 +259,7 @@ Deno.serve(async (req) => {
 כללים:
 - פריט אחד לכל דרכון, באותו סדר שבו הופיעו התמונות.
 - אם לא ניתן לקרוא את השם — דלג על אותו דרכון.
-- אם לא ניתן לחשב גיל — החזר age: null.
+- אם לא ניתן לקרוא את תאריך הלידה בבירור — החזר age: null, אל תנחש.
 - אל תמציא פרטים. אל תחזיר מספרי דרכון או כל מידע אחר.`,
       });
 
