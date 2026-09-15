@@ -130,6 +130,20 @@ ${describeParticipants(participants)}${tuneLine}`;
 - התאם למשתתפים (תינוקות/ילדים), ליעד, לעונה ולהעדפות. כל הטקסט בעברית.`;
 }
 
+/**
+ * Anthropic responses aren't guaranteed to put the reply in content[0] — a
+ * leading non-text block (e.g. thinking) pushes it later. Concatenate every
+ * text block instead of indexing positionally.
+ */
+function extractText(payload: unknown): string {
+  const blocks = (payload as { content?: unknown[] })?.content;
+  if (!Array.isArray(blocks)) return "";
+  return blocks
+    .filter((b): b is { type: string; text: string } => (b as { type?: string })?.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+}
+
 function extractJson(text: string): { items?: unknown[] } | null {
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const raw = fence ? fence[1] : text;
@@ -277,7 +291,8 @@ Deno.serve(async (req) => {
       const visionCostUsd =
         (visionInputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (visionOutputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
 
-      const parsedVision = extractJson(visionPayload?.content?.[0]?.text ?? "");
+      const visionText = extractText(visionPayload);
+      const parsedVision = extractJson(visionText);
       const people = Array.isArray(parsedVision?.items) ? parsedVision!.items : [];
       const items = people
         .map((raw) => {
@@ -304,7 +319,10 @@ Deno.serve(async (req) => {
         // blur, or caution around ID documents) rather than a code failure —
         // keep its raw answer so a report of "couldn't identify" is diagnosable
         // from the monitoring table instead of guessing blind.
-        errorMessage: items.length === 0 ? `empty_result: ${visionPayload?.content?.[0]?.text ?? ""}` : undefined,
+        errorMessage:
+          items.length === 0
+            ? `empty_result: stop=${visionPayload?.stop_reason} blocks=${(visionPayload?.content ?? []).map((b: { type?: string }) => b?.type).join(",")} text=${visionText.slice(0, 300)}`
+            : undefined,
       });
       return new Response(JSON.stringify({ ok: true, items }), {
         headers: { ...cors, "Content-Type": "application/json" },
@@ -361,11 +379,20 @@ Deno.serve(async (req) => {
     const outputTokens = Number(usage.output_tokens ?? 0);
     const costUsd = (inputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (outputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
 
-    const text: string = payload?.content?.[0]?.text ?? "";
+    const text = extractText(payload);
     const parsed = extractJson(text);
     const items = Array.isArray(parsed?.items) ? parsed!.items : [];
     if (items.length === 0) {
-      await logRun({ kind: `generate_${body.kind}`, tripId: body.trip_id, inputTokens, outputTokens, costUsd, latencyMs, status: "ok" });
+      await logRun({
+        kind: `generate_${body.kind}`,
+        tripId: body.trip_id,
+        inputTokens,
+        outputTokens,
+        costUsd,
+        latencyMs,
+        status: "ok",
+        errorMessage: `empty_result: stop=${payload?.stop_reason} blocks=${(payload?.content ?? []).map((b: { type?: string }) => b?.type).join(",")} text=${text.slice(0, 300)}`,
+      });
       return new Response(JSON.stringify({ error: "no_items", inserted: 0 }), {
         status: 200,
         headers: { ...cors, "Content-Type": "application/json" },
