@@ -22,6 +22,37 @@ import { formatDateTimeHeb, formatHeb, formatTimeHeb } from "@/lib/trip-options"
 // 00-23 / 00-59 <select>s sidesteps that entirely: always 24-hour, everywhere.
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
+const DURATION_HOURS = Array.from({ length: 21 }, (_, i) => String(i));
+
+const ISRAEL_AIRPORT = "TLV";
+const OTHER_AIRLINE = "__other__";
+// A convenience shortlist, not a claim of who currently flies the route —
+// routes to/from Israel shift with the news, so "אחר" always stays an option.
+const AIRLINES = [
+  "אל על",
+  "ישראייר",
+  "ארקיע",
+  "Wizz Air",
+  "Ryanair",
+  "easyJet",
+  "Lufthansa",
+  "Air France",
+  "KLM",
+  "British Airways",
+  "SWISS",
+  "Turkish Airlines",
+  "Aegean Airlines",
+  "LOT Polish Airlines",
+  "Pegasus Airlines",
+  "United Airlines",
+  "Delta Air Lines",
+  "American Airlines",
+  "Emirates",
+  "Etihad Airways",
+  "flydubai",
+  "Ethiopian Airlines",
+  "Cyprus Airways",
+];
 
 function isoToDatePart(iso: string | null): string {
   if (!iso) return "";
@@ -43,24 +74,32 @@ function partsToIso(date: string, hour: string, minute: string): string | null {
   const d = new Date(`${date}T${hour || "00"}:${minute || "00"}:00`);
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
+function msToDurationParts(ms: number): { hours: string; minutes: string } {
+  const totalMin = Math.round(ms / 60000);
+  return { hours: String(Math.floor(totalMin / 60)), minutes: String(totalMin % 60).padStart(2, "0") };
+}
+/** Arrival = departure + flight duration, computed instead of asked for directly. */
+function addDurationIso(departIso: string | null, hours: string, minutes: string): string | null {
+  if (!departIso || (!hours && !minutes)) return null;
+  const d = new Date(departIso);
+  if (isNaN(d.getTime())) return null;
+  d.setMinutes(d.getMinutes() + (Number(hours) || 0) * 60 + (Number(minutes) || 0));
+  return d.toISOString();
+}
 
 type FlightDraft = {
   id?: string;
   direction: "outbound" | "inbound";
   airline: string;
+  airlineOther: string;
   flight_number: string;
-  from_airport: string;
-  to_airport: string;
-  from_terminal: string;
-  to_terminal: string;
+  /** The non-Israel side of the route — the Israel side is implied by direction. */
+  otherAirport: string;
   depart_date: string;
   depart_hour: string;
   depart_minute: string;
-  arrive_date: string;
-  arrive_hour: string;
-  arrive_minute: string;
-  booking_ref: string;
-  seats: string;
+  duration_hours: string;
+  duration_minutes: string;
   baggage: string;
   notes: string;
 };
@@ -68,41 +107,36 @@ type FlightDraft = {
 const blankFlight: FlightDraft = {
   direction: "outbound",
   airline: "",
+  airlineOther: "",
   flight_number: "",
-  from_airport: "",
-  to_airport: "",
-  from_terminal: "",
-  to_terminal: "",
+  otherAirport: "",
   depart_date: "",
   depart_hour: "",
   depart_minute: "",
-  arrive_date: "",
-  arrive_hour: "",
-  arrive_minute: "",
-  booking_ref: "",
-  seats: "",
+  duration_hours: "",
+  duration_minutes: "",
   baggage: "",
   notes: "",
 };
 
 function flightToDraft(f: Flight): FlightDraft {
+  const airline = f.airline ?? "";
+  const knownAirline = AIRLINES.includes(airline);
+  const ms =
+    f.depart_at && f.arrive_at ? new Date(f.arrive_at).getTime() - new Date(f.depart_at).getTime() : NaN;
+  const dur = isFinite(ms) && ms > 0 ? msToDurationParts(ms) : { hours: "", minutes: "" };
   return {
     id: f.id,
     direction: f.direction === "inbound" ? "inbound" : "outbound",
-    airline: f.airline ?? "",
+    airline: knownAirline ? airline : airline ? OTHER_AIRLINE : "",
+    airlineOther: knownAirline ? "" : airline,
     flight_number: f.flight_number ?? "",
-    from_airport: f.from_airport ?? "",
-    to_airport: f.to_airport ?? "",
-    from_terminal: f.from_terminal ?? "",
-    to_terminal: f.to_terminal ?? "",
+    otherAirport: (f.direction === "inbound" ? f.from_airport : f.to_airport) ?? "",
     depart_date: isoToDatePart(f.depart_at),
     depart_hour: isoToHour(f.depart_at),
     depart_minute: isoToMinute(f.depart_at),
-    arrive_date: isoToDatePart(f.arrive_at),
-    arrive_hour: isoToHour(f.arrive_at),
-    arrive_minute: isoToMinute(f.arrive_at),
-    booking_ref: f.booking_ref ?? "",
-    seats: f.seats ?? "",
+    duration_hours: dur.hours,
+    duration_minutes: dur.minutes,
     baggage: f.baggage ?? "",
     notes: f.notes ?? "",
   };
@@ -149,19 +183,18 @@ export default function TransportTab() {
   const saveFlight = async () => {
     if (!editing) return;
     setSaving(true);
+    const airline = (editing.airline === OTHER_AIRLINE ? editing.airlineOther : editing.airline).trim() || null;
+    const otherAirport = editing.otherAirport.trim() || null;
+    const depart_at = partsToIso(editing.depart_date, editing.depart_hour, editing.depart_minute);
     const payload = {
       trip_id: trip.id,
       direction: editing.direction,
-      airline: editing.airline.trim() || null,
+      airline,
       flight_number: editing.flight_number.trim() || null,
-      from_airport: editing.from_airport.trim() || null,
-      to_airport: editing.to_airport.trim() || null,
-      from_terminal: editing.from_terminal.trim() || null,
-      to_terminal: editing.to_terminal.trim() || null,
-      depart_at: partsToIso(editing.depart_date, editing.depart_hour, editing.depart_minute),
-      arrive_at: partsToIso(editing.arrive_date, editing.arrive_hour, editing.arrive_minute),
-      booking_ref: editing.booking_ref.trim() || null,
-      seats: editing.seats.trim() || null,
+      from_airport: editing.direction === "outbound" ? ISRAEL_AIRPORT : otherAirport,
+      to_airport: editing.direction === "outbound" ? otherAirport : ISRAEL_AIRPORT,
+      depart_at,
+      arrive_at: addDurationIso(depart_at, editing.duration_hours, editing.duration_minutes),
       baggage: editing.baggage.trim() || null,
       notes: editing.notes.trim() || null,
     };
@@ -448,7 +481,19 @@ export default function TransportTab() {
             />
             <div className="grid grid-cols-2 gap-2">
               <Field label="חברת תעופה">
-                <Input value={editing.airline} onChange={(e) => setEditing({ ...editing, airline: e.target.value })} />
+                <select
+                  value={editing.airline}
+                  onChange={(e) => setEditing({ ...editing, airline: e.target.value })}
+                  className="h-12 w-full rounded-2xl border border-input bg-card px-2 text-sm"
+                >
+                  <option value="">בחר חברה</option>
+                  {AIRLINES.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                  <option value={OTHER_AIRLINE}>אחר...</option>
+                </select>
               </Field>
               <Field label="מספר טיסה">
                 <Input
@@ -457,17 +502,28 @@ export default function TransportTab() {
                 />
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="משדה (קוד)">
+            {editing.airline === OTHER_AIRLINE && (
+              <Field label="שם החברה">
                 <Input
-                  value={editing.from_airport}
-                  onChange={(e) => setEditing({ ...editing, from_airport: e.target.value })}
+                  value={editing.airlineOther}
+                  onChange={(e) => setEditing({ ...editing, airlineOther: e.target.value })}
                 />
               </Field>
-              <Field label="לשדה (קוד)">
-                <Input value={editing.to_airport} onChange={(e) => setEditing({ ...editing, to_airport: e.target.value })} />
-              </Field>
-            </div>
+            )}
+
+            <Field label={editing.direction === "outbound" ? "לאן טסים" : "מאיפה חוזרים"}>
+              <Input
+                value={editing.otherAirport}
+                onChange={(e) => setEditing({ ...editing, otherAirport: e.target.value })}
+                placeholder="למשל CDG, פריז"
+              />
+            </Field>
+            <p className="-mt-2 text-xs text-muted-foreground">
+              {editing.direction === "outbound"
+                ? "המראה מישראל (TLV) מתמלאת אוטומטית."
+                : "נחיתה בישראל (TLV) מתמלאת אוטומטית."}
+            </p>
+
             <div className="grid grid-cols-2 gap-2">
               <Field label="תאריך המראה">
                 <Input
@@ -506,75 +562,45 @@ export default function TransportTab() {
                 </div>
               </Field>
             </div>
+
+            <Field label="משך הטיסה">
+              <div className="flex items-center gap-2">
+                <select
+                  value={editing.duration_hours}
+                  onChange={(e) => setEditing({ ...editing, duration_hours: e.target.value })}
+                  className="h-12 flex-1 rounded-2xl border border-input bg-card px-2 text-center text-sm"
+                >
+                  <option value="">--</option>
+                  {DURATION_HOURS.map((h) => (
+                    <option key={h} value={h}>
+                      {h} שעות
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={editing.duration_minutes}
+                  onChange={(e) => setEditing({ ...editing, duration_minutes: e.target.value })}
+                  className="h-12 flex-1 rounded-2xl border border-input bg-card px-2 text-center text-sm"
+                >
+                  <option value="">--</option>
+                  {MINUTES.map((m) => (
+                    <option key={m} value={m}>
+                      {m} דק'
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </Field>
+            <p className="-mt-2 text-xs text-muted-foreground">שעת הנחיתה מחושבת אוטומטית לפי ההמראה ומשך הטיסה.</p>
+
             <div className="grid grid-cols-2 gap-2">
-              <Field label="תאריך נחיתה">
-                <Input
-                  type="date"
-                  value={editing.arrive_date}
-                  onChange={(e) => setEditing({ ...editing, arrive_date: e.target.value })}
-                />
-              </Field>
-              <Field label="שעת נחיתה (24 שעות)">
-                <div className="flex items-center gap-1">
-                  <select
-                    value={editing.arrive_hour}
-                    onChange={(e) => setEditing({ ...editing, arrive_hour: e.target.value })}
-                    className="h-12 flex-1 rounded-2xl border border-input bg-card px-1 text-center text-sm"
-                  >
-                    <option value="">--</option>
-                    {HOURS.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="font-bold text-muted-foreground">:</span>
-                  <select
-                    value={editing.arrive_minute}
-                    onChange={(e) => setEditing({ ...editing, arrive_minute: e.target.value })}
-                    className="h-12 flex-1 rounded-2xl border border-input bg-card px-1 text-center text-sm"
-                  >
-                    <option value="">--</option>
-                    {MINUTES.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="טרמינל המראה">
-                <Input
-                  value={editing.from_terminal}
-                  onChange={(e) => setEditing({ ...editing, from_terminal: e.target.value })}
-                />
-              </Field>
-              <Field label="טרמינל נחיתה">
-                <Input
-                  value={editing.to_terminal}
-                  onChange={(e) => setEditing({ ...editing, to_terminal: e.target.value })}
-                />
-              </Field>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <Field label="אסמכתה">
-                <Input
-                  value={editing.booking_ref}
-                  onChange={(e) => setEditing({ ...editing, booking_ref: e.target.value })}
-                />
-              </Field>
-              <Field label="מושבים">
-                <Input value={editing.seats} onChange={(e) => setEditing({ ...editing, seats: e.target.value })} />
-              </Field>
               <Field label="כבודה">
                 <Input value={editing.baggage} onChange={(e) => setEditing({ ...editing, baggage: e.target.value })} />
               </Field>
+              <Field label="הערות">
+                <Input value={editing.notes} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} />
+              </Field>
             </div>
-            <Field label="הערות">
-              <Input value={editing.notes} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} />
-            </Field>
           </div>
         )}
       </Modal>
