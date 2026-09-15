@@ -37,18 +37,18 @@ function bgSlide(slide) {
 
 function header(slide, eyebrow, title, lede) {
   slide.addText(eyebrow.toUpperCase(), {
-    x: MX, y: 0.42, w: W - MX * 2, h: 0.32, isTextBox: true,
+    x: MX, y: 0.42, w: W - MX * 2, h: 0.32, isTextBox: true, rtlMode: true,
     fontFace: FONT, fontSize: 12, bold: true, color: C.tealMid,
     charSpacing: 2, align: "right",
   });
   slide.addText(title, {
-    x: MX, y: 0.74, w: W - MX * 2, h: 0.9, isTextBox: true,
+    x: MX, y: 0.74, w: W - MX * 2, h: 0.9, isTextBox: true, rtlMode: true,
     fontFace: FONT_DISPLAY, fontSize: 30, bold: true, color: C.ink,
     align: "right", valign: "top",
   });
   if (lede) {
     slide.addText(lede, {
-      x: MX, y: 1.56, w: W - MX * 2, h: 0.55, isTextBox: true,
+      x: MX, y: 1.56, w: W - MX * 2, h: 0.55, isTextBox: true, rtlMode: true,
       fontFace: FONT, fontSize: 13.5, color: C.muted, align: "right", valign: "top",
     });
   }
@@ -59,14 +59,14 @@ function header(slide, eyebrow, title, lede) {
 
 function footer(slide, text) {
   slide.addText(text, {
-    x: MX, y: H - 0.55, w: W - MX * 2, h: 0.3, isTextBox: true,
+    x: MX, y: H - 0.55, w: W - MX * 2, h: 0.3, isTextBox: true, rtlMode: true,
     fontFace: FONT, fontSize: 10.5, color: C.dim, align: "right",
   });
 }
 
 function pageMark(slide, n) {
   slide.addText(`TripCraft · ${n}`, {
-    x: W - MX - 2.2, y: H - 0.42, w: 2.2, h: 0.28, isTextBox: true,
+    x: W - MX - 2.2, y: H - 0.42, w: 2.2, h: 0.28, isTextBox: true, rtlMode: true,
     fontFace: FONT, fontSize: 9, color: C.dim, align: "left",
   });
 }
@@ -84,14 +84,14 @@ function card(slide, x, y, w, h, opts) {
 
 function cardHeading(slide, x, y, w, text, color) {
   slide.addText(text, {
-    x, y, w, h: 0.4, isTextBox: true, margin: 0,
+    x, y, w, h: 0.4, isTextBox: true, rtlMode: true, margin: 0,
     fontFace: FONT_DISPLAY, fontSize: 15, bold: true, color: color || C.ink,
     align: "right",
   });
 }
 function cardBody(slide, x, y, w, h, text) {
   slide.addText(text, {
-    x, y, w, h, isTextBox: true, margin: 0,
+    x, y, w, h, isTextBox: true, rtlMode: true, margin: 0,
     fontFace: FONT, fontSize: 11.5, color: C.muted, align: "right", valign: "top",
   });
 }
@@ -99,11 +99,11 @@ function cardBody(slide, x, y, w, h, text) {
 function statTile(slide, x, y, w, h, value, label) {
   card(slide, x, y, w, h, {});
   slide.addText(value, {
-    x: x + 0.15, y: y + 0.14, w: w - 0.3, h: 0.55, isTextBox: true, margin: 0,
+    x: x + 0.15, y: y + 0.14, w: w - 0.3, h: 0.55, isTextBox: true, rtlMode: true, margin: 0,
     fontFace: FONT_DISPLAY, fontSize: 26, bold: true, color: C.tealMid, align: "right",
   });
   slide.addText(label, {
-    x: x + 0.15, y: y + 0.72, w: w - 0.3, h: h - 0.85, isTextBox: true, margin: 0,
+    x: x + 0.15, y: y + 0.72, w: w - 0.3, h: h - 0.85, isTextBox: true, rtlMode: true, margin: 0,
     fontFace: FONT, fontSize: 10.5, color: C.muted, align: "right", valign: "top",
   });
 }
@@ -115,7 +115,7 @@ function chip(slide, x, y, text, color, wGuess) {
     fill: { color: C.surface }, line: { color, width: 1 },
   });
   slide.addText(text, {
-    x, y, w, h: 0.32, isTextBox: true, margin: 0,
+    x, y, w, h: 0.32, isTextBox: true, rtlMode: true, margin: 0,
     fontFace: FONT, fontSize: 10.5, bold: true, color, align: "center", valign: "middle",
   });
   return w;
@@ -129,10 +129,10 @@ function phoneMock(slide, x, y, w, h, imgName, captB, captR) {
   });
   slide.addImage({ path: img(imgName), x, y, w, h });
   slide.addText([
-    { text: captB, options: { bold: true, color: C.tealMid, fontSize: 12, breakLine: true } },
-    { text: captR, options: { color: C.muted, fontSize: 9.5 } },
+    { text: captB, options: { bold: true, color: C.tealMid, fontSize: 12, breakLine: true, rtlMode: true } },
+    { text: captR, options: { color: C.muted, fontSize: 9.5, rtlMode: true } },
   ], {
-    x: x - 0.35, y: y + h + 0.12, w: w + 0.7, h: 0.62, isTextBox: true, margin: 0,
+    x: x - 0.35, y: y + h + 0.12, w: w + 0.7, h: 0.62, isTextBox: true, rtlMode: true, margin: 0,
     fontFace: FONT_DISPLAY, align: "center", valign: "top", lineSpacingMultiple: 1.15,
   });
 }
@@ -149,6 +149,7 @@ function tableSlideStyle(rows) {
         fill: { color: ri === 0 ? C.surfaceTint || "EDF7F6" : C.surface },
         align: "right",
         valign: "middle",
+        rtlMode: true,
       },
     }))
   );
@@ -160,18 +161,18 @@ function tableSlideStyle(rows) {
   s.background = { color: C.ground };
   s.addImage({ path: path.join(ROOT, "public/icon-512.png"), x: W / 2 - 0.7, y: 0.95, w: 1.4, h: 1.4 });
   s.addText([
-    { text: "Trip", options: { color: C.ink } },
-    { text: "Craft", options: { color: C.tealMid } },
+    { text: "Trip", options: { color: C.ink, rtlMode: true } },
+    { text: "Craft", options: { color: C.tealMid, rtlMode: true } },
   ], {
-    x: 0, y: 2.55, w: W, h: 1.1, isTextBox: true,
+    x: 0, y: 2.55, w: W, h: 1.1, isTextBox: true, rtlMode: true,
     fontFace: FONT_DISPLAY, fontSize: 54, bold: true, align: "center",
   });
   s.addText("מלווה הטיולים שלך", {
-    x: 0, y: 3.6, w: W, h: 0.55, isTextBox: true,
+    x: 0, y: 3.6, w: W, h: 0.55, isTextBox: true, rtlMode: true,
     fontFace: FONT_DISPLAY, fontSize: 20, bold: true, color: C.tealMid, align: "center",
   });
   s.addText("אפליקציית ווב בעברית מלאה לתכנון וליווי טיול — מסלול, מסמכים, צ'קליסט, וסוכן AI עם כלים ומקור ידע.", {
-    x: W / 2 - 4.2, y: 4.2, w: 8.4, h: 0.7, isTextBox: true,
+    x: W / 2 - 4.2, y: 4.2, w: 8.4, h: 0.7, isTextBox: true, rtlMode: true,
     fontFace: FONT, fontSize: 14, color: C.muted, align: "center",
   });
   const metaY = 5.6;
@@ -184,11 +185,11 @@ function tableSlideStyle(rows) {
   metas.slice().reverse().forEach((m, i) => {
     const x = W / 2 - (mw * 1.5) + i * mw;
     s.addText(m[0].toUpperCase(), {
-      x, y: metaY, w: mw, h: 0.3, isTextBox: true, margin: 0,
+      x, y: metaY, w: mw, h: 0.3, isTextBox: true, rtlMode: true, margin: 0,
       fontFace: FONT, fontSize: 9.5, bold: true, color: C.dim, align: "center", charSpacing: 1.5,
     });
     s.addText(m[1], {
-      x, y: metaY + 0.3, w: mw, h: 0.35, isTextBox: true, margin: 0,
+      x, y: metaY + 0.3, w: mw, h: 0.35, isTextBox: true, rtlMode: true, margin: 0,
       fontFace: FONT, fontSize: 12.5, color: C.ink, align: "center",
     });
   });
@@ -240,20 +241,20 @@ function tableSlideStyle(rows) {
     const x = xCursor;
     card(s, x, ly, lw, lh_, {});
     s.addText(L.lh.toUpperCase(), {
-      x: x + 0.18, y: ly + 0.16, w: lw - 0.36, h: 0.3, isTextBox: true, margin: 0,
+      x: x + 0.18, y: ly + 0.16, w: lw - 0.36, h: 0.3, isTextBox: true, rtlMode: true, margin: 0,
       fontFace: FONT, fontSize: 10, bold: true, color: C.tealMid, align: "right", charSpacing: 1,
     });
     s.addText(L.ln, {
-      x: x + 0.18, y: ly + 0.48, w: lw - 0.36, h: 0.45, isTextBox: true, margin: 0,
+      x: x + 0.18, y: ly + 0.48, w: lw - 0.36, h: 0.45, isTextBox: true, rtlMode: true, margin: 0,
       fontFace: FONT_DISPLAY, fontSize: 12.5, bold: true, color: C.ink, align: "right", valign: "top",
     });
-    s.addText(L.items.map((t, ti) => ({ text: t, options: { breakLine: ti < L.items.length - 1, bullet: { code: "25CF", indent: 12 } } })), {
-      x: x + 0.18, y: ly + 1.0, w: lw - 0.36, h: lh_ - 1.15, isTextBox: true, margin: 0,
+    s.addText(L.items.map((t, ti) => ({ text: t, options: { breakLine: ti < L.items.length - 1, bullet: { code: "25CF", indent: 12 }, rtlMode: true } })), {
+      x: x + 0.18, y: ly + 1.0, w: lw - 0.36, h: lh_ - 1.15, isTextBox: true, rtlMode: true, margin: 0,
       fontFace: FONT, fontSize: 9.5, color: C.muted, align: "right", valign: "top", paraSpaceAfter: 4,
     });
     if (i < n - 1) {
       s.addText("←", {
-        x: x - arrowW - 0.05, y: ly + lh_ / 2 - 0.2, w: arrowW + 0.1, h: 0.4, isTextBox: true,
+        x: x - arrowW - 0.05, y: ly + lh_ / 2 - 0.2, w: arrowW + 0.1, h: 0.4, isTextBox: true, rtlMode: true,
         fontFace: FONT, fontSize: 18, bold: true, color: C.tealMid, align: "center",
       });
     }
@@ -298,10 +299,10 @@ function tableSlideStyle(rows) {
   const cy2 = cy + ch + 0.3, ch2 = 1.7;
   card(s, MX, cy2, cw, ch2, { tint: C.tealSoft, line: C.tealMid });
   s.addText([
-    { text: "איך זה מתעדכן: ", options: { bold: true, color: C.teal } },
-    { text: "כל שינוי סכמה הוא קובץ SQL ממוספר תחת supabase/migrations/ (9 קבצים) — מתועד, בהיסטוריית git, ומופעל על המסד החי. supabase/schema.sql הוא עותק מלא ואידמפוטנטי לבניית מסד חדש בהרצה אחת.", options: { color: C.ink } },
+    { text: "איך זה מתעדכן: ", options: { bold: true, color: C.teal, rtlMode: true } },
+    { text: "כל שינוי סכמה הוא קובץ SQL ממוספר תחת supabase/migrations/ (9 קבצים) — מתועד, בהיסטוריית git, ומופעל על המסד החי. supabase/schema.sql הוא עותק מלא ואידמפוטנטי לבניית מסד חדש בהרצה אחת.", options: { color: C.ink, rtlMode: true } },
   ], {
-    x: MX + 0.3, y: cy2 + 0.25, w: cw - 0.6, h: ch2 - 0.5, isTextBox: true, margin: 0,
+    x: MX + 0.3, y: cy2 + 0.25, w: cw - 0.6, h: ch2 - 0.5, isTextBox: true, rtlMode: true, margin: 0,
     fontFace: FONT, fontSize: 13, align: "right", valign: "top",
   });
   pageMark(s, 5);
@@ -326,14 +327,14 @@ function tableSlideStyle(rows) {
       x: numX, y: sy, w: 0.4, h: 0.4, fill: { color: C.tealSoft }, line: { color: C.tealMid, width: 1 },
     });
     s.addText(String(i + 1), {
-      x: numX, y: sy, w: 0.4, h: 0.4, isTextBox: true, margin: 0,
+      x: numX, y: sy, w: 0.4, h: 0.4, isTextBox: true, rtlMode: true, margin: 0,
       fontFace: FONT_DISPLAY, fontSize: 13, bold: true, color: C.teal, align: "center", valign: "middle",
     });
     s.addText([
-      { text: st[0] + "  ", options: { bold: true, color: C.ink } },
-      { text: st[1], options: { color: C.muted } },
+      { text: st[0] + "  ", options: { bold: true, color: C.ink, rtlMode: true } },
+      { text: st[1], options: { color: C.muted, rtlMode: true } },
     ], {
-      x: MX, y: sy - 0.03, w: numX - MX - 0.2, h: rowH, isTextBox: true, margin: 0,
+      x: MX, y: sy - 0.03, w: numX - MX - 0.2, h: rowH, isTextBox: true, rtlMode: true, margin: 0,
       fontFace: FONT, fontSize: 12.5, align: "right", valign: "top",
     });
     sy += rowH;
@@ -345,16 +346,16 @@ function tableSlideStyle(rows) {
     fill: { color: "EDF7F6" }, line: { type: "none" },
   });
   s.addText('דוגמה אמיתית: "הסוכן לא עונה"', {
-    x: MX + 0.25, y: exY, w: exW - 0.5, h: 0.42, isTextBox: true, margin: 0,
+    x: MX + 0.25, y: exY, w: exW - 0.5, h: 0.42, isTextBox: true, rtlMode: true, margin: 0,
     fontFace: FONT_DISPLAY, fontSize: 12, bold: true, color: C.teal, align: "right", valign: "middle",
   });
   s.addText([
-    { text: "לא ניחשתי. ", options: { bold: true, color: C.ink } },
-    { text: "בדקתי טבלת לוגים (ריקה לגמרי), ואז שלחתי קריאה אמיתית לפונקציה החיה וראיתי את השגיאה המדויקת: ANTHROPIC_API_KEY is not set.", options: { color: C.muted } },
-    { text: "\nשורש הבעיה: ", options: { bold: true, color: C.ink, breakLine: false } },
-    { text: "הסוד מעולם לא הוגדר בפרודקשן. תוקן, ואומת שוב מול הפונקציה החיה לפני שסומן כפתור.", options: { color: C.muted } },
+    { text: "לא ניחשתי. ", options: { bold: true, color: C.ink, rtlMode: true } },
+    { text: "בדקתי טבלת לוגים (ריקה לגמרי), ואז שלחתי קריאה אמיתית לפונקציה החיה וראיתי את השגיאה המדויקת: ANTHROPIC_API_KEY is not set.", options: { color: C.muted, rtlMode: true } },
+    { text: "\nשורש הבעיה: ", options: { bold: true, color: C.ink, breakLine: false, rtlMode: true } },
+    { text: "הסוד מעולם לא הוגדר בפרודקשן. תוקן, ואומת שוב מול הפונקציה החיה לפני שסומן כפתור.", options: { color: C.muted, rtlMode: true } },
   ], {
-    x: MX + 0.25, y: exY + 0.5, w: exW - 0.5, h: exH - 0.6, isTextBox: true, margin: 0,
+    x: MX + 0.25, y: exY + 0.5, w: exW - 0.5, h: exH - 0.6, isTextBox: true, rtlMode: true, margin: 0,
     fontFace: FONT, fontSize: 11, align: "right", valign: "top", paraSpaceAfter: 6,
   });
   pageMark(s, 6);
@@ -374,7 +375,7 @@ function tableSlideStyle(rows) {
     cx -= 0.15;
   });
   s.addText("כל סשן עבודה נפתח באותו פרומפט קבוע — כדי שהעבודה תמיד תתחיל מאימות מול המצב האמיתי בריפו, לא מהנחות:", {
-    x: MX, y: 2.95, w: W - MX * 2, h: 0.5, isTextBox: true,
+    x: MX, y: 2.95, w: W - MX * 2, h: 0.5, isTextBox: true, rtlMode: true,
     fontFace: FONT, fontSize: 13, color: C.muted, align: "right",
   });
   const boxY = 3.55, boxH = 3.0, boxW = W - MX * 2;
@@ -392,7 +393,7 @@ function tableSlideStyle(rows) {
     "3. אל תתחיל שלב חדש לפני שהקודם עומד ב-Definition of Done שלו.\n\n" +
     "עבוד יום אחד בכל פעם. אל תרוץ קדימה.";
   s.addText(promptText, {
-    x: MX + 0.3, y: boxY + 0.25, w: boxW - 0.6, h: boxH - 0.5, isTextBox: true, margin: 0,
+    x: MX + 0.3, y: boxY + 0.25, w: boxW - 0.6, h: boxH - 0.5, isTextBox: true, rtlMode: true, margin: 0,
     fontFace: "Consolas", fontSize: 12.5, color: C.ground, align: "right", valign: "top", lineSpacingMultiple: 1.3,
   });
   pageMark(s, 7);
@@ -420,7 +421,7 @@ function tableSlideStyle(rows) {
     "- כשקוראים ל-add_to_itinerary / add_suggestion: הפעולה לא נכתבת מיד — המשתמש עדיין צריך\n" +
     "  לאשר בכרטיס. אל תגיד \"הוספתי\".";
   s.addText(sysPrompt, {
-    x: MX + 0.3, y: boxY + 0.22, w: boxW - 0.6, h: boxH - 0.4, isTextBox: true, margin: 0,
+    x: MX + 0.3, y: boxY + 0.22, w: boxW - 0.6, h: boxH - 0.4, isTextBox: true, rtlMode: true, margin: 0,
     fontFace: "Consolas", fontSize: 10.5, color: C.ground, align: "right", valign: "top", lineSpacingMultiple: 1.25,
   });
   const cy = boxY + boxH + 0.28, cw = 3.77, ch = 1.55, gap = 0.24;
@@ -466,10 +467,10 @@ function tableSlideStyle(rows) {
   });
   const noteY = 5.75;
   s.addText([
-    { text: "מקור הידע (RAG) ", options: { color: C.ink } },
-    { text: "משתמש במודל שלישי, נפרד: Voyage AI (voyage-4-lite, 1024 ממדים) ליצירת ה-embeddings — לא Claude, כי זו משימת הטמעה ולא שיחה.", options: { color: C.muted } },
+    { text: "מקור הידע (RAG) ", options: { color: C.ink, rtlMode: true } },
+    { text: "משתמש במודל שלישי, נפרד: Voyage AI (voyage-4-lite, 1024 ממדים) ליצירת ה-embeddings — לא Claude, כי זו משימת הטמעה ולא שיחה.", options: { color: C.muted, rtlMode: true } },
   ], {
-    x: MX, y: noteY, w: W - MX * 2, h: 0.6, isTextBox: true,
+    x: MX, y: noteY, w: W - MX * 2, h: 0.6, isTextBox: true, rtlMode: true,
     fontFace: FONT, fontSize: 12.5, align: "right", valign: "top",
   });
   pageMark(s, 9);
@@ -578,15 +579,15 @@ shotSlide(13, "איך זה נראה", "מסמכים, והסוכן", [
     const x = x0 + i * (cw + gap);
     card(s, x, cy, cw, ch, {});
     s.addText(it[0], {
-      x, y: cy + 0.22, w: cw, h: 0.5, isTextBox: true, margin: 0,
+      x, y: cy + 0.22, w: cw, h: 0.5, isTextBox: true, rtlMode: true, margin: 0,
       fontFace: FONT_DISPLAY, fontSize: 22, bold: true, color: it[3], align: "center",
     });
     s.addText(it[1], {
-      x: x + 0.1, y: cy + 0.85, w: cw - 0.2, h: 0.4, isTextBox: true, margin: 0,
+      x: x + 0.1, y: cy + 0.85, w: cw - 0.2, h: 0.4, isTextBox: true, rtlMode: true, margin: 0,
       fontFace: FONT_DISPLAY, fontSize: 12, bold: true, color: C.ink, align: "center",
     });
     s.addText(it[2], {
-      x: x + 0.08, y: cy + 1.3, w: cw - 0.16, h: 0.9, isTextBox: true, margin: 0,
+      x: x + 0.08, y: cy + 1.3, w: cw - 0.16, h: 0.9, isTextBox: true, rtlMode: true, margin: 0,
       fontFace: FONT, fontSize: 9.5, color: C.muted, align: "center", valign: "top",
     });
   });
@@ -605,11 +606,11 @@ shotSlide(13, "איך זה נראה", "מסמכים, והסוכן", [
   cardHeading(s, MX + 0.25, cy + 0.22, cw - 0.5, "📦 ריפו", C.ink);
   cardBody(s, MX + 0.25, cy + 0.75, cw - 0.5, ch - 0.95, "היסטוריית קומיטים מלאה, כל החלטה מתועדת");
   s.addText([
-    { text: "TripCraft · ", options: { color: C.dim } },
-    { text: "מלווה הטיולים שלך", options: { bold: true, color: C.teal } },
-    { text: " · רועי אסדו", options: { color: C.dim } },
+    { text: "TripCraft · ", options: { color: C.dim, rtlMode: true } },
+    { text: "מלווה הטיולים שלך", options: { bold: true, color: C.teal, rtlMode: true } },
+    { text: " · רועי אסדו", options: { color: C.dim, rtlMode: true } },
   ], {
-    x: MX, y: H - 0.7, w: W - MX * 2, h: 0.35, isTextBox: true,
+    x: MX, y: H - 0.7, w: W - MX * 2, h: 0.35, isTextBox: true, rtlMode: true,
     fontFace: FONT, fontSize: 12, align: "center",
   });
 }
