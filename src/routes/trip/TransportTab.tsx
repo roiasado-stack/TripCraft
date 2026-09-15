@@ -16,16 +16,32 @@ import {
 } from "@/lib/maps";
 import { formatDateTimeHeb, formatHeb, formatTimeHeb } from "@/lib/trip-options";
 
-/** ISO timestamp <-> the value a `datetime-local` input needs (no seconds, no zone). */
-function toLocalInput(iso: string | null): string {
+// A native datetime-local input's hour format follows the OS/browser locale,
+// not the page's lang="he" — on a Windows box set to English that renders an
+// AM/PM picker no matter what we do to the page. A date input plus explicit
+// 00-23 / 00-59 <select>s sidesteps that entirely: always 24-hour, everywhere.
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
+
+function isoToDatePart(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-function fromLocalInput(local: string): string | null {
-  return local ? new Date(local).toISOString() : null;
+function isoToHour(iso: string | null): string {
+  const d = iso ? new Date(iso) : null;
+  return d && !isNaN(d.getTime()) ? String(d.getHours()).padStart(2, "0") : "";
+}
+function isoToMinute(iso: string | null): string {
+  const d = iso ? new Date(iso) : null;
+  return d && !isNaN(d.getTime()) ? String(d.getMinutes()).padStart(2, "0") : "";
+}
+function partsToIso(date: string, hour: string, minute: string): string | null {
+  if (!date) return null;
+  const d = new Date(`${date}T${hour || "00"}:${minute || "00"}:00`);
+  return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 type FlightDraft = {
@@ -37,8 +53,12 @@ type FlightDraft = {
   to_airport: string;
   from_terminal: string;
   to_terminal: string;
-  depart_at: string;
-  arrive_at: string;
+  depart_date: string;
+  depart_hour: string;
+  depart_minute: string;
+  arrive_date: string;
+  arrive_hour: string;
+  arrive_minute: string;
   booking_ref: string;
   seats: string;
   baggage: string;
@@ -53,8 +73,12 @@ const blankFlight: FlightDraft = {
   to_airport: "",
   from_terminal: "",
   to_terminal: "",
-  depart_at: "",
-  arrive_at: "",
+  depart_date: "",
+  depart_hour: "",
+  depart_minute: "",
+  arrive_date: "",
+  arrive_hour: "",
+  arrive_minute: "",
   booking_ref: "",
   seats: "",
   baggage: "",
@@ -71,8 +95,12 @@ function flightToDraft(f: Flight): FlightDraft {
     to_airport: f.to_airport ?? "",
     from_terminal: f.from_terminal ?? "",
     to_terminal: f.to_terminal ?? "",
-    depart_at: toLocalInput(f.depart_at),
-    arrive_at: toLocalInput(f.arrive_at),
+    depart_date: isoToDatePart(f.depart_at),
+    depart_hour: isoToHour(f.depart_at),
+    depart_minute: isoToMinute(f.depart_at),
+    arrive_date: isoToDatePart(f.arrive_at),
+    arrive_hour: isoToHour(f.arrive_at),
+    arrive_minute: isoToMinute(f.arrive_at),
     booking_ref: f.booking_ref ?? "",
     seats: f.seats ?? "",
     baggage: f.baggage ?? "",
@@ -130,8 +158,8 @@ export default function TransportTab() {
       to_airport: editing.to_airport.trim() || null,
       from_terminal: editing.from_terminal.trim() || null,
       to_terminal: editing.to_terminal.trim() || null,
-      depart_at: fromLocalInput(editing.depart_at),
-      arrive_at: fromLocalInput(editing.arrive_at),
+      depart_at: partsToIso(editing.depart_date, editing.depart_hour, editing.depart_minute),
+      arrive_at: partsToIso(editing.arrive_date, editing.arrive_hour, editing.arrive_minute),
       booking_ref: editing.booking_ref.trim() || null,
       seats: editing.seats.trim() || null,
       baggage: editing.baggage.trim() || null,
@@ -441,19 +469,79 @@ export default function TransportTab() {
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Field label="המראה">
+              <Field label="תאריך המראה">
                 <Input
-                  type="datetime-local"
-                  value={editing.depart_at}
-                  onChange={(e) => setEditing({ ...editing, depart_at: e.target.value })}
+                  type="date"
+                  value={editing.depart_date}
+                  onChange={(e) => setEditing({ ...editing, depart_date: e.target.value })}
                 />
               </Field>
-              <Field label="נחיתה">
+              <Field label="שעת המראה (24 שעות)">
+                <div className="flex items-center gap-1">
+                  <select
+                    value={editing.depart_hour}
+                    onChange={(e) => setEditing({ ...editing, depart_hour: e.target.value })}
+                    className="h-12 flex-1 rounded-2xl border border-input bg-card px-1 text-center text-sm"
+                  >
+                    <option value="">--</option>
+                    {HOURS.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="font-bold text-muted-foreground">:</span>
+                  <select
+                    value={editing.depart_minute}
+                    onChange={(e) => setEditing({ ...editing, depart_minute: e.target.value })}
+                    className="h-12 flex-1 rounded-2xl border border-input bg-card px-1 text-center text-sm"
+                  >
+                    <option value="">--</option>
+                    {MINUTES.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="תאריך נחיתה">
                 <Input
-                  type="datetime-local"
-                  value={editing.arrive_at}
-                  onChange={(e) => setEditing({ ...editing, arrive_at: e.target.value })}
+                  type="date"
+                  value={editing.arrive_date}
+                  onChange={(e) => setEditing({ ...editing, arrive_date: e.target.value })}
                 />
+              </Field>
+              <Field label="שעת נחיתה (24 שעות)">
+                <div className="flex items-center gap-1">
+                  <select
+                    value={editing.arrive_hour}
+                    onChange={(e) => setEditing({ ...editing, arrive_hour: e.target.value })}
+                    className="h-12 flex-1 rounded-2xl border border-input bg-card px-1 text-center text-sm"
+                  >
+                    <option value="">--</option>
+                    {HOURS.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="font-bold text-muted-foreground">:</span>
+                  <select
+                    value={editing.arrive_minute}
+                    onChange={(e) => setEditing({ ...editing, arrive_minute: e.target.value })}
+                    className="h-12 flex-1 rounded-2xl border border-input bg-card px-1 text-center text-sm"
+                  >
+                    <option value="">--</option>
+                    {MINUTES.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-2">
