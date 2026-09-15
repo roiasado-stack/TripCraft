@@ -300,6 +300,11 @@ Deno.serve(async (req) => {
         costUsd: visionCostUsd,
         latencyMs,
         status: "ok",
+        // Zero items usually means the model declined to read the photo (glare,
+        // blur, or caution around ID documents) rather than a code failure —
+        // keep its raw answer so a report of "couldn't identify" is diagnosable
+        // from the monitoring table instead of guessing blind.
+        errorMessage: items.length === 0 ? `empty_result: ${visionPayload?.content?.[0]?.text ?? ""}` : undefined,
       });
       return new Response(JSON.stringify({ ok: true, items }), {
         headers: { ...cors, "Content-Type": "application/json" },
