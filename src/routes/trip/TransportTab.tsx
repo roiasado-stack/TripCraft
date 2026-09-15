@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Car, CircleAlert, Luggage, Phone, Plane, Radar, Ticket } from "lucide-react";
+import { Car, CircleAlert, Luggage, Pencil, Phone, Plane, Plus, Radar, Ticket, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 import type { Flight, Stay, Transfer } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
-import { Card, FullSpinner } from "@/components/ui";
+import { Button, Card, Field, FullSpinner, Input, Modal, Segmented } from "@/components/ui";
 import { DirectionsLink, LinkChip, MapLink } from "@/components/MapLink";
 import {
   airportMapUrl,
@@ -14,6 +15,70 @@ import {
   taxiSearchUrl,
 } from "@/lib/maps";
 import { formatDateTimeHeb, formatHeb, formatTimeHeb } from "@/lib/trip-options";
+
+/** ISO timestamp <-> the value a `datetime-local` input needs (no seconds, no zone). */
+function toLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fromLocalInput(local: string): string | null {
+  return local ? new Date(local).toISOString() : null;
+}
+
+type FlightDraft = {
+  id?: string;
+  direction: "outbound" | "inbound";
+  airline: string;
+  flight_number: string;
+  from_airport: string;
+  to_airport: string;
+  from_terminal: string;
+  to_terminal: string;
+  depart_at: string;
+  arrive_at: string;
+  booking_ref: string;
+  seats: string;
+  baggage: string;
+  notes: string;
+};
+
+const blankFlight: FlightDraft = {
+  direction: "outbound",
+  airline: "",
+  flight_number: "",
+  from_airport: "",
+  to_airport: "",
+  from_terminal: "",
+  to_terminal: "",
+  depart_at: "",
+  arrive_at: "",
+  booking_ref: "",
+  seats: "",
+  baggage: "",
+  notes: "",
+};
+
+function flightToDraft(f: Flight): FlightDraft {
+  return {
+    id: f.id,
+    direction: f.direction === "inbound" ? "inbound" : "outbound",
+    airline: f.airline ?? "",
+    flight_number: f.flight_number ?? "",
+    from_airport: f.from_airport ?? "",
+    to_airport: f.to_airport ?? "",
+    from_terminal: f.from_terminal ?? "",
+    to_terminal: f.to_terminal ?? "",
+    depart_at: toLocalInput(f.depart_at),
+    arrive_at: toLocalInput(f.arrive_at),
+    booking_ref: f.booking_ref ?? "",
+    seats: f.seats ?? "",
+    baggage: f.baggage ?? "",
+    notes: f.notes ?? "",
+  };
+}
 
 /** Minutes between two ISO timestamps, as "5ש 20ד". */
 function duration(from?: string | null, to?: string | null): string | null {
@@ -28,24 +93,72 @@ function duration(from?: string | null, to?: string | null): string | null {
 
 export default function TransportTab() {
   const { trip } = useTrip();
+  const toast = useToast();
   const [flights, setFlights] = useState<Flight[]>([]);
   const [stays, setStays] = useState<Stay[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<FlightDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const reload = async () => {
+    const [f, s, t] = await Promise.all([
+      supabase.from("flights").select("*").eq("trip_id", trip.id).order("depart_at"),
+      supabase.from("stays").select("*").eq("trip_id", trip.id).order("check_in"),
+      supabase.from("transfers").select("*").eq("trip_id", trip.id).order("pickup_at"),
+    ]);
+    setFlights((f.data as Flight[]) ?? []);
+    setStays((s.data as Stay[]) ?? []);
+    setTransfers((t.data as Transfer[]) ?? []);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    (async () => {
-      const [f, s, t] = await Promise.all([
-        supabase.from("flights").select("*").eq("trip_id", trip.id).order("depart_at"),
-        supabase.from("stays").select("*").eq("trip_id", trip.id).order("check_in"),
-        supabase.from("transfers").select("*").eq("trip_id", trip.id).order("pickup_at"),
-      ]);
-      setFlights((f.data as Flight[]) ?? []);
-      setStays((s.data as Stay[]) ?? []);
-      setTransfers((t.data as Transfer[]) ?? []);
-      setLoading(false);
-    })();
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.id]);
+
+  const saveFlight = async () => {
+    if (!editing) return;
+    setSaving(true);
+    const payload = {
+      trip_id: trip.id,
+      direction: editing.direction,
+      airline: editing.airline.trim() || null,
+      flight_number: editing.flight_number.trim() || null,
+      from_airport: editing.from_airport.trim() || null,
+      to_airport: editing.to_airport.trim() || null,
+      from_terminal: editing.from_terminal.trim() || null,
+      to_terminal: editing.to_terminal.trim() || null,
+      depart_at: fromLocalInput(editing.depart_at),
+      arrive_at: fromLocalInput(editing.arrive_at),
+      booking_ref: editing.booking_ref.trim() || null,
+      seats: editing.seats.trim() || null,
+      baggage: editing.baggage.trim() || null,
+      notes: editing.notes.trim() || null,
+    };
+    const { error } = editing.id
+      ? await supabase.from("flights").update(payload).eq("id", editing.id)
+      : await supabase.from("flights").insert(payload);
+    setSaving(false);
+    if (error) {
+      toast.error("השמירה נכשלה");
+      return;
+    }
+    setEditing(null);
+    toast.success("נשמר");
+    reload();
+  };
+
+  const removeFlight = async (f: Flight) => {
+    const { error } = await supabase.from("flights").delete().eq("id", f.id);
+    if (error) {
+      toast.error("המחיקה נכשלה");
+      return;
+    }
+    toast.success("הטיסה הוסרה");
+    reload();
+  };
 
   if (loading) return <FullSpinner />;
 
@@ -58,20 +171,39 @@ export default function TransportTab() {
 
       {/* Flights */}
       <section className="mb-6">
-        <h3 className="mb-2 font-bold">✈️ טיסות</h3>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="font-bold">✈️ טיסות</h3>
+          <Button size="sm" variant="outline" onClick={() => setEditing({ ...blankFlight })}>
+            <Plus className="size-4" />
+          </Button>
+        </div>
         {flights.length === 0 ? (
           <Card className="p-4 text-center text-sm text-muted-foreground">לא הוזנו טיסות.</Card>
         ) : (
           <div className="flex flex-col gap-3">
             {flights.map((f) => (
               <Card key={f.id} className="p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="rounded-full bg-primary-soft px-2.5 py-1 text-xs font-bold text-secondary-foreground">
-                    {f.direction === "inbound" ? "חזור" : "הלוך"}
-                  </span>
-                  <span className="text-sm font-bold">
-                    {f.airline} {f.flight_number}
-                  </span>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="shrink-0 rounded-full bg-primary-soft px-2.5 py-1 text-xs font-bold text-secondary-foreground">
+                      {f.direction === "inbound" ? "חזור" : "הלוך"}
+                    </span>
+                    <span className="truncate text-sm font-bold">
+                      {f.airline} {f.flight_number}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      onClick={() => setEditing(flightToDraft(f))}
+                      className="text-muted-foreground"
+                      aria-label="עריכת טיסה"
+                    >
+                      <Pencil className="size-4" />
+                    </button>
+                    <button onClick={() => removeFlight(f)} className="text-destructive" aria-label="מחיקת טיסה">
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-start justify-between gap-2">
@@ -260,6 +392,104 @@ export default function TransportTab() {
           </div>
         </Card>
       </section>
+
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={editing?.id ? "עריכת טיסה" : "טיסה חדשה"}
+        footer={
+          <>
+            <Button variant="ghost" className="flex-1" onClick={() => setEditing(null)}>
+              ביטול
+            </Button>
+            <Button className="flex-1" loading={saving} onClick={saveFlight}>
+              שמירה
+            </Button>
+          </>
+        }
+      >
+        {editing && (
+          <div className="flex flex-col gap-3">
+            <Segmented
+              options={[
+                { value: "outbound", label: "הלוך" },
+                { value: "inbound", label: "חזור" },
+              ]}
+              value={editing.direction}
+              onChange={(v) => setEditing({ ...editing, direction: v as "outbound" | "inbound" })}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="חברת תעופה">
+                <Input value={editing.airline} onChange={(e) => setEditing({ ...editing, airline: e.target.value })} />
+              </Field>
+              <Field label="מספר טיסה">
+                <Input
+                  value={editing.flight_number}
+                  onChange={(e) => setEditing({ ...editing, flight_number: e.target.value })}
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="משדה (קוד)">
+                <Input
+                  value={editing.from_airport}
+                  onChange={(e) => setEditing({ ...editing, from_airport: e.target.value })}
+                />
+              </Field>
+              <Field label="לשדה (קוד)">
+                <Input value={editing.to_airport} onChange={(e) => setEditing({ ...editing, to_airport: e.target.value })} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="המראה">
+                <Input
+                  type="datetime-local"
+                  value={editing.depart_at}
+                  onChange={(e) => setEditing({ ...editing, depart_at: e.target.value })}
+                />
+              </Field>
+              <Field label="נחיתה">
+                <Input
+                  type="datetime-local"
+                  value={editing.arrive_at}
+                  onChange={(e) => setEditing({ ...editing, arrive_at: e.target.value })}
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="טרמינל המראה">
+                <Input
+                  value={editing.from_terminal}
+                  onChange={(e) => setEditing({ ...editing, from_terminal: e.target.value })}
+                />
+              </Field>
+              <Field label="טרמינל נחיתה">
+                <Input
+                  value={editing.to_terminal}
+                  onChange={(e) => setEditing({ ...editing, to_terminal: e.target.value })}
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Field label="אסמכתה">
+                <Input
+                  value={editing.booking_ref}
+                  onChange={(e) => setEditing({ ...editing, booking_ref: e.target.value })}
+                />
+              </Field>
+              <Field label="מושבים">
+                <Input value={editing.seats} onChange={(e) => setEditing({ ...editing, seats: e.target.value })} />
+              </Field>
+              <Field label="כבודה">
+                <Input value={editing.baggage} onChange={(e) => setEditing({ ...editing, baggage: e.target.value })} />
+              </Field>
+            </div>
+            <Field label="הערות">
+              <Input value={editing.notes} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} />
+            </Field>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
