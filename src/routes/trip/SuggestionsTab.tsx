@@ -7,12 +7,12 @@ import { useTrip } from "./TripLayout";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, Chip, EmptyState, Field, Input, Modal, Spinner, Textarea } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
-import { generateContent, type TuneOption } from "@/lib/ai";
+import { generateContent, searchPhoto, type TuneOption } from "@/lib/ai";
 import { cn } from "@/lib/utils";
 import { SUGGESTION_KINDS } from "@/lib/trip-options";
 import { destinationPicks, pickToRow } from "@/lib/destinations";
 import { DirectionsLink, LinkChip, MapLink } from "@/components/MapLink";
-import { chabadSearchUrl, isSafeHttpUrl, kosherSearchUrl, resolveMapUrl, vegetarianSearchUrl } from "@/lib/maps";
+import { chabadSearchUrl, kosherSearchUrl, resolveMapUrl, vegetarianSearchUrl } from "@/lib/maps";
 import { CardCoverImage } from "@/components/MediaCard";
 
 const TUNE: { value: TuneOption; label: string }[] = [
@@ -33,7 +33,7 @@ export default function SuggestionsTab() {
   const [generating, setGenerating] = useState(false);
   const [showGen, setShowGen] = useState(false);
   const [tune, setTune] = useState<TuneOption | null>(null);
-  const [manual, setManual] = useState<{ kind: string; title: string; description: string; image: string } | null>(null);
+  const [manual, setManual] = useState<{ kind: string; title: string; description: string } | null>(null);
   const [picking, setPicking] = useState(false);
 
   /** Curated + generic highlights for the destination, matched to the group. */
@@ -47,13 +47,20 @@ export default function SuggestionsTab() {
       const picks = destinationPicks(trip.destination, { style: trip.trip_type, ages, prefs });
 
       const existing = new Set(items.map((i) => i.title));
-      const rows = picks
+      const baseRows = picks
         .filter((p) => !existing.has(p.title))
         .map((p) => pickToRow(p, trip.id, trip.destination));
-      if (!rows.length) {
+      if (!baseRows.length) {
         toast.toast("כל ההמלצות המובילות כבר קיימות");
         return;
       }
+      const photoResults = await Promise.allSettled(
+        baseRows.map((r) => searchPhoto(trip.id, `${r.title} ${trip.destination}`)),
+      );
+      const rows = baseRows.map((r, idx) => {
+        const photo = photoResults[idx];
+        return { ...r, image_url: photo.status === "fulfilled" ? photo.value : null };
+      });
       const { error } = await supabase.from("suggestions").insert(rows);
       if (error) {
         toast.error("ההוספה נכשלה. ודא שהרצת את מיגרציה 002.");
@@ -124,17 +131,13 @@ export default function SuggestionsTab() {
       toast.error("צריך שם");
       return;
     }
-    const image = manual.image.trim();
-    if (image && !isSafeHttpUrl(image)) {
-      toast.error("קישור התמונה צריך להתחיל ב-https://");
-      return;
-    }
+    const image_url = await searchPhoto(trip.id, `${manual.title.trim()} ${trip.destination}`);
     await supabase.from("suggestions").insert({
       trip_id: trip.id,
       kind: manual.kind,
       title: manual.title.trim(),
       description: manual.description || null,
-      image_url: image || null,
+      image_url,
     });
     setManual(null);
     toast.success("נוסף");
@@ -148,7 +151,7 @@ export default function SuggestionsTab() {
         title="מומלצים"
         action={
           <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" onClick={() => setManual({ kind: "attraction", title: "", description: "", image: "" })}>
+            <Button size="sm" variant="outline" onClick={() => setManual({ kind: "attraction", title: "", description: "" })}>
               <Plus className="size-4" />
             </Button>
             <Button size="sm" variant="outline" loading={picking} onClick={addDestinationPicks}>
@@ -331,15 +334,6 @@ export default function SuggestionsTab() {
             </Field>
             <Field label="תיאור">
               <Textarea value={manual.description} onChange={(e) => setManual({ ...manual, description: e.target.value })} />
-            </Field>
-            <Field label="תמונה (קישור URL)" hint="אופציונלי — יוצג ככרטיס בראש הפריט.">
-              <Input
-                dir="ltr"
-                className="text-right"
-                value={manual.image}
-                onChange={(e) => setManual({ ...manual, image: e.target.value })}
-                placeholder="https://…"
-              />
             </Field>
           </div>
         )}

@@ -40,9 +40,11 @@ type PassportImage = { media_type: string; data: string };
 
 type Body = {
   trip_id: string;
-  kind: "suggestions" | "itinerary" | "checklist" | "passports";
+  kind: "suggestions" | "itinerary" | "checklist" | "passports" | "photo";
   images?: PassportImage[];
   tune?: string | null;
+  /** Only for kind: "photo" — the search term to look up on Unsplash. */
+  query?: string;
   trip: {
     destination: string;
     trip_type: string;
@@ -97,13 +99,14 @@ ${describeParticipants(participants)}${tuneLine}`;
     return `${context}
 
 צור המלצות מותאמות אישית לטיול הזה. החזר JSON בלבד, ללא טקסט נוסף, במבנה:
-{"items":[{"kind":"attraction|restaurant|tip","title":"שם בעברית","description":"תיאור קצר בעברית (1-2 משפטים) כולל למה זה מתאים למשתתפים","tags":["תג1","תג2"],"age_min":0,"age_max":99,"price_level":"low|mid|high"}]}
+{"items":[{"kind":"attraction|restaurant|tip","title":"שם בעברית","description":"תיאור קצר בעברית (1-2 משפטים) כולל למה זה מתאים למשתתפים","tags":["תג1","תג2"],"age_min":0,"age_max":99,"price_level":"low|mid|high","photo_query":"ביטוי חיפוש קצר באנגלית"}]}
 
 דרישות:
 - 8 אטרקציות, 6 מסעדות, 4 טיפים מקומיים.
 - התאם לגילאים ולהעדפות שצוינו. אם יש ילדים קטנים — הוסף אפשרויות מתאימות.
 - אם צוין כשרות/צמחונות — התייחס לכך במסעדות.
-- מקומות אמיתיים וידועים ב${trip.destination}. כל הטקסט בעברית.`;
+- מקומות אמיתיים וידועים ב${trip.destination}. כל הטקסט בעברית.
+- photo_query: ביטוי חיפוש קצר באנגלית (2-5 מילים) לחיפוש תמונת סטוק אמיתית של המקום הספציפי הזה — לא הכותרת בעברית, למשל "Eiffel Tower Paris" או "sushi restaurant Tokyo".`;
   }
 
   if (kind === "itinerary") {
@@ -112,12 +115,13 @@ ${describeParticipants(participants)}${tuneLine}`;
 
 צור מסלול יומי מוצע. הימים: ${dayList}
 החזר JSON בלבד במבנה:
-{"items":[{"day_date":"YYYY-MM-DD","start_time":"HH:MM","title":"שם הפעילות בעברית","description":"פרטים קצרים","category":"activity|food|transport|free","location":"שם מקום"}]}
+{"items":[{"day_date":"YYYY-MM-DD","start_time":"HH:MM","title":"שם הפעילות בעברית","description":"פרטים קצרים","category":"activity|food|transport|free","location":"שם מקום","photo_query":"ביטוי חיפוש קצר באנגלית"}]}
 
 דרישות:
 - 3-5 פריטים לכל יום, בסדר הגיוני לפי שעות (בוקר/צהריים/ערב).
 - התאם לקצב המשתתפים (ילדים/מבוגרים) ולהעדפות.
-- day_date חייב להיות אחד מהתאריכים שצוינו. כל הטקסט בעברית.`;
+- day_date חייב להיות אחד מהתאריכים שצוינו. כל הטקסט בעברית.
+- photo_query: ביטוי חיפוש קצר באנגלית (2-5 מילים) לחיפוש תמונת סטוק אמיתית של המקום/הפעילות הספציפית הזו — לא הכותרת בעברית, למשל "hiking trail Alps".`;
   }
 
   return `${context}
@@ -152,6 +156,28 @@ function extractJson(text: string): { items?: unknown[] } | null {
   if (start === -1 || end === -1) return null;
   try {
     return JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Looks up one Unsplash photo for `query`. Best-effort only: a missing key,
+ * network failure, non-OK response, or empty result set all resolve to
+ * null rather than throwing — a photo miss must never fail generation,
+ * manual add, or edit.
+ */
+async function searchUnsplashPhoto(query: string): Promise<string | null> {
+  const key = Deno.env.get("UNSPLASH_ACCESS_KEY");
+  if (!key || !query.trim()) return null;
+  try {
+    const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`;
+    const res = await fetch(url, { headers: { Authorization: `Client-ID ${key}` } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const photo = data?.results?.[0];
+    if (!photo?.urls?.regular) return null;
+    return `${photo.urls.regular}&utm_source=tripcraft&utm_medium=referral`;
   } catch {
     return null;
   }
@@ -221,12 +247,18 @@ Deno.serve(async (req) => {
       }
     };
 
-    const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
-    if ((spentToday ?? 0) >= DAILY_CAP_USD) {
-      return new Response(JSON.stringify({ error: "daily_cap_reached" }), {
-        status: 429,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
+    // The daily cap tracks Anthropic token spend (agent_runs) — every kind
+    // that calls the LLM is capped, including "passports" below. "photo" is
+    // the one exception: it's a plain Unsplash lookup with no LLM call and no
+    // agent_runs logging, so it must never be blocked by this.
+    if (body.kind !== "photo") {
+      const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
+      if ((spentToday ?? 0) >= DAILY_CAP_USD) {
+        return new Response(JSON.stringify({ error: "daily_cap_reached" }), {
+          status: 429,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Passport scanning returns parsed travellers to the client for review and
@@ -352,6 +384,16 @@ Deno.serve(async (req) => {
       });
     }
 
+    // `photo` needs no LLM call — just an Unsplash lookup — so it's handled
+    // right here, early, before any call to Anthropic (and it already skipped
+    // the daily cost cap above, since that cap is LLM-spend only).
+    if (body.kind === "photo") {
+      const image_url = await searchUnsplashPhoto(body.query ?? "");
+      return new Response(JSON.stringify({ ok: true, image_url }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
     const runStart = Date.now();
     const llm = await fetch(ANTHROPIC_URL, {
       method: "POST",
@@ -405,8 +447,22 @@ Deno.serve(async (req) => {
 
     let inserted = 0;
 
+    // Both AI-generated kinds get one Unsplash lookup per item, keyed off the
+    // model's own `photo_query` (falling back to the Hebrew title if it left
+    // it out). allSettled means a slow/failed Unsplash call for one item can
+    // never fail the whole insert — it just leaves that row's image_url null.
+    const photoQueryOf = (raw: unknown): string => {
+      const i = raw as Record<string, unknown>;
+      return String(i.photo_query ?? i.title ?? "");
+    };
+    const photoUrlAt = (results: PromiseSettledResult<string | null>[], idx: number): string | null => {
+      const r = results[idx];
+      return r?.status === "fulfilled" ? r.value : null;
+    };
+
     if (body.kind === "suggestions") {
-      const rows = items.map((raw) => {
+      const photoResults = await Promise.allSettled(items.map((raw) => searchUnsplashPhoto(photoQueryOf(raw))));
+      const rows = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
         return {
           trip_id: body.trip_id,
@@ -417,12 +473,14 @@ Deno.serve(async (req) => {
           age_min: typeof i.age_min === "number" ? i.age_min : null,
           age_max: typeof i.age_max === "number" ? i.age_max : null,
           price_level: i.price_level ? String(i.price_level) : null,
+          image_url: photoUrlAt(photoResults, idx),
         };
       }).filter((r) => r.title);
       const { error } = await supabase.from("suggestions").insert(rows);
       if (error) throw error;
       inserted = rows.length;
     } else if (body.kind === "itinerary") {
+      const photoResults = await Promise.allSettled(items.map((raw) => searchUnsplashPhoto(photoQueryOf(raw))));
       const rows = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
         return {
@@ -436,6 +494,7 @@ Deno.serve(async (req) => {
             : "activity",
           location: i.location ? String(i.location) : null,
           sort_order: idx,
+          image_url: photoUrlAt(photoResults, idx),
         };
       }).filter((r) => r.title && /^\d{4}-\d{2}-\d{2}$/.test(r.day_date));
       const { error } = await supabase.from("itinerary_items").insert(rows);
