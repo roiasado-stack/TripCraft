@@ -182,6 +182,12 @@ CREATE TABLE IF NOT EXISTS public.checklist_items (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Post-migration additions kept in sync so a fresh paste matches a DB that
+-- has run every migration (see migration 010) -------------------------------
+ALTER TABLE public.trips ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.suggestions ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.itinerary_items ADD COLUMN IF NOT EXISTS image_url TEXT;
+
 -- RLS + grants for all child tables ------------------------------------------
 DO $$
 DECLARE t TEXT;

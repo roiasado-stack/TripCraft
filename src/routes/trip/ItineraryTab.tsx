@@ -7,7 +7,8 @@ import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, EmptyState, Field, Input, Label, Modal, Spinner, Textarea } from "@/components/ui";
 import { ImportItinerary } from "@/components/ImportItinerary";
 import { DirectionsLink, MapLink } from "@/components/MapLink";
-import { mapsUrl, resolveMapUrl } from "@/lib/maps";
+import { CardThumbnail } from "@/components/MediaCard";
+import { isSafeHttpUrl, mapsUrl, resolveMapUrl } from "@/lib/maps";
 import { useToast } from "@/hooks/use-toast";
 import { generateContent } from "@/lib/ai";
 import { daysBetween, formatDayHeb, ITINERARY_CATEGORIES, itineraryCategory } from "@/lib/trip-options";
@@ -29,6 +30,7 @@ type Draft = {
   description: string;
   category: string;
   location: string;
+  image_url: string;
 };
 
 export default function ItineraryTab() {
@@ -80,6 +82,11 @@ export default function ItineraryTab() {
       toast.error("צריך כותרת לפריט");
       return;
     }
+    const image = editing.image_url.trim();
+    if (image && !isSafeHttpUrl(image)) {
+      toast.error("קישור התמונה צריך להתחיל ב-https://");
+      return;
+    }
     const payload = {
       trip_id: trip.id,
       day_date: editing.day_date,
@@ -91,6 +98,7 @@ export default function ItineraryTab() {
       map_url: editing.location
         ? mapsUrl(editing.location, scopeFor(editing.category, trip.destination))
         : null,
+      image_url: image || null,
     };
     if (editing.id) {
       await supabase.from("itinerary_items").update(payload).eq("id", editing.id);
@@ -150,7 +158,7 @@ export default function ItineraryTab() {
           description="הוסף תאריכים לטיול או פריט ראשון, או תן ל-AI להציע מסלול יומי."
           action={
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button onClick={() => setEditing({ day_date: defaultDay, start_time: "", title: "", description: "", category: "activity", location: "" })}>
+              <Button onClick={() => setEditing({ day_date: defaultDay, start_time: "", title: "", description: "", category: "activity", location: "", image_url: "" })}>
                 <Plus className="size-4" /> הוספת פריט
               </Button>
               <Button variant="outline" onClick={() => setImporting(true)}>
@@ -174,7 +182,14 @@ export default function ItineraryTab() {
                   const cat = itineraryCategory(it.category);
                   return (
                     <Card key={it.id} className="flex items-start gap-3 p-3">
-                      <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-lg">{cat.emoji}</div>
+                      <CardThumbnail
+                        imageUrl={it.image_url}
+                        alt={it.title}
+                        gradient="sunset"
+                        size="size-10"
+                        rounded="rounded-xl"
+                        icon={<span className="text-lg">{cat.emoji}</span>}
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           {it.start_time && <span className="text-xs font-bold text-primary">{it.start_time.slice(0, 5)}</span>}
@@ -190,7 +205,7 @@ export default function ItineraryTab() {
                         )}
                       </div>
                       <div className="flex shrink-0 flex-col gap-1">
-                        <button onClick={() => setEditing({ id: it.id, day_date: it.day_date, start_time: it.start_time ?? "", title: it.title, description: it.description ?? "", category: it.category, location: it.location ?? "" })} className="text-muted-foreground" aria-label="עריכה">
+                        <button onClick={() => setEditing({ id: it.id, day_date: it.day_date, start_time: it.start_time ?? "", title: it.title, description: it.description ?? "", category: it.category, location: it.location ?? "", image_url: it.image_url ?? "" })} className="text-muted-foreground" aria-label="עריכה">
                           <Pencil className="size-4" />
                         </button>
                         <button onClick={() => remove(it.id)} className="text-destructive" aria-label="מחיקה">
@@ -201,7 +216,7 @@ export default function ItineraryTab() {
                   );
                 })}
                 <button
-                  onClick={() => setEditing({ day_date: day, start_time: "", title: "", description: "", category: "activity", location: "" })}
+                  onClick={() => setEditing({ day_date: day, start_time: "", title: "", description: "", category: "activity", location: "", image_url: "" })}
                   className="flex items-center justify-center gap-1 rounded-2xl border border-dashed border-border py-2.5 text-sm font-semibold text-muted-foreground"
                 >
                   <Plus className="size-4" /> הוספה ליום זה
@@ -266,6 +281,15 @@ export default function ItineraryTab() {
             </Field>
             <Field label="פרטים">
               <Textarea value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} placeholder="הערות, טיפים…" />
+            </Field>
+            <Field label="תמונה (קישור URL)" hint="אופציונלי — יוצג כתמונה ממוזערת ליד הפריט.">
+              <Input
+                dir="ltr"
+                className="text-right"
+                value={editing.image_url}
+                onChange={(e) => setEditing({ ...editing, image_url: e.target.value })}
+                placeholder="https://…"
+              />
             </Field>
           </div>
         )}

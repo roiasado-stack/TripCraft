@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils";
 import { SUGGESTION_KINDS } from "@/lib/trip-options";
 import { destinationPicks, pickToRow } from "@/lib/destinations";
 import { DirectionsLink, LinkChip, MapLink } from "@/components/MapLink";
-import { chabadSearchUrl, kosherSearchUrl, resolveMapUrl, vegetarianSearchUrl } from "@/lib/maps";
+import { chabadSearchUrl, isSafeHttpUrl, kosherSearchUrl, resolveMapUrl, vegetarianSearchUrl } from "@/lib/maps";
+import { CardCoverImage } from "@/components/MediaCard";
 
 const TUNE: { value: TuneOption; label: string }[] = [
   { value: "more_kids", label: "יותר ידידותי לילדים" },
@@ -32,7 +33,7 @@ export default function SuggestionsTab() {
   const [generating, setGenerating] = useState(false);
   const [showGen, setShowGen] = useState(false);
   const [tune, setTune] = useState<TuneOption | null>(null);
-  const [manual, setManual] = useState<{ kind: string; title: string; description: string } | null>(null);
+  const [manual, setManual] = useState<{ kind: string; title: string; description: string; image: string } | null>(null);
   const [picking, setPicking] = useState(false);
 
   /** Curated + generic highlights for the destination, matched to the group. */
@@ -123,11 +124,17 @@ export default function SuggestionsTab() {
       toast.error("צריך שם");
       return;
     }
+    const image = manual.image.trim();
+    if (image && !isSafeHttpUrl(image)) {
+      toast.error("קישור התמונה צריך להתחיל ב-https://");
+      return;
+    }
     await supabase.from("suggestions").insert({
       trip_id: trip.id,
       kind: manual.kind,
       title: manual.title.trim(),
       description: manual.description || null,
+      image_url: image || null,
     });
     setManual(null);
     toast.success("נוסף");
@@ -141,7 +148,7 @@ export default function SuggestionsTab() {
         title="מומלצים"
         action={
           <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" onClick={() => setManual({ kind: "attraction", title: "", description: "" })}>
+            <Button size="sm" variant="outline" onClick={() => setManual({ kind: "attraction", title: "", description: "", image: "" })}>
               <Plus className="size-4" />
             </Button>
             <Button size="sm" variant="outline" loading={picking} onClick={addDestinationPicks}>
@@ -218,39 +225,47 @@ export default function SuggestionsTab() {
           {filtered.map((s) => {
             const kind = SUGGESTION_KINDS.find((k) => k.value === s.kind);
             return (
-              <Card key={s.id} className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary-soft text-xl">{kind?.emoji ?? "📍"}</div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-bold">{s.title}</div>
-                    {s.description && <p className="mt-0.5 text-sm text-muted-foreground">{s.description}</p>}
-                    {s.tags?.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {s.tags.map((t) => (
-                          <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+              <Card key={s.id} className="overflow-hidden p-0">
+                <CardCoverImage
+                  imageUrl={s.image_url}
+                  alt={s.title}
+                  gradient="sea"
+                  icon={<span className="text-4xl">{kind?.emoji ?? "📍"}</span>}
+                  cornerSlot={
+                    <span className="inline-flex items-center gap-1 rounded-full bg-card/90 px-2.5 py-1 text-xs font-semibold text-foreground shadow-soft backdrop-blur">
+                      {kind?.emoji ?? "📍"} {kind?.label}
+                    </span>
+                  }
+                />
+                <div className="p-4">
+                  <div className="font-bold">{s.title}</div>
+                  {s.description && <p className="mt-0.5 text-sm text-muted-foreground">{s.description}</p>}
+                  {s.tags?.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {s.tags.map((t) => (
+                        <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {(s.map_url || s.location) && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <MapLink url={resolveMapUrl(s.map_url, s.location ?? s.title, trip.destination)} />
+                      <DirectionsLink place={s.location ?? s.title} near={trip.destination} />
+                    </div>
+                  )}
+                  <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
+                    <button onClick={() => toggleLike(s)} className={cn("flex items-center gap-1 text-sm font-semibold", s.liked ? "text-accent" : "text-muted-foreground")}>
+                      <Heart className={cn("size-4", s.liked && "fill-current")} /> אהבתי
+                    </button>
+                    <button onClick={() => addToItinerary(s)} className="flex items-center gap-1 text-sm font-semibold text-primary">
+                      <CalendarPlus className="size-4" /> למסלול
+                    </button>
+                    <button onClick={() => remove(s.id)} className="mr-auto text-destructive" aria-label="מחיקה">
+                      <Trash2 className="size-4" />
+                    </button>
                   </div>
-                </div>
-                {(s.map_url || s.location) && (
-                  <div className="mt-2 flex flex-wrap gap-1.5 pr-14">
-                    <MapLink url={resolveMapUrl(s.map_url, s.location ?? s.title, trip.destination)} />
-                    <DirectionsLink place={s.location ?? s.title} near={trip.destination} />
-                  </div>
-                )}
-                <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-                  <button onClick={() => toggleLike(s)} className={cn("flex items-center gap-1 text-sm font-semibold", s.liked ? "text-accent" : "text-muted-foreground")}>
-                    <Heart className={cn("size-4", s.liked && "fill-current")} /> אהבתי
-                  </button>
-                  <button onClick={() => addToItinerary(s)} className="flex items-center gap-1 text-sm font-semibold text-primary">
-                    <CalendarPlus className="size-4" /> למסלול
-                  </button>
-                  <button onClick={() => remove(s.id)} className="mr-auto text-destructive" aria-label="מחיקה">
-                    <Trash2 className="size-4" />
-                  </button>
                 </div>
               </Card>
             );
@@ -316,6 +331,15 @@ export default function SuggestionsTab() {
             </Field>
             <Field label="תיאור">
               <Textarea value={manual.description} onChange={(e) => setManual({ ...manual, description: e.target.value })} />
+            </Field>
+            <Field label="תמונה (קישור URL)" hint="אופציונלי — יוצג ככרטיס בראש הפריט.">
+              <Input
+                dir="ltr"
+                className="text-right"
+                value={manual.image}
+                onChange={(e) => setManual({ ...manual, image: e.target.value })}
+                placeholder="https://…"
+              />
             </Field>
           </div>
         )}

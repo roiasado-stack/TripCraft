@@ -32,6 +32,7 @@ export interface Trip {
   share_slug: string | null;
   is_template: boolean;
   photos_album_url: string | null;
+  image_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -118,6 +119,7 @@ export interface ItineraryItem {
   location: string | null;
   map_url: string | null;
   sort_order: number;
+  image_url: string | null;
   created_at: string;
 }
 
@@ -134,6 +136,7 @@ export interface Suggestion {
   liked: boolean;
   location: string | null;
   map_url: string | null;
+  image_url: string | null;
   created_at: string;
 }
 
