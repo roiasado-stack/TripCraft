@@ -556,11 +556,17 @@ Deno.serve(async (req) => {
 
     // Both AI-generated kinds get one Unsplash lookup per item, keyed off the
     // model's own `photo_query` (falling back to the Hebrew title if it left
-    // it out). allSettled means a slow/failed Unsplash call for one item can
+    // it out — the model doesn't reliably include every optional field for
+    // every item in a long list). Either way, run it through the same
+    // Hebrew-translate step "photo"/"geocode" already use: translateHebrewQuery
+    // no-ops instantly (no API call) for an already-English photo_query, so
+    // this only costs anything for the items that actually fell back to a
+    // Hebrew title. allSettled means a slow/failed lookup for one item can
     // never fail the whole insert — it just leaves that row's image_url null.
-    const photoQueryOf = (raw: unknown): string => {
+    const photoQueryOf = async (raw: unknown): Promise<string> => {
       const i = raw as Record<string, unknown>;
-      return String(i.photo_query ?? i.title ?? "");
+      const q = String(i.photo_query ?? i.title ?? "");
+      return translateHebrewQuery(q, "generate_photo_translate");
     };
     const photoUrlAt = (results: PromiseSettledResult<string | null>[], idx: number): string | null => {
       const r = results[idx];
@@ -581,7 +587,7 @@ Deno.serve(async (req) => {
     };
 
     if (body.kind === "suggestions") {
-      const photoResults = await Promise.allSettled(items.map((raw) => searchUnsplashPhoto(photoQueryOf(raw))));
+      const photoResults = await Promise.allSettled(items.map(async (raw) => searchUnsplashPhoto(await photoQueryOf(raw))));
       const rows = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
         return {
@@ -602,7 +608,7 @@ Deno.serve(async (req) => {
       if (error) throw error;
       inserted = rows.length;
     } else if (body.kind === "itinerary") {
-      const photoResults = await Promise.allSettled(items.map((raw) => searchUnsplashPhoto(photoQueryOf(raw))));
+      const photoResults = await Promise.allSettled(items.map(async (raw) => searchUnsplashPhoto(await photoQueryOf(raw))));
       const rows = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
         return {
