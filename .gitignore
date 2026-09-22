@@ -24,3 +24,6 @@ design/tripcraft-*.html
 
 # Supabase CLI local link cache (project ref, pooler URL) — machine state, not source.
 supabase/.temp/
+
+# tsc -b incremental build cache — regenerated every build, not source.
+tsconfig.tsbuildinfo

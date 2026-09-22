@@ -71,5 +71,12 @@ placeholder or disabled.
   is ever missing — keep handling that case rather than assuming it's always up.
 - Google login is enabled in Supabase Auth (Providers → Google), with its own OAuth client in
   the "Travel App" Google Cloud project.
+- `generate` also auto-attaches a cover photo (Unsplash, `kind: "photo"`) and coordinates
+  (Nominatim, `kind: "geocode"`) to suggestions/itinerary items — manual add/edit and AI
+  generation both go through this, no user-typed URL/coordinates anywhere. Needs
+  `UNSPLASH_ACCESS_KEY` as a Supabase secret; missing/invalid key just means no photos (same
+  graceful-degradation pattern as a missing `ANTHROPIC_API_KEY`, not a hard failure). Both this
+  and geocoding translate Hebrew queries to English first (`translateHebrewQuery`) since neither
+  Unsplash nor Nominatim search Hebrew well.
 
 There is no offline support.
