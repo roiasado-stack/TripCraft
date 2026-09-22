@@ -49,7 +49,11 @@ export function CardCoverImage({
 }) {
   const hasImage = !!imageUrl;
   return (
-    <div className={cn("relative aspect-[16/9] w-full overflow-hidden rounded-t-3xl", className)}>
+    // No photo yet? Keep the fallback compact — a full 16:9 hero of empty
+    // gradient just for one centered icon reads as wasted space; a short
+    // banner still gives the kind badge room without pretending there's a
+    // photo there.
+    <div className={cn("relative w-full overflow-hidden rounded-t-3xl", hasImage ? "aspect-[16/9]" : "h-20", className)}>
       {hasImage ? (
         <img src={imageUrl!} alt={alt} className="size-full object-cover" loading="lazy" />
       ) : (

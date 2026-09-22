@@ -165,7 +165,8 @@ function extractJson(text: string): { items?: unknown[] } | null {
  * Looks up one Unsplash photo for `query`. Best-effort only: a missing key,
  * network failure, non-OK response, or empty result set all resolve to
  * null rather than throwing — a photo miss must never fail generation,
- * manual add, or edit.
+ * manual add, or edit. Failures are logged server-side (Edge Function logs)
+ * rather than surfaced to the client, since a photo miss isn't an error.
  */
 async function searchUnsplashPhoto(query: string): Promise<string | null> {
   const key = Deno.env.get("UNSPLASH_ACCESS_KEY");
@@ -173,12 +174,18 @@ async function searchUnsplashPhoto(query: string): Promise<string | null> {
   try {
     const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`;
     const res = await fetch(url, { headers: { Authorization: `Client-ID ${key}` } });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error("Unsplash search failed", res.status, await res.text().catch(() => ""));
+      return null;
+    }
     const data = await res.json();
     const photo = data?.results?.[0];
-    if (!photo?.urls?.regular) return null;
+    if (!photo?.urls?.regular) {
+      return null;
+    }
     return `${photo.urls.regular}&utm_source=tripcraft&utm_medium=referral`;
-  } catch {
+  } catch (e) {
+    console.error("Unsplash search threw", e);
     return null;
   }
 }
@@ -388,7 +395,49 @@ Deno.serve(async (req) => {
     // right here, early, before any call to Anthropic (and it already skipped
     // the daily cost cap above, since that cap is LLM-spend only).
     if (body.kind === "photo") {
-      const image_url = await searchUnsplashPhoto(body.query ?? "");
+      let query = (body.query ?? "").trim();
+      // Unsplash's search barely understands Hebrew — manually-typed titles
+      // and destinations are Hebrew, so translate to a short English phrase
+      // first. AI-generated items already come with an English photo_query
+      // and skip this. Best-effort: a translation failure just falls back to
+      // searching with the original (Hebrew) query, which will likely miss —
+      // no worse than before, never blocks the response.
+      if (/[֐-׿]/.test(query)) {
+        const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
+        if ((spentToday ?? 0) < DAILY_CAP_USD) {
+          try {
+            const start = Date.now();
+            const tRes = await fetch(ANTHROPIC_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+              body: JSON.stringify({
+                model: MODEL,
+                max_tokens: 20,
+                messages: [{
+                  role: "user",
+                  content: `Translate this Hebrew place/activity name to a short English stock-photo search phrase (2-5 words, no punctuation, no explanation — just the phrase): "${query}"`,
+                }],
+              }),
+            });
+            const tLatency = Date.now() - start;
+            if (tRes.ok) {
+              const tPayload = await tRes.json();
+              const usage = tPayload?.usage ?? {};
+              const inputTokens = Number(usage.input_tokens ?? 0);
+              const outputTokens = Number(usage.output_tokens ?? 0);
+              const costUsd = (inputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (outputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+              const translated = extractText(tPayload).trim();
+              await logRun({ kind: "generate_photo_translate", tripId: body.trip_id, inputTokens, outputTokens, costUsd, latencyMs: tLatency, status: "ok" });
+              if (translated) query = translated;
+            } else {
+              console.error("Photo-query translation failed", tRes.status);
+            }
+          } catch (e) {
+            console.error("Photo-query translation threw", e);
+          }
+        }
+      }
+      const image_url = await searchUnsplashPhoto(query);
       return new Response(JSON.stringify({ ok: true, image_url }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
