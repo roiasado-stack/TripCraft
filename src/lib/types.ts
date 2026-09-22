@@ -120,6 +120,8 @@ export interface ItineraryItem {
   map_url: string | null;
   sort_order: number;
   image_url: string | null;
+  lat: number | null;
+  lng: number | null;
   created_at: string;
 }
 
@@ -137,6 +139,8 @@ export interface Suggestion {
   location: string | null;
   map_url: string | null;
   image_url: string | null;
+  lat: number | null;
+  lng: number | null;
   created_at: string;
 }
 

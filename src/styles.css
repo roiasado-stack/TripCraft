@@ -190,3 +190,13 @@
 * {
   scrollbar-width: thin;
 }
+
+/* Leaflet map — dark mode has no native OSM tile variant, so invert +
+ * hue-rotate the raster tiles into a dark-looking map (a common lightweight
+ * trick). Values tuned so labels stay readable instead of a jarring
+ * negative-image look. Popups/markers sit outside the tile pane and are
+ * unaffected — only .trip-map-tiles (the <TileLayer>'s own class) is hit. */
+.dark .trip-map-tiles {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.9);
+}
+

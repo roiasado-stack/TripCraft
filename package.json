@@ -13,9 +13,11 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "clsx": "^2.1.1",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.454.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-leaflet": "^4.2.1",
     "react-router-dom": "^6.27.0",
     "tailwind-merge": "^2.5.4",
     "xlsx": "^0.18.5"
@@ -23,6 +25,7 @@
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.123.0",
     "@tailwindcss/vite": "^4.0.0",
+    "@types/leaflet": "^1.9.22",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",

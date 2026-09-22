@@ -5,15 +5,16 @@ import { supabase } from "@/lib/supabase";
 import type { Suggestion } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
-import { Button, Card, Chip, EmptyState, Field, Input, Modal, Spinner, Textarea } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, Field, Input, Modal, Segmented, Spinner, Textarea } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
-import { generateContent, searchPhoto, type TuneOption } from "@/lib/ai";
+import { generateContent, searchCoordinates, searchPhoto, type TuneOption } from "@/lib/ai";
 import { cn } from "@/lib/utils";
 import { SUGGESTION_KINDS } from "@/lib/trip-options";
 import { destinationPicks, pickToRow } from "@/lib/destinations";
 import { DirectionsLink, LinkChip, MapLink } from "@/components/MapLink";
 import { chabadSearchUrl, kosherSearchUrl, resolveMapUrl, vegetarianSearchUrl } from "@/lib/maps";
 import { CardCoverImage } from "@/components/MediaCard";
+import { TripMap, type TripMapItem } from "@/components/TripMap";
 
 const TUNE: { value: TuneOption; label: string }[] = [
   { value: "more_kids", label: "יותר ידידותי לילדים" },
@@ -35,6 +36,7 @@ export default function SuggestionsTab() {
   const [tune, setTune] = useState<TuneOption | null>(null);
   const [manual, setManual] = useState<{ kind: string; title: string; description: string } | null>(null);
   const [picking, setPicking] = useState(false);
+  const [view, setView] = useState<"list" | "map">("list");
 
   /** Curated + generic highlights for the destination, matched to the group. */
   const addDestinationPicks = async () => {
@@ -91,6 +93,15 @@ export default function SuggestionsTab() {
     [items, filter, onlyLiked],
   );
 
+  // Numbered in the same order `filtered` renders in — see CLAUDE.md.
+  const mapItems: TripMapItem[] = useMemo(
+    () =>
+      filtered
+        .filter((s): s is Suggestion & { lat: number; lng: number } => s.lat != null && s.lng != null)
+        .map((s, idx) => ({ id: s.id, lat: s.lat, lng: s.lng, title: s.title, subtitle: s.description ?? undefined, number: idx + 1 })),
+    [filtered],
+  );
+
   const toggleLike = async (s: Suggestion) => {
     setItems((x) => x.map((i) => (i.id === s.id ? { ...i, liked: !i.liked } : i)));
     await supabase.from("suggestions").update({ liked: !s.liked }).eq("id", s.id);
@@ -131,13 +142,16 @@ export default function SuggestionsTab() {
       toast.error("צריך שם");
       return;
     }
-    const image_url = await searchPhoto(trip.id, `${manual.title.trim()} ${trip.destination}`);
+    const query = `${manual.title.trim()} ${trip.destination}`;
+    const [image_url, coords] = await Promise.all([searchPhoto(trip.id, query), searchCoordinates(trip.id, query)]);
     await supabase.from("suggestions").insert({
       trip_id: trip.id,
       kind: manual.kind,
       title: manual.title.trim(),
       description: manual.description || null,
       image_url,
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
     });
     setManual(null);
     toast.success("נוסף");
@@ -206,6 +220,18 @@ export default function SuggestionsTab() {
         </button>
       </div>
 
+      {!loading && filtered.length > 0 && (
+        <Segmented
+          className="mb-3"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "list", label: "רשימה", emoji: "📋" },
+            { value: "map", label: "מפה", emoji: "🗺️" },
+          ]}
+        />
+      )}
+
       {loading ? (
         <div className="flex justify-center py-10">
           <Spinner />
@@ -223,6 +249,12 @@ export default function SuggestionsTab() {
             ) : undefined
           }
         />
+      ) : view === "map" ? (
+        mapItems.length === 0 ? (
+          <EmptyState emoji="🗺️" title="אין עדיין מיקומים על המפה" description="הוסיפו פריטים עם מיקום כדי לראות אותם על המפה." />
+        ) : (
+          <TripMap items={mapItems} />
+        )
       ) : (
         <div className="flex flex-col gap-3">
           {filtered.map((s) => {

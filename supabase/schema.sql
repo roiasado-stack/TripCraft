@@ -188,6 +188,12 @@ ALTER TABLE public.trips ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE public.suggestions ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE public.itinerary_items ADD COLUMN IF NOT EXISTS image_url TEXT;
 
+-- Map coordinates for suggestions/itinerary items (see migration 011) -------
+ALTER TABLE public.suggestions ADD COLUMN IF NOT EXISTS lat NUMERIC;
+ALTER TABLE public.suggestions ADD COLUMN IF NOT EXISTS lng NUMERIC;
+ALTER TABLE public.itinerary_items ADD COLUMN IF NOT EXISTS lat NUMERIC;
+ALTER TABLE public.itinerary_items ADD COLUMN IF NOT EXISTS lng NUMERIC;
+
 -- RLS + grants for all child tables ------------------------------------------
 DO $$
 DECLARE t TEXT;

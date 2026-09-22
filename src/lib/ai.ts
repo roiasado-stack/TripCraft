@@ -109,6 +109,27 @@ export async function searchPhoto(tripId: string, query: string): Promise<string
   }
 }
 
+/**
+ * Looks up approximate coordinates for `query` via the `generate` Edge
+ * Function's `geocode` kind (a Nominatim search, no LLM call). Mirrors
+ * searchPhoto's exact contract: never throws, never surfaces an error toast
+ * — a missing geocode isn't a failure, it's just `null`, which simply means
+ * that item won't get a pin on the map.
+ */
+export async function searchCoordinates(tripId: string, query: string): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke("generate", {
+      body: { trip_id: tripId, kind: "geocode", query },
+    });
+    if (error) return null;
+    const res = data as { ok?: boolean; lat?: number | null; lng?: number | null };
+    if (!res?.ok || res.lat == null || res.lng == null) return null;
+    return { lat: res.lat, lng: res.lng };
+  } catch {
+    return null;
+  }
+}
+
 export type AskTurn = { role: "user" | "assistant"; content: string };
 
 export type AskResult = {

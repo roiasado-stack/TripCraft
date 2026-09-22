@@ -40,10 +40,10 @@ type PassportImage = { media_type: string; data: string };
 
 type Body = {
   trip_id: string;
-  kind: "suggestions" | "itinerary" | "checklist" | "passports" | "photo";
+  kind: "suggestions" | "itinerary" | "checklist" | "passports" | "photo" | "geocode";
   images?: PassportImage[];
   tune?: string | null;
-  /** Only for kind: "photo" — the search term to look up on Unsplash. */
+  /** For kind: "photo" (Unsplash search term) or kind: "geocode" (place to look up). */
   query?: string;
   trip: {
     destination: string;
@@ -99,14 +99,15 @@ ${describeParticipants(participants)}${tuneLine}`;
     return `${context}
 
 צור המלצות מותאמות אישית לטיול הזה. החזר JSON בלבד, ללא טקסט נוסף, במבנה:
-{"items":[{"kind":"attraction|restaurant|tip","title":"שם בעברית","description":"תיאור קצר בעברית (1-2 משפטים) כולל למה זה מתאים למשתתפים","tags":["תג1","תג2"],"age_min":0,"age_max":99,"price_level":"low|mid|high","photo_query":"ביטוי חיפוש קצר באנגלית"}]}
+{"items":[{"kind":"attraction|restaurant|tip","title":"שם בעברית","description":"תיאור קצר בעברית (1-2 משפטים) כולל למה זה מתאים למשתתפים","tags":["תג1","תג2"],"age_min":0,"age_max":99,"price_level":"low|mid|high","photo_query":"ביטוי חיפוש קצר באנגלית","lat":32.0853,"lng":34.7818}]}
 
 דרישות:
 - 8 אטרקציות, 6 מסעדות, 4 טיפים מקומיים.
 - התאם לגילאים ולהעדפות שצוינו. אם יש ילדים קטנים — הוסף אפשרויות מתאימות.
 - אם צוין כשרות/צמחונות — התייחס לכך במסעדות.
 - מקומות אמיתיים וידועים ב${trip.destination}. כל הטקסט בעברית.
-- photo_query: ביטוי חיפוש קצר באנגלית (2-5 מילים) לחיפוש תמונת סטוק אמיתית של המקום הספציפי הזה — לא הכותרת בעברית, למשל "Eiffel Tower Paris" או "sushi restaurant Tokyo".`;
+- photo_query: ביטוי חיפוש קצר באנגלית (2-5 מילים) לחיפוש תמונת סטוק אמיתית של המקום הספציפי הזה — לא הכותרת בעברית, למשל "Eiffel Tower Paris" או "sushi restaurant Tokyo".
+- lat/lng: קואורדינטות עשרוניות משוערות אך אמיתיות של המקום הספציפי, לפי הידע שלך (הערכה טובה מספיקה לסמן על מפה, לא נדרשת דיוק סקר-קרקע). לטיפים כלליים שאינם מקום ספציפי — השמט lat/lng.`;
   }
 
   if (kind === "itinerary") {
@@ -115,13 +116,14 @@ ${describeParticipants(participants)}${tuneLine}`;
 
 צור מסלול יומי מוצע. הימים: ${dayList}
 החזר JSON בלבד במבנה:
-{"items":[{"day_date":"YYYY-MM-DD","start_time":"HH:MM","title":"שם הפעילות בעברית","description":"פרטים קצרים","category":"activity|food|transport|free","location":"שם מקום","photo_query":"ביטוי חיפוש קצר באנגלית"}]}
+{"items":[{"day_date":"YYYY-MM-DD","start_time":"HH:MM","title":"שם הפעילות בעברית","description":"פרטים קצרים","category":"activity|food|transport|free","location":"שם מקום","photo_query":"ביטוי חיפוש קצר באנגלית","lat":32.0853,"lng":34.7818}]}
 
 דרישות:
 - 3-5 פריטים לכל יום, בסדר הגיוני לפי שעות (בוקר/צהריים/ערב).
 - התאם לקצב המשתתפים (ילדים/מבוגרים) ולהעדפות.
 - day_date חייב להיות אחד מהתאריכים שצוינו. כל הטקסט בעברית.
-- photo_query: ביטוי חיפוש קצר באנגלית (2-5 מילים) לחיפוש תמונת סטוק אמיתית של המקום/הפעילות הספציפית הזו — לא הכותרת בעברית, למשל "hiking trail Alps".`;
+- photo_query: ביטוי חיפוש קצר באנגלית (2-5 מילים) לחיפוש תמונת סטוק אמיתית של המקום/הפעילות הספציפית הזו — לא הכותרת בעברית, למשל "hiking trail Alps".
+- lat/lng: קואורדינטות עשרוניות משוערות אך אמיתיות של המקום הספציפי, לפי הידע שלך (הערכה טובה מספיקה לסמן על מפה, לא נדרשת דיוק סקר-קרקע). לפריטים כלליים ללא מקום מסוים (כמו "זמן חופשי") — השמט lat/lng.`;
   }
 
   return `${context}
@@ -186,6 +188,44 @@ async function searchUnsplashPhoto(query: string): Promise<string | null> {
     return `${photo.urls.regular}&utm_source=tripcraft&utm_medium=referral`;
   } catch (e) {
     console.error("Unsplash search threw", e);
+    return null;
+  }
+}
+
+/**
+ * Looks up approximate coordinates for `query` via OpenStreetMap's free
+ * Nominatim API. Same resilience contract as searchUnsplashPhoto: never
+ * throws, resolves to null on any failure (empty result set, network error,
+ * non-OK response, unparsable numbers) — a geocoding miss must never block
+ * add/edit or generation. Failures are logged server-side only.
+ *
+ * Nominatim's usage policy requires a descriptive User-Agent (requests are
+ * rejected without one) and caps public usage at ~1 request/second with no
+ * parallel requests. This is only ever called once per manual add/edit save
+ * (a single user action), trivially within that limit — no throttling here.
+ * Do not reuse this for batch-geocoding AI-generated lists; those get their
+ * coordinates from the model itself (see buildPrompt's lat/lng fields).
+ */
+async function geocodeWithNominatim(query: string): Promise<{ lat: number; lng: number } | null> {
+  if (!query.trim()) return null;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "TripCraft/1.0 (travel planning app)" },
+    });
+    if (!res.ok) {
+      console.error("Nominatim search failed", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    const data = await res.json();
+    const hit = data?.[0];
+    if (!hit?.lat || !hit?.lon) return null;
+    const lat = Number(hit.lat);
+    const lng = Number(hit.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  } catch (e) {
+    console.error("Nominatim search threw", e);
     return null;
   }
 }
@@ -255,10 +295,13 @@ Deno.serve(async (req) => {
     };
 
     // The daily cap tracks Anthropic token spend (agent_runs) — every kind
-    // that calls the LLM is capped, including "passports" below. "photo" is
-    // the one exception: it's a plain Unsplash lookup with no LLM call and no
-    // agent_runs logging, so it must never be blocked by this.
-    if (body.kind !== "photo") {
+    // that calls the LLM is capped, including "passports" below. "photo" and
+    // "geocode" are the exceptions: a plain Unsplash lookup and a plain
+    // Nominatim lookup respectively, neither an LLM call nor agent_runs
+    // logging on their own, so neither must be blocked by this. (Their
+    // internal Hebrew-translation sub-call has its own, separate cap check —
+    // see translateHebrewQuery below.)
+    if (body.kind !== "photo" && body.kind !== "geocode") {
       const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
       if ((spentToday ?? 0) >= DAILY_CAP_USD) {
         return new Response(JSON.stringify({ error: "daily_cap_reached" }), {
@@ -391,54 +434,69 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Shared by kind:"photo" (Unsplash search) and kind:"geocode" (Nominatim
+    // lookup) — both need a Latin-script query, and manually-typed titles /
+    // destinations are Hebrew. AI-generated items already come with an
+    // English photo_query and skip this (their lat/lng come straight from
+    // the model, too — see buildPrompt — so geocode never sees them either).
+    // Best-effort: a translation failure just falls back to the original
+    // (Hebrew) query, which will likely miss — no worse than before, never
+    // blocks the response. Gated by the same daily cap as any other LLM
+    // call, since unlike its callers this sub-call does cost money.
+    const translateHebrewQuery = async (query: string, logKind: string): Promise<string> => {
+      if (!/[֐-׿]/.test(query)) return query;
+      const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
+      if ((spentToday ?? 0) >= DAILY_CAP_USD) return query;
+      try {
+        const start = Date.now();
+        const tRes = await fetch(ANTHROPIC_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({
+            model: MODEL,
+            max_tokens: 20,
+            messages: [{
+              role: "user",
+              content: `Translate this Hebrew place/activity name to a short English search phrase (2-5 words, no punctuation, no explanation — just the phrase): "${query}"`,
+            }],
+          }),
+        });
+        const tLatency = Date.now() - start;
+        if (!tRes.ok) {
+          console.error("Query translation failed", tRes.status);
+          return query;
+        }
+        const tPayload = await tRes.json();
+        const usage = tPayload?.usage ?? {};
+        const inputTokens = Number(usage.input_tokens ?? 0);
+        const outputTokens = Number(usage.output_tokens ?? 0);
+        const costUsd = (inputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (outputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+        const translated = extractText(tPayload).trim();
+        await logRun({ kind: logKind, tripId: body.trip_id, inputTokens, outputTokens, costUsd, latencyMs: tLatency, status: "ok" });
+        return translated || query;
+      } catch (e) {
+        console.error("Query translation threw", e);
+        return query;
+      }
+    };
+
     // `photo` needs no LLM call — just an Unsplash lookup — so it's handled
     // right here, early, before any call to Anthropic (and it already skipped
     // the daily cost cap above, since that cap is LLM-spend only).
     if (body.kind === "photo") {
-      let query = (body.query ?? "").trim();
-      // Unsplash's search barely understands Hebrew — manually-typed titles
-      // and destinations are Hebrew, so translate to a short English phrase
-      // first. AI-generated items already come with an English photo_query
-      // and skip this. Best-effort: a translation failure just falls back to
-      // searching with the original (Hebrew) query, which will likely miss —
-      // no worse than before, never blocks the response.
-      if (/[֐-׿]/.test(query)) {
-        const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
-        if ((spentToday ?? 0) < DAILY_CAP_USD) {
-          try {
-            const start = Date.now();
-            const tRes = await fetch(ANTHROPIC_URL, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-              body: JSON.stringify({
-                model: MODEL,
-                max_tokens: 20,
-                messages: [{
-                  role: "user",
-                  content: `Translate this Hebrew place/activity name to a short English stock-photo search phrase (2-5 words, no punctuation, no explanation — just the phrase): "${query}"`,
-                }],
-              }),
-            });
-            const tLatency = Date.now() - start;
-            if (tRes.ok) {
-              const tPayload = await tRes.json();
-              const usage = tPayload?.usage ?? {};
-              const inputTokens = Number(usage.input_tokens ?? 0);
-              const outputTokens = Number(usage.output_tokens ?? 0);
-              const costUsd = (inputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (outputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
-              const translated = extractText(tPayload).trim();
-              await logRun({ kind: "generate_photo_translate", tripId: body.trip_id, inputTokens, outputTokens, costUsd, latencyMs: tLatency, status: "ok" });
-              if (translated) query = translated;
-            } else {
-              console.error("Photo-query translation failed", tRes.status);
-            }
-          } catch (e) {
-            console.error("Photo-query translation threw", e);
-          }
-        }
-      }
+      const query = await translateHebrewQuery((body.query ?? "").trim(), "generate_photo_translate");
       const image_url = await searchUnsplashPhoto(query);
       return new Response(JSON.stringify({ ok: true, image_url }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
+    // `geocode` is the same shape as `photo`: no LLM call of its own (just a
+    // Nominatim lookup), handled early, exempt from the daily cap above.
+    if (body.kind === "geocode") {
+      const query = await translateHebrewQuery((body.query ?? "").trim(), "generate_geocode_translate");
+      const coords = await geocodeWithNominatim(query);
+      return new Response(JSON.stringify({ ok: true, lat: coords?.lat ?? null, lng: coords?.lng ?? null }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
@@ -509,6 +567,19 @@ Deno.serve(async (req) => {
       return r?.status === "fulfilled" ? r.value : null;
     };
 
+    // The model's own best-guess coordinates (see buildPrompt) — no extra
+    // latency or cost, since it's part of the same LLM call already made.
+    // Not survey-grade, same precision bar as this app's existing map_url
+    // (a Google-Maps search link) — good enough for a map pin.
+    const latOf = (raw: unknown): number | null => {
+      const v = (raw as Record<string, unknown>).lat;
+      return typeof v === "number" && Number.isFinite(v) ? v : null;
+    };
+    const lngOf = (raw: unknown): number | null => {
+      const v = (raw as Record<string, unknown>).lng;
+      return typeof v === "number" && Number.isFinite(v) ? v : null;
+    };
+
     if (body.kind === "suggestions") {
       const photoResults = await Promise.allSettled(items.map((raw) => searchUnsplashPhoto(photoQueryOf(raw))));
       const rows = items.map((raw, idx) => {
@@ -523,6 +594,8 @@ Deno.serve(async (req) => {
           age_max: typeof i.age_max === "number" ? i.age_max : null,
           price_level: i.price_level ? String(i.price_level) : null,
           image_url: photoUrlAt(photoResults, idx),
+          lat: latOf(i),
+          lng: lngOf(i),
         };
       }).filter((r) => r.title);
       const { error } = await supabase.from("suggestions").insert(rows);
@@ -544,6 +617,8 @@ Deno.serve(async (req) => {
           location: i.location ? String(i.location) : null,
           sort_order: idx,
           image_url: photoUrlAt(photoResults, idx),
+          lat: latOf(i),
+          lng: lngOf(i),
         };
       }).filter((r) => r.title && /^\d{4}-\d{2}-\d{2}$/.test(r.day_date));
       const { error } = await supabase.from("itinerary_items").insert(rows);
