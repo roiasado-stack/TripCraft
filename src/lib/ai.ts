@@ -16,7 +16,7 @@ export type GenerateKind = "suggestions" | "itinerary" | "checklist";
  * Matching on the message alone silently collapses every case into "unknown",
  * which is what used to happen here.
  */
-async function mapInvokeError(error: unknown): Promise<string> {
+export async function mapInvokeError(error: unknown): Promise<string> {
   const e = error as { name?: string; message?: string; context?: Response };
   const msg = (e?.message ?? "").toLowerCase();
 

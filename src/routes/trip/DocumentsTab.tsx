@@ -16,9 +16,7 @@ import {
   type VoucherFlightData,
   type VoucherHotelData,
 } from "@/components/ImportVoucher";
-
-const BUCKET = "trip-docs";
-const MAX_FILE_BYTES = 20 * 1024 * 1024;
+import { DOCS_BUCKET as BUCKET, uploadTripDocument } from "@/lib/documents";
 
 export default function DocumentsTab() {
   const { trip, participants } = useTrip();
@@ -44,26 +42,13 @@ export default function DocumentsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.id]);
 
-  /** Uploads a file into the trip-docs bucket at the standard path convention
-   *  and inserts a matching `documents` row. Shared by the manual file picker
-   *  and the voucher-scan confirm handler below — same path/size-cap logic,
-   *  called from two places. Throws on any failure (including an oversize
-   *  file) for the caller to catch and toast appropriately. */
+  /** Thin wrapper over the shared uploadTripDocument (also used by the Wizard)
+   *  binding this trip + user. Shared by the manual file picker and the
+   *  voucher-scan confirm handler below. Throws on any failure (including an
+   *  oversize file) for the caller to catch and toast appropriately. */
   const uploadDocument = async (file: File, fields: { category: string; participantId?: string | null; name?: string }) => {
     if (!user) throw new Error("not_authenticated");
-    if (file.size > MAX_FILE_BYTES) throw new Error("file_too_large");
-    const safe = file.name.replace(/[^\w.\-]+/g, "_");
-    const path = `${user.id}/${trip.id}/${Date.now()}-${safe}`;
-    const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
-    if (upErr) throw upErr;
-    const { error: insErr } = await supabase.from("documents").insert({
-      trip_id: trip.id,
-      name: fields.name ?? file.name,
-      category: fields.category,
-      participant_id: fields.participantId || null,
-      storage_path: path,
-    });
-    if (insErr) throw insErr;
+    await uploadTripDocument({ userId: user.id, tripId: trip.id, file, ...fields });
   };
 
   const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {

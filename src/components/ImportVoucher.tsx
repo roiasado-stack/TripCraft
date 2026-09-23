@@ -95,7 +95,7 @@ export interface VoucherCarData {
 }
 export type VoucherData = VoucherFlightData | VoucherHotelData | VoucherCarData;
 
-const blankFlight: VoucherFlightData = {
+export const blankFlight: VoucherFlightData = {
   direction: "outbound",
   airline: null,
   flight_number: null,
@@ -110,7 +110,7 @@ const blankFlight: VoucherFlightData = {
   booking_ref: null,
   notes: null,
 };
-const blankHotel: VoucherHotelData = {
+export const blankHotel: VoucherHotelData = {
   hotel_name: "",
   address: null,
   check_in: null,
@@ -120,7 +120,7 @@ const blankHotel: VoucherHotelData = {
   url: null,
   notes: null,
 };
-const blankCar: VoucherCarData = {
+export const blankCar: VoucherCarData = {
   provider: null,
   pickup_location: null,
   dropoff_location: null,

@@ -455,23 +455,37 @@ Deno.serve(async (req) => {
 ${hintLine}החזר JSON בלבד, ללא טקסט נוסף, באחד מהמבנים הבאים לפי סוג המסמך שזיהית בפועל:
 
 אם זו טיסה:
-{"doc_type":"flight","data":{"direction":"outbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null}}
+{"doc_type":"flight","data":{"direction":"outbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null},"destination":"עיר, מדינה","passengers":[{"name":"שם הנוסע כפי שמודפס","type":"adult|child|infant|null","birth_date":null,"meal_code":null}]}
 (direction: "outbound" אם הטיסה יוצאת מישראל, "inbound" אם היא חוזרת לישראל — לפי שדות התעופה; אם לא ברור, "outbound".)
 
 אם זה מלון:
-{"doc_type":"hotel","data":{"hotel_name":"שם המלון","address":null,"check_in":"YYYY-MM-DD","check_out":"YYYY-MM-DD","booking_ref":null,"phone":null,"url":null,"notes":null}}
+{"doc_type":"hotel","data":{"hotel_name":"שם המלון","address":null,"check_in":"YYYY-MM-DD","check_out":"YYYY-MM-DD","booking_ref":null,"phone":null,"url":null,"notes":null},"destination":"עיר, מדינה","passengers":[{"name":"שם האורח כפי שמודפס","type":null,"birth_date":null,"meal_code":null}]}
 
 אם זו השכרת רכב או הסעה:
-{"doc_type":"car","data":{"provider":"שם חברת ההשכרה או ההסעה","pickup_location":"נקודת איסוף","dropoff_location":null,"pickup_at":"YYYY-MM-DDTHH:MM:00","return_at":null,"booking_ref":null,"phone":null,"url":null,"notes":null}}
+{"doc_type":"car","data":{"provider":"שם חברת ההשכרה או ההסעה","pickup_location":"נקודת איסוף","dropoff_location":null,"pickup_at":"YYYY-MM-DDTHH:MM:00","return_at":null,"booking_ref":null,"phone":null,"url":null,"notes":null},"destination":"עיר, מדינה","passengers":[{"name":"שם הנהג/הנוסע כפי שמודפס","type":null,"birth_date":null,"meal_code":null}]}
 
 אם המסמך אינו נראה כמו אישור הזמנה של טיסה/מלון/רכב, או שאי אפשר לזהות בבירור:
-{"doc_type":"unknown","data":null}
+{"doc_type":"unknown","data":null,"destination":null,"passengers":[]}
 
 כללים:
 - כל שדה שלא מופיע במסמך בבירור — החזר null, אל תמציא ואל תנחש.
 - תאריכים/שעות: קרא בדיוק את מה שמודפס במסמך, ללא המרת אזור זמן.
 - שמות (חברת תעופה, מלון, ספק) — השאר בשפה שבה הם מופיעים במסמך (עברית או לועזית), אל תתרגם.
-- אם אתה לא בטוח בסוג המסמך — עדיף "unknown" מאשר סיווג שגוי.`,
+- אם אתה לא בטוח בסוג המסמך — עדיף "unknown" מאשר סיווג שגוי.
+
+destination (יעד הטיול שההזמנה מרמזת עליו):
+- בפורמט "עיר, מדינה" בעברית, למשל "רומא, איטליה".
+- מלון: העיר שבה נמצא המלון. טיסה: הקצה של המסלול שאינו בישראל (ביעד של טיסת הלוך, במוצא של טיסת חזור). רכב/הסעה: העיר של נקודת האיסוף.
+- אם לא ניתן להסיק את העיר בבירור מהמסמך — null. אל תנחש.
+
+passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
+- פריט אחד לכל אדם ששמו מודפס במסמך. אם אין שמות במסמך — מערך ריק [].
+- name: בפורמט קריא "שם פרטי שם משפחה" (למשל COHEN/ROI MR ← "Roi Cohen"), ללא תארים או סימוני סוג (MR/MRS/MS/MSTR/MISS/CHD/INF/ADT).
+- name: השאר את השם בכתב שבו הוא מודפס — שם לועזי נשאר באותיות לועזיות ושם עברי נשאר בעברית. אל תתעתק ואל תתרגם שמות.
+- אל תמציא שמות, אל תשלים שם חלקי ואל תנחש שם שלא מודפס בבירור.
+- type: "adult" / "child" / "infant" רק אם מופיע במסמך סימון סוג נוסע מפורש (ADT/CHD/INF, מבוגר/ילד/תינוק, Adult/Child/Infant). אחרת null — אל תסיק סוג מהשם או מהתואר.
+- birth_date: "YYYY-MM-DD" רק אם תאריך הלידה מודפס במסמך, אחרת null.
+- meal_code: קוד הארוחה המיוחדת כפי שמודפס (למשל KSML, VGML, VLML, AVML), אחרת null.`,
       });
 
       const runStart = Date.now();
@@ -484,7 +498,9 @@ ${hintLine}החזר JSON בלבד, ללא טקסט נוסף, באחד מהמבנ
         },
         body: JSON.stringify({
           model: MODEL,
-          max_tokens: 1200,
+          // Headroom for the passengers array (up to ~12 names) on top of the
+          // booking fields themselves.
+          max_tokens: 2000,
           messages: [{ role: "user", content }],
         }),
       });
@@ -576,6 +592,75 @@ ${hintLine}החזר JSON בלבד, ללא טקסט נוסף, באחד מהמבנ
 
       const finalDocType = data ? docType : "unknown";
 
+      // Trip destination the booking implies ("עיר, מדינה", Hebrew) — optional,
+      // only meaningful alongside a recognized booking.
+      const destination = finalDocType !== "unknown" ? str(parsedVision?.destination, 80) : null;
+
+      // Travellers named on the booking. The model normalizes the name; this is
+      // a deterministic safety net on top (PNR "LAST/FIRST MR" order, stray
+      // titles, ALL-CAPS Latin) — it never changes the script the name was
+      // printed in. Special-meal code → preference is mapped here, not by the
+      // model, so the mapping is exact and auditable.
+      const TITLE_TOKEN = /^\(?(MR|MRS|MS|MSTR|MISS|CHD|INF|ADT|DR)\.?\)?$/i;
+      const normalizePassengerName = (raw: string): { name: string; marker: "child" | "infant" | null } => {
+        let marker: "child" | "infant" | null = null;
+        const stripTitles = (part: string) =>
+          part
+            .split(/\s+/)
+            .filter((tok) => {
+              if (!TITLE_TOKEN.test(tok)) return true;
+              const t = tok.replace(/[().]/g, "").toUpperCase();
+              if (t === "CHD") marker = "child";
+              if (t === "INF") marker = "infant";
+              return false;
+            })
+            .join(" ");
+        let s = raw.replace(/\s+/g, " ").trim();
+        if (s.includes("/")) {
+          const [last, ...rest] = s.split("/");
+          s = `${stripTitles(rest.join(" "))} ${stripTitles(last)}`;
+        } else {
+          s = stripTitles(s);
+        }
+        s = s.replace(/\s+/g, " ").trim();
+        // ALL-CAPS Latin (no lowercase at all) → Title Case. Hebrew has no case,
+        // so a Hebrew name passes through untouched.
+        if (/[A-Z]/.test(s) && !/[a-z]/.test(s)) {
+          s = s.toLowerCase().replace(/(^|[\s\-'])([a-z])/g, (_m, pre: string, ch: string) => pre + ch.toUpperCase());
+        }
+        return { name: s.slice(0, 120), marker };
+      };
+      const MEAL_PREFS: Record<string, string> = {
+        KSML: "kosher",
+        VGML: "vegetarian",
+        VLML: "vegetarian",
+        AVML: "vegetarian",
+        VJML: "vegetarian",
+        VOML: "vegetarian",
+      };
+      const rawPassengers =
+        finalDocType !== "unknown" && Array.isArray(parsedVision?.passengers) ? (parsedVision!.passengers as unknown[]) : [];
+      const passengers = rawPassengers
+        .map((raw) => {
+          const p = (raw ?? {}) as Record<string, unknown>;
+          const rawName = str(p.name, 160);
+          if (!rawName) return null;
+          const { name, marker } = normalizePassengerName(rawName);
+          if (!name) return null;
+          const type =
+            p.type === "adult" || p.type === "child" || p.type === "infant" ? (p.type as string) : marker;
+          const mealCode = (str(p.meal_code, 8) ?? "").toUpperCase();
+          const pref = MEAL_PREFS[mealCode];
+          return {
+            name,
+            type: type ?? null,
+            birth_date: isoDate(p.birth_date),
+            preferences: pref ? [pref] : ([] as string[]),
+          };
+        })
+        .filter((p): p is NonNullable<typeof p> => p !== null)
+        .slice(0, 12);
+
       await logRun({
         kind: "generate_voucher",
         tripId: body.trip_id ?? null,
@@ -589,7 +674,9 @@ ${hintLine}החזר JSON בלבד, ללא טקסט נוסף, באחד מהמבנ
             ? `unknown_doc: stop=${visionPayload?.stop_reason} blocks=${(visionPayload?.content ?? []).map((b: { type?: string }) => b?.type).join(",")} text=${visionText.slice(0, 300)}`
             : undefined,
       });
-      return new Response(JSON.stringify({ ok: true, doc_type: finalDocType, data }), {
+      // `destination` / `passengers` are additive — single-voucher callers
+      // (ImportVoucher) read only doc_type/data and ignore them.
+      return new Response(JSON.stringify({ ok: true, doc_type: finalDocType, data, destination, passengers }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }

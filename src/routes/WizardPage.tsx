@@ -1,11 +1,12 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, Plus, ScanLine, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CircleAlert, CircleCheck, Plus, ScanLine, Ticket, Trash2, Users, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { Button, Card, Chip, Field, Input, Label, Segmented } from "@/components/ui";
+import { Button, Card, Checkbox, Chip, Field, Input, Label, Segmented, Spinner } from "@/components/ui";
 import { ImportParticipants } from "@/components/ImportParticipants";
+import { ImportBookings, personKey, type BookingsImportResult, type BookingTraveller } from "@/components/ImportBookings";
 import {
   ImportVoucher,
   type VoucherCarData,
@@ -14,6 +15,9 @@ import {
   type VoucherFlightData,
   type VoucherHotelData,
 } from "@/components/ImportVoucher";
+import { generateContent } from "@/lib/ai";
+import { uploadTripDocument } from "@/lib/documents";
+import type { Participant, Trip } from "@/lib/types";
 import {
   AGE_RANGES,
   BUDGET_LEVELS,
@@ -31,6 +35,11 @@ type PartDraft = {
   age_range: string;
   preferences: string[];
 };
+// The optional fields below have no wizard UI: they carry voucher-scanned
+// detail through to create() as hidden values (manually added drafts simply
+// leave them unset). `source_file` is the scanned original, uploaded to
+// trip-docs once the trip exists — tied to the draft so deleting the draft in
+// the logistics step also drops its file.
 type FlightDraft = {
   direction: "outbound" | "inbound";
   airline: string;
@@ -38,11 +47,122 @@ type FlightDraft = {
   from_airport: string;
   to_airport: string;
   depart_at: string;
+  arrive_at?: string | null; // ISO / wall-clock datetime
+  from_terminal?: string | null;
+  to_terminal?: string | null;
+  seats?: string | null;
+  baggage?: string | null;
+  booking_ref?: string | null;
+  notes?: string | null;
+  source_file?: File | null;
 };
-type StayDraft = { hotel_name: string; address: string; check_in: string; check_out: string; booking_ref: string };
-type TransferDraft = { kind: string; provider: string; pickup_location: string; pickup_at: string };
+type StayDraft = {
+  hotel_name: string;
+  address: string;
+  check_in: string;
+  check_out: string;
+  booking_ref: string;
+  phone?: string | null;
+  url?: string | null;
+  notes?: string | null;
+  source_file?: File | null;
+};
+type TransferDraft = {
+  kind: string;
+  provider: string;
+  pickup_location: string;
+  pickup_at: string;
+  dropoff_location?: string | null;
+  return_at?: string | null; // ISO / wall-clock datetime
+  booking_ref?: string | null;
+  phone?: string | null;
+  url?: string | null;
+  notes?: string | null;
+  source_file?: File | null;
+};
+
+type TaskStatus = "running" | "done" | "failed";
+type BuildState = { suggestions: TaskStatus | null; itinerary: TaskStatus | null; docs: TaskStatus | null };
 
 const STEPS = ["יעד", "משתתפים", "לוגיסטיקה", "סיכום"];
+
+/** Hidden datetime field → ISO for insert; null when empty or unparsable. */
+function toIso(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function flightDraftFromVoucher(d: VoucherFlightData, file: File | null): FlightDraft {
+  return {
+    direction: d.direction === "inbound" ? "inbound" : "outbound",
+    airline: d.airline ?? "",
+    flight_number: d.flight_number ?? "",
+    from_airport: d.from_airport ?? "",
+    to_airport: d.to_airport ?? "",
+    depart_at: isoToDatetimeLocalInput(d.depart_at),
+    arrive_at: d.arrive_at,
+    from_terminal: d.from_terminal,
+    to_terminal: d.to_terminal,
+    seats: d.seats,
+    baggage: d.baggage,
+    booking_ref: d.booking_ref,
+    notes: d.notes,
+    source_file: file,
+  };
+}
+function stayDraftFromVoucher(d: VoucherHotelData, file: File | null): StayDraft {
+  return {
+    hotel_name: d.hotel_name,
+    address: d.address ?? "",
+    check_in: d.check_in ?? "",
+    check_out: d.check_out ?? "",
+    booking_ref: d.booking_ref ?? "",
+    phone: d.phone,
+    url: d.url,
+    notes: d.notes,
+    source_file: file,
+  };
+}
+function transferDraftFromVoucher(d: VoucherCarData, file: File | null): TransferDraft {
+  return {
+    kind: "car_rental",
+    provider: d.provider ?? "",
+    pickup_location: d.pickup_location ?? "",
+    pickup_at: isoToDatetimeLocalInput(d.pickup_at),
+    dropoff_location: d.dropoff_location,
+    return_at: d.return_at,
+    booking_ref: d.booking_ref,
+    phone: d.phone,
+    url: d.url,
+    notes: d.notes,
+    source_file: file,
+  };
+}
+
+/** Booking traveller → participant draft. Unlike the passport path (which
+ *  defaults an unknown age to the 30-49 range), an unknown age stays unset
+ *  here: exact-age mode with an empty age saves as age/age_range null, and the
+ *  user can fill it in on the participants step. */
+function travellerToDraft(t: BookingTraveller): PartDraft {
+  if (t.age != null) {
+    return { name: t.name, ageMode: "age", age: String(t.age), age_range: AGE_RANGES[5], preferences: t.preferences };
+  }
+  if (t.age_range) {
+    return { name: t.name, ageMode: "range", age: "", age_range: t.age_range, preferences: t.preferences };
+  }
+  return { name: t.name, ageMode: "age", age: "", age_range: AGE_RANGES[5], preferences: t.preferences };
+}
+
+/** ["2 טיסות", "מלון אחד", "3 נוסעים"] → "2 טיסות, מלון אחד ו-3 נוסעים". */
+function joinHebrew(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  const last = parts[parts.length - 1];
+  return `${parts.slice(0, -1).join(", ")} ${/^\d/.test(last) ? "ו-" : "ו"}${last}`;
+}
+function countHe(n: number, one: string, many: string): string {
+  return n === 1 ? one : `${n} ${many}`;
+}
 
 /** ISO timestamp → the "YYYY-MM-DDTHH:MM" shape a native datetime-local input
  *  expects. Reads local wall-clock fields off the Date object rather than
@@ -64,6 +184,11 @@ export default function WizardPage() {
   const [saving, setSaving] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [voucherOpen, setVoucherOpen] = useState(false);
+  const [bookingsOpen, setBookingsOpen] = useState(false);
+  // Post-create "the agent builds the rest" step. Defaults ON once the trip
+  // has been seeded from bookings, OFF for the manual flow.
+  const [autoGenerate, setAutoGenerate] = useState(false);
+  const [building, setBuilding] = useState<BuildState | null>(null);
 
   // step 0
   const [destination, setDestination] = useState("");
@@ -124,19 +249,26 @@ export default function WizardPage() {
 
       // Supabase query builders are thenable, not real Promises.
       const jobs: PromiseLike<unknown>[] = [];
-      if (participants.length) {
+      const partRows = participants
+        .filter((p) => p.name.trim())
+        .map((p) => ({
+          trip_id: tripId,
+          name: p.name.trim(),
+          age: p.ageMode === "age" && p.age ? Number(p.age) : null,
+          age_range: p.ageMode === "range" ? p.age_range : null,
+          preferences: p.preferences,
+        }));
+      // The inserted rows feed the post-create AI generation below.
+      let insertedParticipants: Participant[] = [];
+      if (partRows.length) {
         jobs.push(
-          supabase.from("participants").insert(
-            participants
-              .filter((p) => p.name.trim())
-              .map((p) => ({
-                trip_id: tripId,
-                name: p.name.trim(),
-                age: p.ageMode === "age" && p.age ? Number(p.age) : null,
-                age_range: p.ageMode === "range" ? p.age_range : null,
-                preferences: p.preferences,
-              })),
-          ),
+          supabase
+            .from("participants")
+            .insert(partRows)
+            .select()
+            .then(({ data }) => {
+              insertedParticipants = (data as Participant[] | null) ?? [];
+            }),
         );
       }
       if (flights.length) {
@@ -150,23 +282,32 @@ export default function WizardPage() {
               from_airport: f.from_airport || null,
               to_airport: f.to_airport || null,
               depart_at: f.depart_at ? new Date(f.depart_at).toISOString() : null,
+              arrive_at: toIso(f.arrive_at),
+              from_terminal: f.from_terminal || null,
+              to_terminal: f.to_terminal || null,
+              seats: f.seats || null,
+              baggage: f.baggage || null,
+              booking_ref: f.booking_ref || null,
+              notes: f.notes || null,
             })),
           ),
         );
       }
-      if (stays.length) {
+      const savedStays = stays.filter((s) => s.hotel_name.trim());
+      if (savedStays.length) {
         jobs.push(
           supabase.from("stays").insert(
-            stays
-              .filter((s) => s.hotel_name.trim())
-              .map((s) => ({
-                trip_id: tripId,
-                hotel_name: s.hotel_name.trim(),
-                address: s.address || null,
-                check_in: s.check_in || null,
-                check_out: s.check_out || null,
-                booking_ref: s.booking_ref || null,
-              })),
+            savedStays.map((s) => ({
+              trip_id: tripId,
+              hotel_name: s.hotel_name.trim(),
+              address: s.address || null,
+              check_in: s.check_in || null,
+              check_out: s.check_out || null,
+              booking_ref: s.booking_ref || null,
+              phone: s.phone || null,
+              url: s.url || null,
+              notes: s.notes || null,
+            })),
           ),
         );
       }
@@ -179,12 +320,21 @@ export default function WizardPage() {
               provider: t.provider || null,
               pickup_location: t.pickup_location || null,
               pickup_at: t.pickup_at ? new Date(t.pickup_at).toISOString() : null,
+              dropoff_location: t.dropoff_location || null,
+              return_at: toIso(t.return_at),
+              booking_ref: t.booking_ref || null,
+              phone: t.phone || null,
+              url: t.url || null,
+              notes: t.notes || null,
             })),
           ),
         );
       }
       await Promise.all(jobs);
-      toast.success("הטיול נוצר! ✈️");
+
+      // ---- The trip exists from here on. Nothing below may throw: a failure
+      // must never land in the catch below and invite a second "create". ----
+      await afterCreate(trip as Trip, insertedParticipants, partRows, savedStays);
       navigate(`/trip/${tripId}`, { replace: true });
     } catch (e) {
       console.error(e);
@@ -193,6 +343,133 @@ export default function WizardPage() {
       setSaving(false);
     }
   };
+
+  /**
+   * Best-effort work that needs the trip id: keep the original booking files
+   * (only for drafts that survived to the insert), and — if the user left the
+   * checkbox on — have the agent build suggestions + itinerary. Awaited before
+   * navigating on purpose: the trip tabs load their data once on mount, so
+   * content landing after navigation wouldn't show until a refresh.
+   */
+  const afterCreate = async (
+    createdTrip: Trip,
+    inserted: Participant[],
+    partRows: { name: string; age: number | null; age_range: string | null; preferences: string[] }[],
+    savedStays: StayDraft[],
+  ) => {
+    const sourceDocs = [
+      ...flights.map((f) => ({ file: f.source_file, category: "flight" })),
+      ...savedStays.map((s) => ({ file: s.source_file, category: "hotel" })),
+      ...transfers.map((t) => ({ file: t.source_file, category: "car" })),
+    ].filter((d): d is { file: File; category: string } => !!d.file);
+
+    if (!autoGenerate && !sourceDocs.length) {
+      toast.success("הטיול נוצר! ✈️");
+      return;
+    }
+
+    setBuilding({
+      suggestions: autoGenerate ? "running" : null,
+      itinerary: autoGenerate ? "running" : null,
+      docs: sourceDocs.length ? "running" : null,
+    });
+    const mark = (key: keyof BuildState, status: TaskStatus) =>
+      setBuilding((b) => (b ? { ...b, [key]: status } : b));
+
+    // Sequential on purpose: the storage path is `${Date.now()}-${name}`, so two
+    // same-named files uploaded in the same millisecond would collide.
+    const uploadDocs = async (): Promise<number> => {
+      let failed = 0;
+      for (const d of sourceDocs) {
+        try {
+          if (!user) throw new Error("not_authenticated");
+          await uploadTripDocument({ userId: user.id, tripId: createdTrip.id, file: d.file, category: d.category });
+        } catch (err) {
+          console.error(err);
+          failed += 1;
+        }
+      }
+      if (sourceDocs.length) mark("docs", failed ? "failed" : "done");
+      return failed;
+    };
+
+    // Prefer the rows as inserted; fall back to the drafts (generateContent
+    // only reads name/age/age_range/preferences) if the select came back empty.
+    const aiParticipants: Participant[] = inserted.length
+      ? inserted
+      : partRows.map((r) => ({ ...r, id: "", trip_id: createdTrip.id, notes: null, created_at: "" }));
+    const runAi = async (kind: "suggestions" | "itinerary"): Promise<boolean> => {
+      const res = await generateContent(createdTrip, aiParticipants, kind);
+      mark(kind, res.ok ? "done" : "failed");
+      return res.ok;
+    };
+
+    const [failedDocs, suggestionsOk, itineraryOk] = await Promise.all([
+      uploadDocs(),
+      autoGenerate ? runAi("suggestions") : Promise.resolve(true),
+      autoGenerate ? runAi("itinerary") : Promise.resolve(true),
+    ]);
+
+    toast.success(autoGenerate && suggestionsOk && itineraryOk ? "הטיול נוצר והסוכן בנה המלצות ומסלול ✨" : "הטיול נוצר! ✈️");
+    if (failedDocs) {
+      toast.error(
+        failedDocs === 1
+          ? "שמירת אחד מקבצי ההזמנה המקוריים נכשלה — אפשר להעלות אותו בלשונית \"מסמכים\"."
+          : `שמירת ${failedDocs} מקבצי ההזמנה המקוריים נכשלה — אפשר להעלות אותם בלשונית "מסמכים".`,
+      );
+    }
+    if (!suggestionsOk && !itineraryOk) {
+      toast.error("הסוכן לא הצליח לבנות את התוכן — אפשר ליצור אותו בלשוניות \"מומלצים\" ו\"מסלול\" עם כפתור ה-AI.");
+    } else if (!suggestionsOk) {
+      toast.error("ההמלצות לא נוצרו — אפשר ליצור אותן בלשונית \"מומלצים\" עם כפתור ה-AI.");
+    } else if (!itineraryOk) {
+      toast.error("המסלול לא נוצר — אפשר ליצור אותו בלשונית \"מסלול\" עם כפתור ה-AI.");
+    }
+  };
+
+  /** Seeds the whole wizard from reviewed bookings. Everything stays local
+   *  until create(); the user lands on the summary and can step back to edit. */
+  const onBookingsConfirm = (r: BookingsImportResult) => {
+    const dest = r.destination.trim();
+    if (dest) setDestination(dest);
+    if (r.startDate) setStartDate(r.startDate);
+    if (r.endDate) setEndDate(r.endDate);
+    if (dest && !title.trim()) setTitle(`טיול ל${dest.split(",")[0].trim()}`);
+
+    // Skip travellers already on the list (e.g. importing a second time).
+    const have = new Set(participants.map((p) => personKey(p.name)));
+    const newTravellers = r.travellers.filter((t) => !have.has(personKey(t.name)));
+    if (newTravellers.length) setParticipants((prev) => [...prev, ...newTravellers.map(travellerToDraft)]);
+
+    const nf = r.bookings.filter((b) => b.docType === "flight");
+    const nh = r.bookings.filter((b) => b.docType === "hotel");
+    const nc = r.bookings.filter((b) => b.docType === "car");
+    if (nf.length) setFlights((prev) => [...prev, ...nf.map((b) => flightDraftFromVoucher(b.data as VoucherFlightData, b.sourceFile))]);
+    if (nh.length) setStays((prev) => [...prev, ...nh.map((b) => stayDraftFromVoucher(b.data as VoucherHotelData, b.sourceFile))]);
+    if (nc.length) setTransfers((prev) => [...prev, ...nc.map((b) => transferDraftFromVoucher(b.data as VoucherCarData, b.sourceFile))]);
+    setAutoGenerate(true);
+
+    const parts = [
+      nf.length ? countHe(nf.length, "טיסה אחת", "טיסות") : null,
+      nh.length ? countHe(nh.length, "מלון אחד", "מלונות") : null,
+      nc.length ? countHe(nc.length, "הזמנת רכב אחת", "הזמנות רכב") : null,
+      newTravellers.length ? countHe(newTravellers.length, "נוסע אחד", "נוסעים") : null,
+    ].filter((x): x is string => !!x);
+    const summary = parts.length ? `מולאו ${joinHebrew(parts)}` : "פרטי הטיול מולאו";
+
+    // Step 0 is the only step with a hard requirement (a destination). With
+    // one, jump straight to the summary; without one, stay here to fill it.
+    if (dest || destination.trim()) {
+      setStep(3);
+      toast.success(`${summary} ✨ בדוק את הסיכום — אפשר לחזור לכל שלב ולערוך.`);
+    } else {
+      toast.success(`${summary}. חסר יעד — מלא אותו כדי להמשיך.`);
+    }
+  };
+
+  // The trip already exists while this shows — no back/cancel/create controls,
+  // so it can't be created twice.
+  if (building) return <BuildingView state={building} />;
 
   return (
     <div className="mx-auto min-h-screen max-w-lg px-4 pb-28 pt-4">
@@ -232,6 +509,7 @@ export default function WizardPage() {
             tripType, setTripType, budget, setBudget, emoji, setEmoji, duration,
             isAgent, guideName, setGuideName, guidePhone, setGuidePhone,
           }}
+          onImportBookings={() => setBookingsOpen(true)}
         />
       )}
       {step === 1 && (
@@ -263,8 +541,12 @@ export default function WizardPage() {
           flights={flights}
           stays={stays}
           transfers={transfers}
+          autoGenerate={autoGenerate}
+          setAutoGenerate={setAutoGenerate}
         />
       )}
+
+      <ImportBookings open={bookingsOpen} onClose={() => setBookingsOpen(false)} onConfirm={onBookingsConfirm} />
 
       <ImportParticipants
         open={bulkOpen}
@@ -283,51 +565,20 @@ export default function WizardPage() {
         }
       />
 
-      {/* No trip exists yet at this point in the flow, so unlike the
-          Documents-tab path, there's nothing to upload the source file to —
-          the scanned file itself isn't kept, only the extracted data staged
-          into these local draft arrays until `create()` inserts them for
-          real. Same accepted limitation as passport photos scanned here. */}
+      {/* No trip exists yet at this point in the flow, so the extracted data
+          (including the voucher-only extras, as hidden draft fields) is staged
+          locally, and the source file rides along on the draft — create()
+          uploads it to trip-docs only once the trip exists. */}
       <ImportVoucher
         open={voucherOpen}
         onClose={() => setVoucherOpen(false)}
-        onConfirm={(docType: VoucherDocType, data: VoucherData) => {
+        onConfirm={(docType: VoucherDocType, data: VoucherData, sourceFile: File | null) => {
           if (docType === "flight") {
-            const d = data as VoucherFlightData;
-            setFlights((prev) => [
-              ...prev,
-              {
-                direction: d.direction === "inbound" ? "inbound" : "outbound",
-                airline: d.airline ?? "",
-                flight_number: d.flight_number ?? "",
-                from_airport: d.from_airport ?? "",
-                to_airport: d.to_airport ?? "",
-                depart_at: isoToDatetimeLocalInput(d.depart_at),
-              },
-            ]);
+            setFlights((prev) => [...prev, flightDraftFromVoucher(data as VoucherFlightData, sourceFile)]);
           } else if (docType === "hotel") {
-            const d = data as VoucherHotelData;
-            setStays((prev) => [
-              ...prev,
-              {
-                hotel_name: d.hotel_name,
-                address: d.address ?? "",
-                check_in: d.check_in ?? "",
-                check_out: d.check_out ?? "",
-                booking_ref: d.booking_ref ?? "",
-              },
-            ]);
+            setStays((prev) => [...prev, stayDraftFromVoucher(data as VoucherHotelData, sourceFile)]);
           } else {
-            const d = data as VoucherCarData;
-            setTransfers((prev) => [
-              ...prev,
-              {
-                kind: "car_rental",
-                provider: d.provider ?? "",
-                pickup_location: d.pickup_location ?? "",
-                pickup_at: isoToDatetimeLocalInput(d.pickup_at),
-              },
-            ]);
+            setTransfers((prev) => [...prev, transferDraftFromVoucher(data as VoucherCarData, sourceFile)]);
           }
         }}
       />
@@ -374,12 +625,35 @@ function StepBasics(p: {
   setGuideName: (v: string) => void;
   guidePhone: string;
   setGuidePhone: (v: string) => void;
+  onImportBookings: () => void;
 }) {
   return (
     <div className="flex flex-col gap-5">
       <div>
         <h2 className="text-xl font-bold">לאן נוסעים?</h2>
         <p className="text-sm text-muted-foreground">נתחיל מהבסיס — אפשר לשנות הכל אחר כך.</p>
+      </div>
+
+      {/* Fast path first: bookings already in hand fill almost every step. */}
+      <button
+        onClick={p.onImportBookings}
+        className="flex items-center gap-3 rounded-3xl border-2 border-dashed border-primary bg-primary-soft/50 p-4 text-start transition active:scale-[0.99]"
+      >
+        <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground">
+          <Ticket className="size-5" />
+        </div>
+        <div className="flex-1">
+          <div className="font-bold">יש לך כבר הזמנות?</div>
+          <div className="text-xs text-muted-foreground">
+            העלה כרטיסי טיסה / אישור מלון / השכרת רכב ונמלא הכל אוטומטית — יעד, תאריכים, נוסעים ולוגיסטיקה
+          </div>
+        </div>
+      </button>
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="h-px flex-1 bg-border" />
+        <span>או מלא ידנית</span>
+        <div className="h-px flex-1 bg-border" />
       </div>
 
       <Field label="יעד">
@@ -754,6 +1028,8 @@ function StepReview(p: {
   flights: FlightDraft[];
   stays: StayDraft[];
   transfers: TransferDraft[];
+  autoGenerate: boolean;
+  setAutoGenerate: (v: boolean) => void;
 }) {
   const row = (label: string, value: string) => (
     <div className="flex items-center justify-between border-b border-border py-2.5 text-sm last:border-0">
@@ -783,9 +1059,55 @@ function StepReview(p: {
         {row("מלונות", p.stays.filter((x) => x.hotel_name.trim()).length.toString())}
         {row("העברות", p.transfers.length.toString())}
       </Card>
-      <p className="text-center text-sm text-muted-foreground">
-        אחרי היצירה תוכל להפעיל את ה-AI כדי לקבל אטרקציות, מסלול יומי וצ'קליסט מותאמים ✨
-      </p>
+      <Card className="flex items-start gap-3 p-4">
+        <Checkbox checked={p.autoGenerate} onChange={p.setAutoGenerate} />
+        <button type="button" onClick={() => p.setAutoGenerate(!p.autoGenerate)} className="flex-1 text-start">
+          <div className="font-semibold">הסוכן יבנה המלצות ומסלול אוטומטית ✨</div>
+          <div className="text-xs text-muted-foreground">
+            מיד אחרי היצירה — אטרקציות, מסעדות ומסלול יומי מותאמים למשתתפים. לוקח כחצי דקה.
+          </div>
+        </button>
+      </Card>
+      {!p.autoGenerate && (
+        <p className="text-center text-sm text-muted-foreground">
+          אחרי היצירה תוכל להפעיל את ה-AI כדי לקבל אטרקציות, מסלול יומי וצ'קליסט מותאמים ✨
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------- Post-create: agent building ------------------------- */
+function BuildingView({ state }: { state: BuildState }) {
+  const lines: { key: keyof BuildState; running: string; done: string; failed: string }[] = [
+    { key: "suggestions", running: "יוצר המלצות…", done: "ההמלצות מוכנות", failed: "ההמלצות לא נוצרו — אפשר ליצור אחר כך" },
+    { key: "itinerary", running: "בונה מסלול יומי…", done: "המסלול היומי מוכן", failed: "המסלול לא נוצר — אפשר ליצור אחר כך" },
+    { key: "docs", running: "שומר את קבצי ההזמנה המקוריים…", done: "קבצי ההזמנה נשמרו במסמכים", failed: "חלק מהקבצים לא נשמרו" },
+  ];
+  return (
+    <div className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center gap-6 px-4 text-center">
+      <Spinner className="size-10" />
+      <div>
+        <h2 className="text-xl font-bold">הטיול נוצר! הסוכן משלים את הפרטים</h2>
+        <p className="text-sm text-muted-foreground">עוד רגע ונעבור לטיול — אין צורך לעשות כלום.</p>
+      </div>
+      <Card className="flex w-full flex-col gap-3 p-4 text-start">
+        {lines
+          .filter((l) => state[l.key])
+          .map((l) => {
+            const s = state[l.key];
+            return (
+              <div key={l.key} className="flex items-center gap-3 text-sm">
+                {s === "running" && <Spinner className="size-5" />}
+                {s === "done" && <CircleCheck className="size-5 text-primary" />}
+                {s === "failed" && <CircleAlert className="size-5 text-destructive" />}
+                <span className={s === "failed" ? "text-destructive" : s === "done" ? "font-semibold" : "text-muted-foreground"}>
+                  {s === "running" ? l.running : s === "done" ? l.done : l.failed}
+                </span>
+              </div>
+            );
+          })}
+      </Card>
     </div>
   );
 }
