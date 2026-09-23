@@ -15,6 +15,15 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
+// Output ceiling for every call. claude-sonnet-5 runs adaptive thinking by
+// default and thinking tokens count against max_tokens, so tight caps (the
+// old 1500/2000/4000) cut the JSON off mid-answer - agent_runs showed 4 of 7
+// itinerary runs and every truncated voucher scan stopping at the cap. Billing
+// is per token actually generated, so a high ceiling costs nothing extra.
+const MAX_TOKENS = 16000;
+// Simple extraction/translation calls: less thinking, same answer, faster.
+const EXTRACTION_OUTPUT_CONFIG = { effort: "low" } as const;
+
 // claude-sonnet-5 pricing (Anthropic API).
 const PRICE_PER_MTOK_INPUT_USD = 2.0;
 const PRICE_PER_MTOK_OUTPUT_USD = 10.0;
@@ -361,7 +370,8 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify({
           model: MODEL,
-          max_tokens: 1500,
+          max_tokens: MAX_TOKENS,
+          output_config: EXTRACTION_OUTPUT_CONFIG,
           messages: [{ role: "user", content }],
         }),
       });
@@ -498,9 +508,8 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
         },
         body: JSON.stringify({
           model: MODEL,
-          // Headroom for the passengers array (up to ~12 names) on top of the
-          // booking fields themselves.
-          max_tokens: 2000,
+          max_tokens: MAX_TOKENS,
+          output_config: EXTRACTION_OUTPUT_CONFIG,
           messages: [{ role: "user", content }],
         }),
       });
@@ -720,7 +729,8 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
           headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
           body: JSON.stringify({
             model: MODEL,
-            max_tokens: 20,
+            max_tokens: MAX_TOKENS,
+            output_config: EXTRACTION_OUTPUT_CONFIG,
             messages: [{
               role: "user",
               content: `Translate this Hebrew place/activity name to a short English search phrase (2-5 words, no punctuation, no explanation — just the phrase): "${query}"`,
@@ -777,7 +787,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 4000,
+        max_tokens: MAX_TOKENS,
         messages: [{ role: "user", content: buildPrompt(body) }],
       }),
     });
