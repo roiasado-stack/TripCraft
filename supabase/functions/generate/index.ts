@@ -164,20 +164,59 @@ function extractText(payload: unknown): string {
     .join("\n");
 }
 
-// Generic enough for both `{items:[...]}` (suggestions/itinerary/checklist/passports)
-// and `{doc_type, data}` (voucher) shaped responses — callers narrow via Array.isArray
-// or direct field access on the returned record.
-function extractJson(text: string): Record<string, unknown> | null {
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const raw = fence ? fence[1] : text;
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start === -1 || end === -1) return null;
-  try {
-    return JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
-  } catch {
-    return null;
+/**
+ * Every top-level JSON object in the reply, in order. A long answer sometimes
+ * arrives split into several blocks (e.g. one fenced ```json block per
+ * itinerary day); taking only the first block silently dropped the rest.
+ * Brace-matching respects string literals, so braces inside values are safe;
+ * quotes outside any object (prose) are ignored.
+ */
+function extractJsonObjects(text: string): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (c === "\\") escaped = true;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') {
+      if (depth > 0) inString = true;
+    } else if (c === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (c === "}" && depth > 0) {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        try {
+          const v = JSON.parse(text.slice(start, i + 1));
+          if (v && typeof v === "object" && !Array.isArray(v)) out.push(v as Record<string, unknown>);
+        } catch {
+          // Not valid JSON on its own — skip it.
+        }
+        start = -1;
+      }
+    }
   }
+  return out;
+}
+
+// Generic enough for both `{items:[...]}` (suggestions/itinerary/checklist/passports)
+// and `{doc_type, data}` (voucher) shaped responses. When the reply holds several
+// `{items:[...]}` objects, their items are concatenated into one.
+function extractJson(text: string): Record<string, unknown> | null {
+  const objects = extractJsonObjects(text);
+  if (!objects.length) return null;
+  const withItems = objects.filter((o) => Array.isArray(o.items));
+  if (withItems.length > 1) {
+    return { ...withItems[0], items: withItems.flatMap((o) => o.items as unknown[]) };
+  }
+  return withItems[0] ?? objects[0];
 }
 
 /**
@@ -188,24 +227,30 @@ function extractJson(text: string): Record<string, unknown> | null {
  * rather than surfaced to the client, since a photo miss isn't an error.
  */
 async function searchUnsplashPhoto(query: string): Promise<string | null> {
+  return (await unsplashLookup(query)).url;
+}
+
+/** Same lookup, plus a short reason when it comes back empty — fed into the
+ *  generation diagnostics in agent_runs so a photo outage is visible. */
+async function unsplashLookup(query: string): Promise<{ url: string | null; fail?: string }> {
   const key = Deno.env.get("UNSPLASH_ACCESS_KEY");
-  if (!key || !query.trim()) return null;
+  if (!key) return { url: null, fail: "no_key" };
+  if (!query.trim()) return { url: null, fail: "empty_query" };
   try {
     const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`;
     const res = await fetch(url, { headers: { Authorization: `Client-ID ${key}` } });
     if (!res.ok) {
-      console.error("Unsplash search failed", res.status, await res.text().catch(() => ""));
-      return null;
+      const body = await res.text().catch(() => "");
+      console.error("Unsplash search failed", res.status, body);
+      return { url: null, fail: `http_${res.status}:${body.slice(0, 80)}` };
     }
     const data = await res.json();
     const photo = data?.results?.[0];
-    if (!photo?.urls?.regular) {
-      return null;
-    }
-    return `${photo.urls.regular}&utm_source=tripcraft&utm_medium=referral`;
+    if (!photo?.urls?.regular) return { url: null, fail: `no_results:${query.slice(0, 40)}` };
+    return { url: `${photo.urls.regular}&utm_source=tripcraft&utm_medium=referral` };
   } catch (e) {
     console.error("Unsplash search threw", e);
-    return null;
+    return { url: null, fail: `exception:${String(e).slice(0, 80)}` };
   }
 }
 
@@ -861,6 +906,11 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
     const text = extractText(payload);
     const parsed = extractJson(text);
     const items = Array.isArray(parsed?.items) ? parsed!.items : [];
+    // Diagnostics recorded on the agent_runs row (status stays "ok"): how many
+    // JSON blocks came back, how many items survived into rows, and how photo
+    // lookups went — enough to tell a parsing loss from a model or photo issue.
+    const jsonBlocks = extractJsonObjects(text).length;
+    let photoStats = "";
     if (items.length === 0) {
       await logRun({
         kind: `generate_${body.kind}`,
@@ -894,9 +944,18 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       const q = String(i.photo_query ?? i.title ?? "");
       return translateHebrewQuery(q, "generate_photo_translate");
     };
-    const photoUrlAt = (results: PromiseSettledResult<string | null>[], idx: number): string | null => {
+    const photoUrlAt = (results: PromiseSettledResult<{ url: string | null; fail?: string }>[], idx: number): string | null => {
       const r = results[idx];
-      return r?.status === "fulfilled" ? r.value : null;
+      return r?.status === "fulfilled" ? r.value.url : null;
+    };
+    const lookupPhotos = async (list: unknown[]) => {
+      const results = await Promise.allSettled(list.map(async (raw) => unsplashLookup(await photoQueryOf(raw))));
+      const found = results.filter((r) => r.status === "fulfilled" && r.value.url).length;
+      const firstFail = results
+        .map((r) => (r.status === "fulfilled" ? r.value.fail : `rejected:${String(r.reason).slice(0, 60)}`))
+        .find((f) => f);
+      photoStats = `photos=${found}/${list.length}${firstFail ? ` first_fail=${firstFail}` : ""}`;
+      return results;
     };
 
     // The model's own best-guess coordinates (see buildPrompt) — no extra
@@ -913,7 +972,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
     };
 
     if (body.kind === "suggestions") {
-      const photoResults = await Promise.allSettled(items.map(async (raw) => searchUnsplashPhoto(await photoQueryOf(raw))));
+      const photoResults = await lookupPhotos(items);
       const rows = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
         return {
@@ -934,7 +993,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       if (error) throw error;
       inserted = rows.length;
     } else if (body.kind === "itinerary") {
-      const photoResults = await Promise.allSettled(items.map(async (raw) => searchUnsplashPhoto(await photoQueryOf(raw))));
+      const photoResults = await lookupPhotos(items);
       const rows = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
         return {
@@ -971,7 +1030,16 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       inserted = rows.length;
     }
 
-    await logRun({ kind: `generate_${body.kind}`, tripId: body.trip_id, inputTokens, outputTokens, costUsd, latencyMs, status: "ok" });
+    await logRun({
+      kind: `generate_${body.kind}`,
+      tripId: body.trip_id,
+      inputTokens,
+      outputTokens,
+      costUsd,
+      latencyMs,
+      status: "ok",
+      errorMessage: `diag: stop=${payload?.stop_reason} json_blocks=${jsonBlocks} items=${items.length} rows=${inserted}${photoStats ? ` ${photoStats}` : ""}`,
+    });
     return new Response(JSON.stringify({ ok: true, inserted }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
