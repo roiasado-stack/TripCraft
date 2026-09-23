@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, LinkIcon, Trash2, Upload } from "lucide-react";
+import { Download, ExternalLink, LinkIcon, ScanLine, Trash2, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import type { DocumentRow } from "@/lib/types";
@@ -8,8 +8,17 @@ import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, Chip, EmptyState, Field, Input, Modal, Spinner } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
 import { DOC_CATEGORIES, docCategoryLabel } from "@/lib/trip-options";
+import {
+  ImportVoucher,
+  type VoucherCarData,
+  type VoucherData,
+  type VoucherDocType,
+  type VoucherFlightData,
+  type VoucherHotelData,
+} from "@/components/ImportVoucher";
 
 const BUCKET = "trip-docs";
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
 export default function DocumentsTab() {
   const { trip, participants } = useTrip();
@@ -22,6 +31,7 @@ export default function DocumentsTab() {
   const [category, setCategory] = useState("flight");
   const [participantId, setParticipantId] = useState<string>("");
   const [linkModal, setLinkModal] = useState<{ name: string; url: string } | null>(null);
+  const [voucherOpen, setVoucherOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -34,36 +44,123 @@ export default function DocumentsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.id]);
 
+  /** Uploads a file into the trip-docs bucket at the standard path convention
+   *  and inserts a matching `documents` row. Shared by the manual file picker
+   *  and the voucher-scan confirm handler below — same path/size-cap logic,
+   *  called from two places. Throws on any failure (including an oversize
+   *  file) for the caller to catch and toast appropriately. */
+  const uploadDocument = async (file: File, fields: { category: string; participantId?: string | null; name?: string }) => {
+    if (!user) throw new Error("not_authenticated");
+    if (file.size > MAX_FILE_BYTES) throw new Error("file_too_large");
+    const safe = file.name.replace(/[^\w.\-]+/g, "_");
+    const path = `${user.id}/${trip.id}/${Date.now()}-${safe}`;
+    const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
+    if (upErr) throw upErr;
+    const { error: insErr } = await supabase.from("documents").insert({
+      trip_id: trip.id,
+      name: fields.name ?? file.name,
+      category: fields.category,
+      participant_id: fields.participantId || null,
+      storage_path: path,
+    });
+    if (insErr) throw insErr;
+  };
+
   const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    if (file.size > 20 * 1024 * 1024) {
-      toast.error("הקובץ גדול מדי (מקסימום 20MB)");
-      return;
-    }
     setUploading(true);
     try {
-      const safe = file.name.replace(/[^\w.\-]+/g, "_");
-      const path = `${user.id}/${trip.id}/${Date.now()}-${safe}`;
-      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
-      if (upErr) throw upErr;
-      const { error: insErr } = await supabase.from("documents").insert({
-        trip_id: trip.id,
-        name: file.name,
-        category,
-        participant_id: participantId || null,
-        storage_path: path,
-      });
-      if (insErr) throw insErr;
+      await uploadDocument(file, { category, participantId });
       toast.success("הקובץ הועלה 📎");
       load();
     } catch (err) {
-      console.error(err);
-      toast.error("ההעלאה נכשלה. ודא שהסכימה/הדלי הוגדרו (README).");
+      if (err instanceof Error && err.message === "file_too_large") {
+        toast.error("הקובץ גדול מדי (מקסימום 20MB)");
+      } else {
+        console.error(err);
+        toast.error("ההעלאה נכשלה. ודא שהסכימה/הדלי הוגדרו (README).");
+      }
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
     }
+  };
+
+  /** Human-in-the-loop voucher scan confirmed: insert the structured record
+   *  into the matching table, AND (best-effort) save the original file the
+   *  same way the manual upload path does — so both the parsed data and the
+   *  source document are preserved. */
+  const onVoucherConfirm = async (docType: VoucherDocType, data: VoucherData, sourceFile: File | null) => {
+    try {
+      if (docType === "flight") {
+        const d = data as VoucherFlightData;
+        const { error } = await supabase.from("flights").insert({
+          trip_id: trip.id,
+          direction: d.direction === "inbound" ? "inbound" : "outbound",
+          airline: d.airline,
+          flight_number: d.flight_number,
+          from_airport: d.from_airport,
+          to_airport: d.to_airport,
+          depart_at: d.depart_at,
+          arrive_at: d.arrive_at,
+          from_terminal: d.from_terminal,
+          to_terminal: d.to_terminal,
+          seats: d.seats,
+          baggage: d.baggage,
+          booking_ref: d.booking_ref,
+          notes: d.notes,
+        });
+        if (error) throw error;
+      } else if (docType === "hotel") {
+        const d = data as VoucherHotelData;
+        const { error } = await supabase.from("stays").insert({
+          trip_id: trip.id,
+          hotel_name: d.hotel_name,
+          address: d.address,
+          check_in: d.check_in,
+          check_out: d.check_out,
+          booking_ref: d.booking_ref,
+          phone: d.phone,
+          url: d.url,
+          notes: d.notes,
+        });
+        if (error) throw error;
+      } else {
+        const d = data as VoucherCarData;
+        const { error } = await supabase.from("transfers").insert({
+          trip_id: trip.id,
+          kind: "car_rental",
+          provider: d.provider,
+          pickup_location: d.pickup_location,
+          dropoff_location: d.dropoff_location,
+          pickup_at: d.pickup_at,
+          return_at: d.return_at,
+          booking_ref: d.booking_ref,
+          phone: d.phone,
+          url: d.url,
+          notes: d.notes,
+        });
+        if (error) throw error;
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("שמירת פרטי השובר נכשלה.");
+      return;
+    }
+
+    if (sourceFile) {
+      try {
+        await uploadDocument(sourceFile, { category: docType, name: sourceFile.name });
+      } catch (err) {
+        console.error(err);
+        toast.error("הפרטים נשמרו, אך שמירת הקובץ המקורי נכשלה.");
+        load();
+        return;
+      }
+    }
+    toast.success("הפרטים נשמרו 🧾");
+    load();
   };
 
   const saveLink = async () => {
@@ -154,6 +251,9 @@ export default function DocumentsTab() {
             Browse…) — "Browse" is also how Files-provider apps like Google
             Drive show up as an upload source, so this covers both. */}
         <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={onPickFile} />
+        <Button variant="soft" onClick={() => setVoucherOpen(true)}>
+          <ScanLine className="size-4" /> סריקת שובר הזמנה
+        </Button>
       </Card>
 
       {/* filter */}
@@ -226,6 +326,8 @@ export default function DocumentsTab() {
           </div>
         )}
       </Modal>
+
+      <ImportVoucher open={voucherOpen} onClose={() => setVoucherOpen(false)} onConfirm={onVoucherConfirm} />
     </div>
   );
 }

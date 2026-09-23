@@ -192,7 +192,7 @@ export interface AgentRun {
   id: string;
   trip_id: string | null;
   user_id: string;
-  kind: string; // ask | generate_suggestions | generate_itinerary | generate_checklist | generate_passports
+  kind: string; // ask | generate_suggestions | generate_itinerary | generate_checklist | generate_passports | generate_voucher
   input_tokens: number;
   output_tokens: number;
   cost_usd: number;

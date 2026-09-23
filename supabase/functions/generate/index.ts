@@ -40,8 +40,11 @@ type PassportImage = { media_type: string; data: string };
 
 type Body = {
   trip_id: string;
-  kind: "suggestions" | "itinerary" | "checklist" | "passports" | "photo" | "geocode";
+  kind: "suggestions" | "itinerary" | "checklist" | "passports" | "photo" | "geocode" | "voucher";
   images?: PassportImage[];
+  /** For kind: "voucher" — the document category the user picked before uploading, if any.
+   *  Narrows/primes classification; the model's own `doc_type` in the response stays authoritative. */
+  hint?: "flight" | "hotel" | "car" | "other";
   tune?: string | null;
   /** For kind: "photo" (Unsplash search term) or kind: "geocode" (place to look up). */
   query?: string;
@@ -150,14 +153,17 @@ function extractText(payload: unknown): string {
     .join("\n");
 }
 
-function extractJson(text: string): { items?: unknown[] } | null {
+// Generic enough for both `{items:[...]}` (suggestions/itinerary/checklist/passports)
+// and `{doc_type, data}` (voucher) shaped responses — callers narrow via Array.isArray
+// or direct field access on the returned record.
+function extractJson(text: string): Record<string, unknown> | null {
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const raw = fence ? fence[1] : text;
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
   if (start === -1 || end === -1) return null;
   try {
-    return JSON.parse(raw.slice(start, end + 1));
+    return JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -411,6 +417,179 @@ Deno.serve(async (req) => {
             : undefined,
       });
       return new Response(JSON.stringify({ ok: true, items }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
+    // Voucher scanning (flight/hotel/car-rental booking confirmations) returns a
+    // single classified record for client-side review only and writes nothing
+    // itself — same reasoning as "passports" above: no trip ownership check
+    // needed (this also covers the Wizard's logistics step, called before a
+    // trip row exists at all), but it's still a vision call so still capped
+    // and logged (trip_id: null when called without a real trip yet).
+    if (body.kind === "voucher") {
+      const images = (body.images ?? []).slice(0, 8);
+      if (!images.length) {
+        return new Response(JSON.stringify({ error: "no_images", ok: false }), {
+          status: 400,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+
+      const content: unknown[] = images.map((img) =>
+        img.media_type === "application/pdf"
+          ? { type: "document", source: { type: "base64", media_type: img.media_type, data: img.data } }
+          : { type: "image", source: { type: "base64", media_type: img.media_type, data: img.data } },
+      );
+
+      const hintLabels: Record<string, string> = { flight: "טיסה", hotel: "מלון", car: "רכב/העברה" };
+      const hintLine =
+        body.hint && hintLabels[body.hint]
+          ? `המשתמש חושב שזהו אישור הזמנה מסוג "${hintLabels[body.hint]}", אך סווג לפי תוכן המסמך בפועל וזהה מחדש אם הוא טעה.\n\n`
+          : "";
+
+      content.push({
+        type: "text",
+        text: `זהו את סוג מסמך ההזמנה המצורף (אישור טיסה / אישור מלון / אישור השכרת רכב או הסעה), וחלץ ממנו את הפרטים בדיוק כפי שהם מופיעים במסמך.
+
+${hintLine}החזר JSON בלבד, ללא טקסט נוסף, באחד מהמבנים הבאים לפי סוג המסמך שזיהית בפועל:
+
+אם זו טיסה:
+{"doc_type":"flight","data":{"direction":"outbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null}}
+(direction: "outbound" אם הטיסה יוצאת מישראל, "inbound" אם היא חוזרת לישראל — לפי שדות התעופה; אם לא ברור, "outbound".)
+
+אם זה מלון:
+{"doc_type":"hotel","data":{"hotel_name":"שם המלון","address":null,"check_in":"YYYY-MM-DD","check_out":"YYYY-MM-DD","booking_ref":null,"phone":null,"url":null,"notes":null}}
+
+אם זו השכרת רכב או הסעה:
+{"doc_type":"car","data":{"provider":"שם חברת ההשכרה או ההסעה","pickup_location":"נקודת איסוף","dropoff_location":null,"pickup_at":"YYYY-MM-DDTHH:MM:00","return_at":null,"booking_ref":null,"phone":null,"url":null,"notes":null}}
+
+אם המסמך אינו נראה כמו אישור הזמנה של טיסה/מלון/רכב, או שאי אפשר לזהות בבירור:
+{"doc_type":"unknown","data":null}
+
+כללים:
+- כל שדה שלא מופיע במסמך בבירור — החזר null, אל תמציא ואל תנחש.
+- תאריכים/שעות: קרא בדיוק את מה שמודפס במסמך, ללא המרת אזור זמן.
+- שמות (חברת תעופה, מלון, ספק) — השאר בשפה שבה הם מופיעים במסמך (עברית או לועזית), אל תתרגם.
+- אם אתה לא בטוח בסוג המסמך — עדיף "unknown" מאשר סיווג שגוי.`,
+      });
+
+      const runStart = Date.now();
+      const visionRes = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 1200,
+          messages: [{ role: "user", content }],
+        }),
+      });
+      const latencyMs = Date.now() - runStart;
+
+      if (!visionRes.ok) {
+        const detail = await visionRes.text();
+        await logRun({ kind: "generate_voucher", tripId: body.trip_id ?? null, inputTokens: 0, outputTokens: 0, costUsd: 0, latencyMs, status: "error", errorMessage: detail });
+        return new Response(JSON.stringify({ error: "llm_failed", detail, ok: false }), {
+          status: 502,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+
+      const visionPayload = await visionRes.json();
+      const visionUsage = visionPayload?.usage ?? {};
+      const visionInputTokens = Number(visionUsage.input_tokens ?? 0);
+      const visionOutputTokens = Number(visionUsage.output_tokens ?? 0);
+      const visionCostUsd =
+        (visionInputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (visionOutputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+
+      const visionText = extractText(visionPayload);
+      const parsedVision = extractJson(visionText);
+      const rawDocType = String(parsedVision?.doc_type ?? "unknown");
+      const docType = (["flight", "hotel", "car"].includes(rawDocType) ? rawDocType : "unknown") as
+        | "flight"
+        | "hotel"
+        | "car"
+        | "unknown";
+      const rawData = (parsedVision?.data ?? null) as Record<string, unknown> | null;
+
+      // Small local helpers — every field lands as a trimmed string capped at a
+      // sane length, or null. Never trust the model's null-ness claims blindly,
+      // but never invent a value either.
+      const str = (v: unknown, max = 300): string | null => {
+        const s = typeof v === "string" ? v.trim() : "";
+        return s ? s.slice(0, max) : null;
+      };
+      const isoDateTime = (v: unknown): string | null => {
+        const s = typeof v === "string" ? v.trim() : "";
+        return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) ? s.slice(0, 16) + ":00" : null;
+      };
+      const isoDate = (v: unknown): string | null => {
+        const s = typeof v === "string" ? v.trim() : "";
+        return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+      };
+
+      let data: Record<string, unknown> | null = null;
+      if (docType === "flight" && rawData) {
+        data = {
+          direction: rawData.direction === "inbound" ? "inbound" : "outbound",
+          airline: str(rawData.airline, 120),
+          flight_number: str(rawData.flight_number, 20),
+          from_airport: str(rawData.from_airport, 10),
+          to_airport: str(rawData.to_airport, 10),
+          depart_at: isoDateTime(rawData.depart_at),
+          arrive_at: isoDateTime(rawData.arrive_at),
+          from_terminal: str(rawData.from_terminal, 20),
+          to_terminal: str(rawData.to_terminal, 20),
+          seats: str(rawData.seats, 60),
+          baggage: str(rawData.baggage, 120),
+          booking_ref: str(rawData.booking_ref, 60),
+          notes: str(rawData.notes, 500),
+        };
+      } else if (docType === "hotel" && rawData) {
+        data = {
+          hotel_name: str(rawData.hotel_name, 200) ?? "",
+          address: str(rawData.address, 300),
+          check_in: isoDate(rawData.check_in),
+          check_out: isoDate(rawData.check_out),
+          booking_ref: str(rawData.booking_ref, 60),
+          phone: str(rawData.phone, 40),
+          url: str(rawData.url, 500),
+          notes: str(rawData.notes, 500),
+        };
+      } else if (docType === "car" && rawData) {
+        data = {
+          provider: str(rawData.provider, 200),
+          pickup_location: str(rawData.pickup_location, 300),
+          dropoff_location: str(rawData.dropoff_location, 300),
+          pickup_at: isoDateTime(rawData.pickup_at),
+          return_at: isoDateTime(rawData.return_at),
+          booking_ref: str(rawData.booking_ref, 60),
+          phone: str(rawData.phone, 40),
+          url: str(rawData.url, 500),
+          notes: str(rawData.notes, 500),
+        };
+      }
+
+      const finalDocType = data ? docType : "unknown";
+
+      await logRun({
+        kind: "generate_voucher",
+        tripId: body.trip_id ?? null,
+        inputTokens: visionInputTokens,
+        outputTokens: visionOutputTokens,
+        costUsd: visionCostUsd,
+        latencyMs,
+        status: "ok",
+        errorMessage:
+          finalDocType === "unknown"
+            ? `unknown_doc: stop=${visionPayload?.stop_reason} blocks=${(visionPayload?.content ?? []).map((b: { type?: string }) => b?.type).join(",")} text=${visionText.slice(0, 300)}`
+            : undefined,
+      });
+      return new Response(JSON.stringify({ ok: true, doc_type: finalDocType, data }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }

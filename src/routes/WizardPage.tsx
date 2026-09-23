@@ -1,11 +1,19 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, Plus, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Plus, ScanLine, Trash2, Users, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button, Card, Chip, Field, Input, Label, Segmented } from "@/components/ui";
 import { ImportParticipants } from "@/components/ImportParticipants";
+import {
+  ImportVoucher,
+  type VoucherCarData,
+  type VoucherData,
+  type VoucherDocType,
+  type VoucherFlightData,
+  type VoucherHotelData,
+} from "@/components/ImportVoucher";
 import {
   AGE_RANGES,
   BUDGET_LEVELS,
@@ -36,6 +44,18 @@ type TransferDraft = { kind: string; provider: string; pickup_location: string; 
 
 const STEPS = ["יעד", "משתתפים", "לוגיסטיקה", "סיכום"];
 
+/** ISO timestamp → the "YYYY-MM-DDTHH:MM" shape a native datetime-local input
+ *  expects. Reads local wall-clock fields off the Date object rather than
+ *  slicing the ISO string, so it round-trips correctly regardless of the
+ *  timezone offset baked into the ISO value. */
+function isoToDatetimeLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function WizardPage() {
   const { user, isAgent } = useAuth();
   const toast = useToast();
@@ -43,6 +63,7 @@ export default function WizardPage() {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [voucherOpen, setVoucherOpen] = useState(false);
 
   // step 0
   const [destination, setDestination] = useState("");
@@ -228,6 +249,7 @@ export default function WizardPage() {
           setStays={setStays}
           transfers={transfers}
           setTransfers={setTransfers}
+          onScanVoucher={() => setVoucherOpen(true)}
         />
       )}
       {step === 3 && (
@@ -259,6 +281,55 @@ export default function WizardPage() {
             })),
           ])
         }
+      />
+
+      {/* No trip exists yet at this point in the flow, so unlike the
+          Documents-tab path, there's nothing to upload the source file to —
+          the scanned file itself isn't kept, only the extracted data staged
+          into these local draft arrays until `create()` inserts them for
+          real. Same accepted limitation as passport photos scanned here. */}
+      <ImportVoucher
+        open={voucherOpen}
+        onClose={() => setVoucherOpen(false)}
+        onConfirm={(docType: VoucherDocType, data: VoucherData) => {
+          if (docType === "flight") {
+            const d = data as VoucherFlightData;
+            setFlights((prev) => [
+              ...prev,
+              {
+                direction: d.direction === "inbound" ? "inbound" : "outbound",
+                airline: d.airline ?? "",
+                flight_number: d.flight_number ?? "",
+                from_airport: d.from_airport ?? "",
+                to_airport: d.to_airport ?? "",
+                depart_at: isoToDatetimeLocalInput(d.depart_at),
+              },
+            ]);
+          } else if (docType === "hotel") {
+            const d = data as VoucherHotelData;
+            setStays((prev) => [
+              ...prev,
+              {
+                hotel_name: d.hotel_name,
+                address: d.address ?? "",
+                check_in: d.check_in ?? "",
+                check_out: d.check_out ?? "",
+                booking_ref: d.booking_ref ?? "",
+              },
+            ]);
+          } else {
+            const d = data as VoucherCarData;
+            setTransfers((prev) => [
+              ...prev,
+              {
+                kind: "car_rental",
+                provider: d.provider ?? "",
+                pickup_location: d.pickup_location ?? "",
+                pickup_at: isoToDatetimeLocalInput(d.pickup_at),
+              },
+            ]);
+          }
+        }}
       />
 
       {/* bottom action */}
@@ -522,6 +593,7 @@ function StepLogistics({
   setStays,
   transfers,
   setTransfers,
+  onScanVoucher,
 }: {
   flights: FlightDraft[];
   setFlights: Dispatch<SetStateAction<FlightDraft[]>>;
@@ -529,6 +601,10 @@ function StepLogistics({
   setStays: Dispatch<SetStateAction<StayDraft[]>>;
   transfers: TransferDraft[];
   setTransfers: Dispatch<SetStateAction<TransferDraft[]>>;
+  /** Opens the shared voucher-scan modal (owned by the parent, same pattern as
+   *  onBulkOpen/ImportParticipants) — the returned doc type routes to whichever
+   *  section it actually matches, regardless of which button opened it. */
+  onScanVoucher: () => void;
 }) {
   // Functional updates keep rapid edits from clobbering each other.
   const patchFlight = (i: number, patch: Partial<FlightDraft>) =>
@@ -574,9 +650,18 @@ function StepLogistics({
             </Field>
           </Card>
         ))}
-        <Button variant="outline" onClick={() => setFlights((prev) => [...prev, { direction: "outbound", airline: "", flight_number: "", from_airport: "", to_airport: "", depart_at: "" }])}>
-          <Plus className="size-4" /> הוספת טיסה
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setFlights((prev) => [...prev, { direction: "outbound", airline: "", flight_number: "", from_airport: "", to_airport: "", depart_at: "" }])}
+          >
+            <Plus className="size-4" /> הוספת טיסה
+          </Button>
+          <Button variant="soft" className="flex-1" onClick={onScanVoucher}>
+            <ScanLine className="size-4" /> סריקת שובר
+          </Button>
+        </div>
       </section>
 
       {/* Stays */}
@@ -602,9 +687,18 @@ function StepLogistics({
             <Input placeholder="מספר הזמנה" value={s.booking_ref} onChange={(e) => patchStay(i, { booking_ref: e.target.value })} />
           </Card>
         ))}
-        <Button variant="outline" onClick={() => setStays((prev) => [...prev, { hotel_name: "", address: "", check_in: "", check_out: "", booking_ref: "" }])}>
-          <Plus className="size-4" /> הוספת מלון
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setStays((prev) => [...prev, { hotel_name: "", address: "", check_in: "", check_out: "", booking_ref: "" }])}
+          >
+            <Plus className="size-4" /> הוספת מלון
+          </Button>
+          <Button variant="soft" className="flex-1" onClick={onScanVoucher}>
+            <ScanLine className="size-4" /> סריקת שובר
+          </Button>
+        </div>
       </section>
 
       {/* Transfers */}
@@ -632,9 +726,18 @@ function StepLogistics({
             </Field>
           </Card>
         ))}
-        <Button variant="outline" onClick={() => setTransfers((prev) => [...prev, { kind: "transfer", provider: "", pickup_location: "", pickup_at: "" }])}>
-          <Plus className="size-4" /> הוספת העברה / רכב
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setTransfers((prev) => [...prev, { kind: "transfer", provider: "", pickup_location: "", pickup_at: "" }])}
+          >
+            <Plus className="size-4" /> הוספת העברה / רכב
+          </Button>
+          <Button variant="soft" className="flex-1" onClick={onScanVoucher}>
+            <ScanLine className="size-4" /> סריקת שובר
+          </Button>
+        </div>
       </section>
     </div>
   );
