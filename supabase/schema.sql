@@ -303,6 +303,18 @@ ALTER TABLE public.knowledge_chunks ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON public.knowledge_chunks TO service_role;
 REVOKE ALL ON public.knowledge_chunks FROM anon, authenticated;
 CREATE INDEX IF NOT EXISTS knowledge_chunks_destination_idx ON public.knowledge_chunks (destination);
+
+-- Photo cache for the generate function's Unsplash lookups (migration 012).
+-- Service-role only: users must never be able to plant an image other trips show.
+CREATE TABLE IF NOT EXISTS public.photo_cache (
+  query_key TEXT PRIMARY KEY,
+  url TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.photo_cache ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.photo_cache TO service_role;
+REVOKE ALL ON public.photo_cache FROM anon, authenticated;
+
 CREATE OR REPLACE FUNCTION public.match_knowledge_chunks(
   query_embedding VECTOR(1024),
   filter_destination TEXT,

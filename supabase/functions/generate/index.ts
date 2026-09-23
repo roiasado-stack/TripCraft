@@ -121,7 +121,8 @@ ${describeParticipants(participants)}${tuneLine}`;
 - אם צוין כשרות/צמחונות — התייחס לכך במסעדות.
 - מקומות אמיתיים וידועים ב${trip.destination}. כל הטקסט בעברית.
 - photo_query: ביטוי חיפוש קצר באנגלית (2-5 מילים) לחיפוש תמונת סטוק אמיתית של המקום הספציפי הזה — לא הכותרת בעברית, למשל "Eiffel Tower Paris" או "sushi restaurant Tokyo".
-- lat/lng: קואורדינטות עשרוניות משוערות אך אמיתיות של המקום הספציפי, לפי הידע שלך (הערכה טובה מספיקה לסמן על מפה, לא נדרשת דיוק סקר-קרקע). לטיפים כלליים שאינם מקום ספציפי — השמט lat/lng.`;
+- lat/lng: קואורדינטות עשרוניות משוערות אך אמיתיות של המקום הספציפי, לפי הידע שלך (הערכה טובה מספיקה לסמן על מפה, לא נדרשת דיוק סקר-קרקע). לטיפים כלליים שאינם מקום ספציפי — השמט lat/lng.
+- בקיצורים עבריים (כמו חב״ד, אונסק״ו, ארה״ב) כתוב את הגרשיים בתו ״ ולא במירכאות " — מירכאות רגילות שוברות את ה-JSON.`;
   }
 
   if (kind === "itinerary") {
@@ -137,7 +138,8 @@ ${describeParticipants(participants)}${tuneLine}`;
 - התאם לקצב המשתתפים (ילדים/מבוגרים) ולהעדפות.
 - day_date חייב להיות אחד מהתאריכים שצוינו. כל הטקסט בעברית.
 - photo_query: ביטוי חיפוש קצר באנגלית (2-5 מילים) לחיפוש תמונת סטוק אמיתית של המקום/הפעילות הספציפית הזו — לא הכותרת בעברית, למשל "hiking trail Alps".
-- lat/lng: קואורדינטות עשרוניות משוערות אך אמיתיות של המקום הספציפי, לפי הידע שלך (הערכה טובה מספיקה לסמן על מפה, לא נדרשת דיוק סקר-קרקע). לפריטים כלליים ללא מקום מסוים (כמו "זמן חופשי") — השמט lat/lng.`;
+- lat/lng: קואורדינטות עשרוניות משוערות אך אמיתיות של המקום הספציפי, לפי הידע שלך (הערכה טובה מספיקה לסמן על מפה, לא נדרשת דיוק סקר-קרקע). לפריטים כלליים ללא מקום מסוים (כמו "זמן חופשי") — השמט lat/lng.
+- בקיצורים עבריים (כמו חב״ד, אונסק״ו, ארה״ב) כתוב את הגרשיים בתו ״ ולא במירכאות " — מירכאות רגילות שוברות את ה-JSON.`;
   }
 
   return `${context}
@@ -147,7 +149,8 @@ ${describeParticipants(participants)}${tuneLine}`;
 
 דרישות:
 - 15-25 פריטים. is_shared=true לפריטים משותפים למשפחה, false לפריטים אישיים.
-- התאם למשתתפים (תינוקות/ילדים), ליעד, לעונה ולהעדפות. כל הטקסט בעברית.`;
+- התאם למשתתפים (תינוקות/ילדים), ליעד, לעונה ולהעדפות. כל הטקסט בעברית.
+- בקיצורים עבריים (כמו חב״ד, אונסק״ו, ארה״ב) כתוב את הגרשיים בתו ״ ולא במירכאות " — מירכאות רגילות שוברות את ה-JSON.`;
 }
 
 /**
@@ -171,7 +174,12 @@ function extractText(payload: unknown): string {
  * Brace-matching respects string literals, so braces inside values are safe;
  * quotes outside any object (prose) are ignored.
  */
-function extractJsonObjects(text: string): Record<string, unknown>[] {
+function extractJsonObjects(rawText: string): Record<string, unknown>[] {
+  // Hebrew abbreviations (אונסק"ו, חב"ד, ארה"ב) are often written with a plain
+  // double quote, which ends the JSON string early and loses the whole reply.
+  // A quote between two Hebrew letters can never be JSON syntax, so turning it
+  // into the proper gershayim (״) is always safe.
+  const text = rawText.replace(/([\u0590-\u05FF])"(?=[\u0590-\u05FF])/g, "$1\u05F4");
   const out: Record<string, unknown>[] = [];
   let depth = 0;
   let start = -1;
@@ -230,12 +238,38 @@ async function searchUnsplashPhoto(query: string): Promise<string | null> {
   return (await unsplashLookup(query)).url;
 }
 
+// Service-role client used ONLY for photo_cache (migration 012). That table is
+// deliberately not user-writable — a user who could write it could plant an
+// image every other trip then shows — so it can't go through the caller's JWT.
+let adminClient: ReturnType<typeof createClient> | null = null;
+function adminDb(): ReturnType<typeof createClient> | null {
+  if (!adminClient) {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) return null;
+    adminClient = createClient(url, key, { auth: { persistSession: false } });
+  }
+  return adminClient;
+}
+const photoCacheKey = (q: string) => q.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 200);
+
 /** Same lookup, plus a short reason when it comes back empty — fed into the
  *  generation diagnostics in agent_runs so a photo outage is visible. */
-async function unsplashLookup(query: string): Promise<{ url: string | null; fail?: string }> {
+async function unsplashLookup(query: string): Promise<{ url: string | null; fail?: string; cached?: boolean }> {
+  const cacheKey = photoCacheKey(query);
+  if (!cacheKey) return { url: null, fail: "empty_query" };
+  const db = adminDb();
+  if (db) {
+    try {
+      const { data } = await db.from("photo_cache").select("url").eq("query_key", cacheKey).maybeSingle();
+      const cachedUrl = (data as { url?: string } | null)?.url;
+      if (cachedUrl) return { url: cachedUrl, cached: true };
+    } catch {
+      // Cache is an optimization only — fall through to Unsplash.
+    }
+  }
   const key = Deno.env.get("UNSPLASH_ACCESS_KEY");
   if (!key) return { url: null, fail: "no_key" };
-  if (!query.trim()) return { url: null, fail: "empty_query" };
   try {
     const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`;
     const res = await fetch(url, { headers: { Authorization: `Client-ID ${key}` } });
@@ -247,7 +281,16 @@ async function unsplashLookup(query: string): Promise<{ url: string | null; fail
     const data = await res.json();
     const photo = data?.results?.[0];
     if (!photo?.urls?.regular) return { url: null, fail: `no_results:${query.slice(0, 40)}` };
-    return { url: `${photo.urls.regular}&utm_source=tripcraft&utm_medium=referral` };
+    const found = `${photo.urls.regular}&utm_source=tripcraft&utm_medium=referral`;
+    if (db) {
+      try {
+        // Awaited on purpose: an un-awaited write can be cut off when the function returns.
+        await db.from("photo_cache").upsert({ query_key: cacheKey, url: found });
+      } catch {
+        // Best-effort.
+      }
+    }
+    return { url: found };
   } catch (e) {
     console.error("Unsplash search threw", e);
     return { url: null, fail: `exception:${String(e).slice(0, 80)}` };
@@ -948,13 +991,21 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       const r = results[idx];
       return r?.status === "fulfilled" ? r.value.url : null;
     };
-    const lookupPhotos = async (list: unknown[]) => {
-      const results = await Promise.allSettled(list.map(async (raw) => unsplashLookup(await photoQueryOf(raw))));
+    // `skip` marks items that aren't a place (general tips, free time,
+    // transport) — no photo lookup for those, which also saves Unsplash quota.
+    const lookupPhotos = async (list: unknown[], skip: (i: Record<string, unknown>) => boolean) => {
+      const results = await Promise.allSettled(
+        list.map(async (raw): Promise<{ url: string | null; fail?: string; cached?: boolean }> =>
+          skip(raw as Record<string, unknown>) ? { url: null } : unsplashLookup(await photoQueryOf(raw)),
+        ),
+      );
+      const skipped = list.filter((raw) => skip(raw as Record<string, unknown>)).length;
       const found = results.filter((r) => r.status === "fulfilled" && r.value.url).length;
+      const cached = results.filter((r) => r.status === "fulfilled" && r.value.cached).length;
       const firstFail = results
         .map((r) => (r.status === "fulfilled" ? r.value.fail : `rejected:${String(r.reason).slice(0, 60)}`))
         .find((f) => f);
-      photoStats = `photos=${found}/${list.length}${firstFail ? ` first_fail=${firstFail}` : ""}`;
+      photoStats = `photos=${found}/${list.length - skipped} cached=${cached} skipped=${skipped}${firstFail ? ` first_fail=${firstFail}` : ""}`;
       return results;
     };
 
@@ -972,7 +1023,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
     };
 
     if (body.kind === "suggestions") {
-      const photoResults = await lookupPhotos(items);
+      const photoResults = await lookupPhotos(items, (i) => i.kind === "tip" || i.kind === "gear");
       const rows = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
         return {
@@ -993,7 +1044,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       if (error) throw error;
       inserted = rows.length;
     } else if (body.kind === "itinerary") {
-      const photoResults = await lookupPhotos(items);
+      const photoResults = await lookupPhotos(items, (i) => i.category === "transport" || i.category === "free");
       const rows = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
         return {
