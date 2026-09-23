@@ -10,10 +10,9 @@ import { ImportBookings, personKey, type BookingsImportResult, type BookingTrave
 import {
   ImportVoucher,
   type VoucherCarData,
-  type VoucherData,
-  type VoucherDocType,
   type VoucherFlightData,
   type VoucherHotelData,
+  type VoucherResult,
 } from "@/components/ImportVoucher";
 import { generateContent } from "@/lib/ai";
 import { uploadTripDocument } from "@/lib/documents";
@@ -38,8 +37,10 @@ type PartDraft = {
 // The optional fields below have no wizard UI: they carry voucher-scanned
 // detail through to create() as hidden values (manually added drafts simply
 // leave them unset). `source_file` is the scanned original, uploaded to
-// trip-docs once the trip exists — tied to the draft so deleting the draft in
-// the logistics step also drops its file.
+// trip-docs once the trip exists. Every flight segment scanned from one file
+// shares that one File object (afterCreate de-duplicates by identity), so the
+// file is dropped only once every draft carrying it has been deleted in the
+// logistics step — deleting just one segment never loses it.
 type FlightDraft = {
   direction: "outbound" | "inbound";
   airline: string;
@@ -356,11 +357,19 @@ export default function WizardPage() {
     partRows: { name: string; age: number | null; age_range: string | null; preferences: string[] }[],
     savedStays: StayDraft[],
   ) => {
+    // A multi-segment flight file puts the SAME File object on every segment's
+    // draft, so keep only the first occurrence of each File: every original is
+    // uploaded exactly once, as long as at least one of its drafts survived.
+    const seenFiles = new Set<File>();
     const sourceDocs = [
       ...flights.map((f) => ({ file: f.source_file, category: "flight" })),
       ...savedStays.map((s) => ({ file: s.source_file, category: "hotel" })),
       ...transfers.map((t) => ({ file: t.source_file, category: "car" })),
-    ].filter((d): d is { file: File; category: string } => !!d.file);
+    ].filter((d): d is { file: File; category: string } => {
+      if (!d.file || seenFiles.has(d.file)) return false;
+      seenFiles.add(d.file);
+      return true;
+    });
 
     if (!autoGenerate && !sourceDocs.length) {
       toast.success("הטיול נוצר! ✈️");
@@ -573,13 +582,15 @@ export default function WizardPage() {
       <ImportVoucher
         open={voucherOpen}
         onClose={() => setVoucherOpen(false)}
-        onConfirm={(docType: VoucherDocType, data: VoucherData, sourceFile: File | null) => {
-          if (docType === "flight") {
-            setFlights((prev) => [...prev, flightDraftFromVoucher(data as VoucherFlightData, sourceFile)]);
-          } else if (docType === "hotel") {
-            setStays((prev) => [...prev, stayDraftFromVoucher(data as VoucherHotelData, sourceFile)]);
+        onConfirm={(result: VoucherResult, sourceFile: File | null) => {
+          if (result.docType === "flight") {
+            // One draft per segment, all sharing the one File object —
+            // afterCreate uploads each distinct file once.
+            setFlights((prev) => [...prev, ...result.data.map((seg) => flightDraftFromVoucher(seg, sourceFile))]);
+          } else if (result.docType === "hotel") {
+            setStays((prev) => [...prev, stayDraftFromVoucher(result.data, sourceFile)]);
           } else {
-            setTransfers((prev) => [...prev, transferDraftFromVoucher(data as VoucherCarData, sourceFile)]);
+            setTransfers((prev) => [...prev, transferDraftFromVoucher(result.data, sourceFile)]);
           }
         }}
       />

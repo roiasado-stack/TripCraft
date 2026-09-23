@@ -8,14 +8,7 @@ import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, Chip, EmptyState, Field, Input, Modal, Spinner } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
 import { DOC_CATEGORIES, docCategoryLabel } from "@/lib/trip-options";
-import {
-  ImportVoucher,
-  type VoucherCarData,
-  type VoucherData,
-  type VoucherDocType,
-  type VoucherFlightData,
-  type VoucherHotelData,
-} from "@/components/ImportVoucher";
+import { ImportVoucher, type VoucherResult } from "@/components/ImportVoucher";
 import { DOCS_BUCKET as BUCKET, uploadTripDocument } from "@/lib/documents";
 
 export default function DocumentsTab() {
@@ -76,29 +69,33 @@ export default function DocumentsTab() {
    *  into the matching table, AND (best-effort) save the original file the
    *  same way the manual upload path does — so both the parsed data and the
    *  source document are preserved. */
-  const onVoucherConfirm = async (docType: VoucherDocType, data: VoucherData, sourceFile: File | null) => {
+  const onVoucherConfirm = async (result: VoucherResult, sourceFile: File | null) => {
+    const docType = result.docType;
     try {
-      if (docType === "flight") {
-        const d = data as VoucherFlightData;
-        const { error } = await supabase.from("flights").insert({
-          trip_id: trip.id,
-          direction: d.direction === "inbound" ? "inbound" : "outbound",
-          airline: d.airline,
-          flight_number: d.flight_number,
-          from_airport: d.from_airport,
-          to_airport: d.to_airport,
-          depart_at: d.depart_at,
-          arrive_at: d.arrive_at,
-          from_terminal: d.from_terminal,
-          to_terminal: d.to_terminal,
-          seats: d.seats,
-          baggage: d.baggage,
-          booking_ref: d.booking_ref,
-          notes: d.notes,
-        });
+      if (result.docType === "flight") {
+        // Every segment (outbound, return, connection legs) in one insert —
+        // all or nothing, and the source file below is still uploaded once.
+        const { error } = await supabase.from("flights").insert(
+          result.data.map((d) => ({
+            trip_id: trip.id,
+            direction: d.direction === "inbound" ? "inbound" : "outbound",
+            airline: d.airline,
+            flight_number: d.flight_number,
+            from_airport: d.from_airport,
+            to_airport: d.to_airport,
+            depart_at: d.depart_at,
+            arrive_at: d.arrive_at,
+            from_terminal: d.from_terminal,
+            to_terminal: d.to_terminal,
+            seats: d.seats,
+            baggage: d.baggage,
+            booking_ref: d.booking_ref,
+            notes: d.notes,
+          })),
+        );
         if (error) throw error;
-      } else if (docType === "hotel") {
-        const d = data as VoucherHotelData;
+      } else if (result.docType === "hotel") {
+        const d = result.data;
         const { error } = await supabase.from("stays").insert({
           trip_id: trip.id,
           hotel_name: d.hotel_name,
@@ -112,7 +109,7 @@ export default function DocumentsTab() {
         });
         if (error) throw error;
       } else {
-        const d = data as VoucherCarData;
+        const d = result.data;
         const { error } = await supabase.from("transfers").insert({
           trip_id: trip.id,
           kind: "car_rental",

@@ -9,8 +9,8 @@ import { AGE_RANGES, prefLabel } from "@/lib/trip-options";
 import type { ParsedParticipant } from "@/lib/import-participants";
 import {
   blankCar,
-  blankFlight,
   blankHotel,
+  flightSegmentsFrom,
   type VoucherCarData,
   type VoucherData,
   type VoucherDocType,
@@ -46,6 +46,10 @@ type ScannedPassenger = {
   preferences: string[];
 };
 
+/** One reviewed booking. A flight file with several segments yields several
+ *  bookings that share the SAME `sourceFile` object — consumers must upload
+ *  each distinct File once (WizardPage.afterCreate de-duplicates by identity),
+ *  never once per booking. */
 export type ImportedBooking = { docType: VoucherDocType; data: VoucherData; sourceFile: File };
 /** Same shape the passport scan hands the wizard, plus the detected passenger type. */
 export type BookingTraveller = ParsedParticipant & { type: PassengerType | null };
@@ -58,16 +62,25 @@ export type BookingsImportResult = {
 };
 
 type ScanStatus = "pending" | "scanning" | "done" | "unknown" | "error";
+type ScannedBooking = {
+  /** Stable per card: `${scanItemId}-${index}`. */
+  key: string;
+  docType: VoucherDocType;
+  data: VoucherData;
+  /** Removed by the user in the review view — kept so keys stay stable. */
+  removed: boolean;
+};
 type ScanItem = {
   id: number;
   file: File;
   status: ScanStatus;
-  booking: { docType: VoucherDocType; data: VoucherData } | null;
+  /** One per flight segment for a flight file; exactly one for hotel/car. */
+  bookings: ScannedBooking[];
   destination: string | null;
   passengers: ScannedPassenger[];
-  /** Removed by the user in the review view — kept so ids stay stable. */
-  removed: boolean;
 };
+
+const liveBookings = (it: ScanItem) => it.bookings.filter((b) => !b.removed);
 type TravellerDraft = {
   /** Normalized name, fixed at first sight — used for de-duplication only. */
   key: string;
@@ -140,9 +153,10 @@ function bookingDates(b: { docType: VoucherDocType; data: VoucherData }): string
   return raw.map(datePart).filter((d): d is string => !!d);
 }
 
-/** Start = earliest date across all bookings, end = latest. */
+/** Start = earliest date across all bookings (every flight segment included,
+ *  so a return flight sets the end date), end = latest. */
 function pickDates(items: ScanItem[]): { start: string; end: string } {
-  const all = items.flatMap((i) => (i.booking ? bookingDates(i.booking) : [])).sort();
+  const all = items.flatMap((i) => liveBookings(i).flatMap(bookingDates)).sort();
   return { start: all[0] ?? "", end: all[all.length - 1] ?? "" };
 }
 
@@ -152,9 +166,10 @@ function pickDestination(items: ScanItem[]): string {
   const priority: Record<VoucherDocType, number> = { hotel: 2, car: 1, flight: 0 };
   const tally = new Map<string, { count: number; pri: number }>();
   for (const it of items) {
-    if (!it.destination || !it.booking) continue;
+    const first = liveBookings(it)[0];
+    if (!it.destination || !first) continue;
     const cur = tally.get(it.destination) ?? { count: 0, pri: -1 };
-    tally.set(it.destination, { count: cur.count + 1, pri: Math.max(cur.pri, priority[it.booking.docType]) });
+    tally.set(it.destination, { count: cur.count + 1, pri: Math.max(cur.pri, priority[first.docType]) });
   }
   const best = [...tally.entries()].sort((a, b) => b[1].count - a[1].count || b[1].pri - a[1].pri)[0];
   return best?.[0] ?? "";
@@ -287,7 +302,8 @@ export function ImportBookings({
   const patchItem = (id: number, patch: Partial<ScanItem>) =>
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
 
-  /** One file = one booking = one `voucher` call. Never throws. */
+  /** One file = one `voucher` call = one document (a flight file may hold
+   *  several segments → several bookings). Never throws. */
   const scanOne = async (item: ScanItem): Promise<{ recognized: boolean; error?: string }> => {
     patchItem(item.id, { status: "scanning" });
     try {
@@ -303,6 +319,7 @@ export function ImportBookings({
         ok?: boolean;
         doc_type?: string;
         data?: Record<string, unknown> | null;
+        segments?: unknown;
         destination?: unknown;
         passengers?: unknown;
       };
@@ -311,15 +328,15 @@ export function ImportBookings({
         return { recognized: false };
       }
       const docType = res.doc_type;
-      const bookingData: VoucherData =
+      const datas: VoucherData[] =
         docType === "flight"
-          ? { ...blankFlight, ...(res.data as Partial<VoucherFlightData>) }
+          ? flightSegmentsFrom(res)
           : docType === "hotel"
-            ? { ...blankHotel, ...(res.data as Partial<VoucherHotelData>) }
-            : { ...blankCar, ...(res.data as Partial<VoucherCarData>) };
+            ? [{ ...blankHotel, ...(res.data as Partial<VoucherHotelData>) }]
+            : [{ ...blankCar, ...(res.data as Partial<VoucherCarData>) }];
       patchItem(item.id, {
         status: "done",
-        booking: { docType, data: bookingData },
+        bookings: datas.map((data, i) => ({ key: `${item.id}-${i}`, docType, data, removed: false })),
         destination: typeof res.destination === "string" && res.destination.trim() ? res.destination.trim() : null,
         passengers: readPassengers(res.passengers),
       });
@@ -344,10 +361,9 @@ export function ImportBookings({
       id: nextId.current++,
       file,
       status: "pending",
-      booking: null,
+      bookings: [],
       destination: null,
       passengers: [],
-      removed: false,
     }));
     setItems((prev) => [...prev, ...batch]);
 
@@ -380,8 +396,11 @@ export function ImportBookings({
     }
   };
 
-  const recognizedItems = (list: ScanItem[]) => list.filter((i) => i.status === "done" && i.booking && !i.removed);
+  /** Scanned files that still have at least one booking the user kept. */
+  const recognizedItems = (list: ScanItem[]) => list.filter((i) => i.status === "done" && liveBookings(i).length > 0);
   const active = recognizedItems(items);
+  /** Every kept booking (card), each paired with the scanned file it came from. */
+  const activeBookings = active.flatMap((it) => liveBookings(it).map((b) => ({ item: it, booking: b })));
 
   /** Re-derives whatever the user hasn't edited yet from the current bookings. */
   const refreshBasics = (list: ScanItem[]) => {
@@ -404,8 +423,11 @@ export function ImportBookings({
     setView("review");
   };
 
-  const removeBooking = (id: number) => {
-    const next = items.map((it) => (it.id === id ? { ...it, removed: true } : it));
+  const removeBooking = (key: string) => {
+    const next = items.map((it) => ({
+      ...it,
+      bookings: it.bookings.map((b) => (b.key === key ? { ...b, removed: true } : b)),
+    }));
     setItems(next);
     refreshBasics(next);
   };
@@ -419,7 +441,7 @@ export function ImportBookings({
   };
 
   const confirm = () => {
-    if (!active.length) return;
+    if (!activeBookings.length) return;
     if (startDate && endDate && endDate < startDate) {
       toast.error("תאריך החזרה מוקדם מתאריך היציאה");
       return;
@@ -444,7 +466,14 @@ export function ImportBookings({
       startDate,
       endDate,
       travellers: out,
-      bookings: active.map((i) => ({ docType: i.booking!.docType, data: i.booking!.data, sourceFile: i.file })),
+      // Every kept segment of a file carries that file's one File object, so
+      // removing any card (even the first segment) never loses the original;
+      // it's dropped only when all of that file's cards are removed.
+      bookings: activeBookings.map(({ item, booking }) => ({
+        docType: booking.docType,
+        data: booking.data,
+        sourceFile: item.file,
+      })),
     });
     close();
   };
@@ -455,12 +484,17 @@ export function ImportBookings({
         return { icon: <Clock className="size-4 text-muted-foreground" />, text: "ממתין…", tone: "text-muted-foreground" };
       case "scanning":
         return { icon: <Loader2 className="size-4 animate-spin text-primary" />, text: "סורק…", tone: "text-primary" };
-      case "done":
+      case "done": {
+        const docType = it.bookings[0]?.docType ?? "flight";
         return {
-          icon: <span className="text-base leading-none">{DOC_EMOJI[it.booking!.docType]}</span>,
-          text: `זוהה: ${DOC_LABEL[it.booking!.docType]}`,
+          icon: <span className="text-base leading-none">{DOC_EMOJI[docType]}</span>,
+          text:
+            docType === "flight" && it.bookings.length > 1
+              ? `זוהו: ${it.bookings.length} טיסות`
+              : `זוהה: ${DOC_LABEL[docType]}`,
           tone: "text-primary",
         };
+      }
       case "unknown":
         return { icon: <AlertTriangle className="size-4 text-destructive" />, text: "לא זוהה — ידולג", tone: "text-destructive" };
       default:
@@ -499,17 +533,18 @@ export function ImportBookings({
             <div className="flex flex-col gap-1.5">
               {items.map((it) => {
                 const s = statusLine(it);
+                const removed = it.bookings.length > 0 && liveBookings(it).length === 0;
                 return (
                   <div
                     key={it.id}
-                    className={cn("flex items-center gap-2 rounded-2xl border border-border p-2.5", it.removed && "opacity-50")}
+                    className={cn("flex items-center gap-2 rounded-2xl border border-border p-2.5", removed && "opacity-50")}
                   >
                     <div className="grid size-7 shrink-0 place-items-center">{s.icon}</div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold" dir="auto">
                         {it.file.name}
                       </div>
-                      <div className={cn("text-xs font-medium", s.tone)}>{it.removed ? "הוסר" : s.text}</div>
+                      <div className={cn("text-xs font-medium", s.tone)}>{removed ? "הוסר" : s.text}</div>
                     </div>
                     {it.status !== "pending" && it.status !== "scanning" && (
                       <button
@@ -628,15 +663,15 @@ export function ImportBookings({
 
           {/* Bookings */}
           <section className="flex flex-col gap-2">
-            <h3 className="font-bold">הזמנות ({active.length})</h3>
-            {active.map((it) => (
-              <Card key={it.id} className="flex items-center gap-3 p-3 shadow-none">
+            <h3 className="font-bold">הזמנות ({activeBookings.length})</h3>
+            {activeBookings.map(({ booking }) => (
+              <Card key={booking.key} className="flex items-center gap-3 p-3 shadow-none">
                 <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary-soft text-lg">
-                  {DOC_EMOJI[it.booking!.docType]}
+                  {DOC_EMOJI[booking.docType]}
                 </div>
-                <BookingSummary booking={it.booking!} />
+                <BookingSummary booking={booking} />
                 <button
-                  onClick={() => removeBooking(it.id)}
+                  onClick={() => removeBooking(booking.key)}
                   className="grid size-8 shrink-0 place-items-center rounded-xl text-destructive"
                   aria-label="הסרת ההזמנה"
                 >
@@ -652,7 +687,7 @@ export function ImportBookings({
               <FilePlus className="size-4" />
               חזרה לקבצים
             </Button>
-            <Button className="flex-1" variant="accent" disabled={!active.length} onClick={confirm}>
+            <Button className="flex-1" variant="accent" disabled={!activeBookings.length} onClick={confirm}>
               <Sparkles className="size-4" />
               מילוי הטיול
             </Button>

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { AlertTriangle, FileUp, Sparkles } from "lucide-react";
+import { AlertTriangle, FileUp, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Button, Chip, Field, Input, Modal, Segmented } from "@/components/ui";
@@ -94,6 +94,24 @@ export interface VoucherCarData {
   notes: string | null;
 }
 export type VoucherData = VoucherFlightData | VoucherHotelData | VoucherCarData;
+
+/** A reviewed voucher. A flight document can hold several segments (outbound,
+ *  return, connection legs) — always at least one; hotel/car stay a single record. */
+export type VoucherResult =
+  | { docType: "flight"; data: VoucherFlightData[] }
+  | { docType: "hotel"; data: VoucherHotelData }
+  | { docType: "car"; data: VoucherCarData };
+
+/** Flight segments from a `voucher` response: the `segments` array when present,
+ *  else the single `data` record (older function deployments). Already
+ *  sanitized server-side; this only fills missing keys with blanks. */
+export function flightSegmentsFrom(res: { data?: Record<string, unknown> | null; segments?: unknown }): VoucherFlightData[] {
+  const segs = Array.isArray(res.segments)
+    ? res.segments.filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
+    : [];
+  const raw = segs.length ? segs : res.data ? [res.data] : [];
+  return raw.map((s) => ({ ...blankFlight, ...(s as Partial<VoucherFlightData>) }));
+}
 
 export const blankFlight: VoucherFlightData = {
   direction: "outbound",
@@ -377,18 +395,19 @@ export function ImportVoucher({
 }: {
   open: boolean;
   onClose: () => void;
-  /** Receives the classified doc type, the (already user-edited) data, and the
-   *  original source file — callers decide whether to insert a row, also save
-   *  the file to Storage, or (in the Wizard, pre-trip) just stage it locally.
-   *  Nothing is written by this component itself. */
-  onConfirm: (docType: VoucherDocType, data: VoucherData, sourceFile: File | null) => void | Promise<void>;
+  /** Receives the classified, already user-edited result (every flight segment
+   *  for a flight document) and the original source file — once per document,
+   *  however many segments it holds. Callers decide whether to insert rows,
+   *  also save the file to Storage, or (in the Wizard, pre-trip) just stage it
+   *  locally. Nothing is written by this component itself. */
+  onConfirm: (result: VoucherResult, sourceFile: File | null) => void | Promise<void>;
 }) {
   const toast = useToast();
   const [hint, setHint] = useState<Hint>("other");
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [result, setResult] = useState<{ docType: VoucherDocType; data: VoucherData } | null>(null);
+  const [result, setResult] = useState<VoucherResult | null>(null);
   const [notFound, setNotFound] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -428,7 +447,7 @@ export function ImportVoucher({
         );
         return;
       }
-      const res = data as { ok?: boolean; doc_type?: string; data?: Record<string, unknown> | null };
+      const res = data as { ok?: boolean; doc_type?: string; data?: Record<string, unknown> | null; segments?: unknown };
       if (!res?.ok || !res.doc_type || res.doc_type === "unknown" || !res.data) {
         setNotFound(true);
         return;
@@ -439,8 +458,11 @@ export function ImportVoucher({
       // saved file — a documented simplification, same spirit as passport
       // scanning not saving the source photos at all.
       setSourceFile(files[0] ?? null);
+      let segmentCount = 1;
       if (res.doc_type === "flight") {
-        setResult({ docType: "flight", data: { ...blankFlight, ...(res.data as Partial<VoucherFlightData>) } });
+        const segments = flightSegmentsFrom(res);
+        segmentCount = segments.length;
+        setResult({ docType: "flight", data: segments });
       } else if (res.doc_type === "hotel") {
         setResult({ docType: "hotel", data: { ...blankHotel, ...(res.data as Partial<VoucherHotelData>) } });
       } else if (res.doc_type === "car") {
@@ -449,7 +471,7 @@ export function ImportVoucher({
         setNotFound(true);
         return;
       }
-      toast.success("השובר זוהה 🧾");
+      toast.success(segmentCount > 1 ? `השובר זוהה — ${segmentCount} טיסות 🧾` : "השובר זוהה 🧾");
     } catch {
       toast.error("סריקת השובר נכשלה.");
     } finally {
@@ -459,30 +481,43 @@ export function ImportVoucher({
 
   const confirm = async () => {
     if (!result) return;
-    if (result.docType === "hotel" && !(result.data as VoucherHotelData).hotel_name.trim()) {
+    if (result.docType === "hotel" && !result.data.hotel_name.trim()) {
       toast.error("שם המלון חובה");
       return;
     }
     setBusy(true);
     try {
-      await onConfirm(result.docType, result.data, sourceFile);
+      await onConfirm(result, sourceFile);
       close();
     } finally {
       setBusy(false);
     }
   };
 
-  const patchFlight = (patch: Partial<VoucherFlightData>) =>
-    setResult((r) => (r && r.docType === "flight" ? { ...r, data: { ...(r.data as VoucherFlightData), ...patch } } : r));
+  const patchFlight = (index: number, patch: Partial<VoucherFlightData>) =>
+    setResult((r) =>
+      r && r.docType === "flight"
+        ? { ...r, data: r.data.map((seg, i) => (i === index ? { ...seg, ...patch } : seg)) }
+        : r,
+    );
+  /** At least one segment always remains — the remove control is hidden at one. */
+  const removeFlight = (index: number) =>
+    setResult((r) =>
+      r && r.docType === "flight" && r.data.length > 1 ? { ...r, data: r.data.filter((_, i) => i !== index) } : r,
+    );
   const patchHotel = (patch: Partial<VoucherHotelData>) =>
-    setResult((r) => (r && r.docType === "hotel" ? { ...r, data: { ...(r.data as VoucherHotelData), ...patch } } : r));
+    setResult((r) => (r && r.docType === "hotel" ? { ...r, data: { ...r.data, ...patch } } : r));
   const patchCar = (patch: Partial<VoucherCarData>) =>
-    setResult((r) => (r && r.docType === "car" ? { ...r, data: { ...(r.data as VoucherCarData), ...patch } } : r));
+    setResult((r) => (r && r.docType === "car" ? { ...r, data: { ...r.data, ...patch } } : r));
+
+  const flightCount = result?.docType === "flight" ? result.data.length : 0;
 
   const title = !result
     ? "סריקת שובר הזמנה"
     : result.docType === "flight"
-      ? "בדיקת פרטי הטיסה"
+      ? flightCount > 1
+        ? "בדיקת פרטי הטיסות"
+        : "בדיקת פרטי הטיסה"
       : result.docType === "hotel"
         ? "בדיקת פרטי המלון"
         : "בדיקת פרטי הרכב/ההעברה";
@@ -529,14 +564,38 @@ export function ImportVoucher({
       ) : (
         <div className="flex flex-col gap-3">
           <div className="rounded-2xl bg-primary-soft p-3 text-sm font-semibold text-secondary-foreground">
-            {result.docType === "flight" && "זוהתה טיסה. אפשר לתקן לפני ההוספה:"}
+            {result.docType === "flight" &&
+              (flightCount > 1
+                ? `זוהו ${flightCount} טיסות. אפשר לתקן או להסיר לפני ההוספה:`
+                : "זוהתה טיסה. אפשר לתקן לפני ההוספה:")}
             {result.docType === "hotel" && "זוהה אישור מלון. אפשר לתקן לפני ההוספה:"}
             {result.docType === "car" && "זוהה אישור רכב/העברה. אפשר לתקן לפני ההוספה:"}
           </div>
 
-          {result.docType === "flight" && <FlightFields data={result.data as VoucherFlightData} patch={patchFlight} />}
-          {result.docType === "hotel" && <HotelFields data={result.data as VoucherHotelData} patch={patchHotel} />}
-          {result.docType === "car" && <CarFields data={result.data as VoucherCarData} patch={patchCar} />}
+          {result.docType === "flight" &&
+            (result.data.length === 1 ? (
+              <FlightFields data={result.data[0]} patch={(p) => patchFlight(0, p)} />
+            ) : (
+              result.data.map((seg, i) => (
+                <div key={i} className="flex flex-col gap-3 rounded-2xl border border-border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-bold">
+                      טיסה {i + 1} · {seg.direction === "inbound" ? "חזור" : "הלוך"}
+                    </span>
+                    <button
+                      onClick={() => removeFlight(i)}
+                      className="grid size-8 shrink-0 place-items-center rounded-xl text-destructive"
+                      aria-label="הסרת הטיסה"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                  <FlightFields data={seg} patch={(p) => patchFlight(i, p)} />
+                </div>
+              ))
+            ))}
+          {result.docType === "hotel" && <HotelFields data={result.data} patch={patchHotel} />}
+          {result.docType === "car" && <CarFields data={result.data} patch={patchCar} />}
 
           <div className="flex gap-2">
             <Button

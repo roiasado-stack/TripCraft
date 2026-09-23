@@ -23,6 +23,8 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const MAX_TOKENS = 16000;
 // Simple extraction/translation calls: less thinking, same answer, faster.
 const EXTRACTION_OUTPUT_CONFIG = { effort: "low" } as const;
+// Voucher scans: multi-page family e-tickets need every page read; low effort skimmed and dropped passengers/segments.
+const VOUCHER_OUTPUT_CONFIG = { effort: "medium" } as const;
 
 // claude-sonnet-5 pricing (Anthropic API).
 const PRICE_PER_MTOK_INPUT_USD = 2.0;
@@ -432,7 +434,8 @@ Deno.serve(async (req) => {
     }
 
     // Voucher scanning (flight/hotel/car-rental booking confirmations) returns a
-    // single classified record for client-side review only and writes nothing
+    // classified record (for flights: every segment in the document, with the
+    // first also in `data`) for client-side review only and writes nothing
     // itself — same reasoning as "passports" above: no trip ownership check
     // needed (this also covers the Wizard's logistics step, called before a
     // trip row exists at all), but it's still a vision call so still capped
@@ -462,11 +465,19 @@ Deno.serve(async (req) => {
         type: "text",
         text: `זהו את סוג מסמך ההזמנה המצורף (אישור טיסה / אישור מלון / אישור השכרת רכב או הסעה), וחלץ ממנו את הפרטים בדיוק כפי שהם מופיעים במסמך.
 
+המסמך עשוי להשתרע על פני כמה עמודים — למשל כרטיס אלקטרוני נפרד לכל נוסע, או עמודים נפרדים לטיסת ההלוך ולטיסת החזור. קרא את כל העמודים עד הסוף, לא רק את הראשון, ואסוף את הפרטים מכולם.
+
 ${hintLine}החזר JSON בלבד, ללא טקסט נוסף, באחד מהמבנים הבאים לפי סוג המסמך שזיהית בפועל:
 
 אם זו טיסה:
-{"doc_type":"flight","data":{"direction":"outbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null},"destination":"עיר, מדינה","passengers":[{"name":"שם הנוסע כפי שמודפס","type":"adult|child|infant|null","birth_date":null,"meal_code":null}]}
-(direction: "outbound" אם הטיסה יוצאת מישראל, "inbound" אם היא חוזרת לישראל — לפי שדות התעופה; אם לא ברור, "outbound".)
+{"doc_type":"flight","segments":[{"direction":"outbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null},{"direction":"inbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null}],"destination":"עיר, מדינה","passengers":[{"name":"שם הנוסע כפי שמודפס","type":"adult|child|infant|null","birth_date":null,"meal_code":null}]}
+
+segments (כל קטעי הטיסה שבמסמך):
+- פריט אחד לכל קטע טיסה: טיסת ההלוך, טיסת החזור, וכל רגל של טיסת המשך (קונקשן) כקטע נפרד. אל תחזיר רק את הטיסה הראשונה.
+- לפי סדר כרונולוגי של זמן ההמראה.
+- אותה טיסה שמופיעה בעמוד של כל נוסע היא קטע אחד — לא קטע לכל נוסע.
+- direction לכל קטע: "outbound" אם הקטע יוצא מישראל, "inbound" אם הוא נוחת בישראל; רגל של טיסת המשך מקבלת את הכיוון של המסלול שהיא חלק ממנו (הלוך או חזור). אם לא ברור, "outbound".
+- seats: המושבים של כל הנוסעים בקטע הזה, אם מודפסים.
 
 אם זה מלון:
 {"doc_type":"hotel","data":{"hotel_name":"שם המלון","address":null,"check_in":"YYYY-MM-DD","check_out":"YYYY-MM-DD","booking_ref":null,"phone":null,"url":null,"notes":null},"destination":"עיר, מדינה","passengers":[{"name":"שם האורח כפי שמודפס","type":null,"birth_date":null,"meal_code":null}]}
@@ -485,11 +496,13 @@ ${hintLine}החזר JSON בלבד, ללא טקסט נוסף, באחד מהמבנ
 
 destination (יעד הטיול שההזמנה מרמזת עליו):
 - בפורמט "עיר, מדינה" בעברית, למשל "רומא, איטליה".
-- מלון: העיר שבה נמצא המלון. טיסה: הקצה של המסלול שאינו בישראל (ביעד של טיסת הלוך, במוצא של טיסת חזור). רכב/הסעה: העיר של נקודת האיסוף.
+- מלון: העיר שבה נמצא המלון. טיסה: הקצה של המסלול שאינו בישראל (ביעד הסופי של מסלול ההלוך, במוצא של מסלול החזור — לא עיר של עצירת ביניים). רכב/הסעה: העיר של נקודת האיסוף.
 - אם לא ניתן להסיק את העיר בבירור מהמסמך — null. אל תנחש.
 
 passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
 - פריט אחד לכל אדם ששמו מודפס במסמך. אם אין שמות במסמך — מערך ריק [].
+- רשום את כל הנוסעים ששמם מופיע בעמוד כלשהו של המסמך. אל תעצור אחרי העמוד הראשון או אחרי הנוסע הראשון — בכרטיס משפחתי יש לרוב עמוד (כרטיס אלקטרוני) נפרד לכל נוסע.
+- כל אדם מופיע פעם אחת בלבד: אותו נוסע שמופיע בכמה עמודים הוא פריט אחד.
 - name: בפורמט קריא "שם פרטי שם משפחה" (למשל COHEN/ROI MR ← "Roi Cohen"), ללא תארים או סימוני סוג (MR/MRS/MS/MSTR/MISS/CHD/INF/ADT).
 - name: השאר את השם בכתב שבו הוא מודפס — שם לועזי נשאר באותיות לועזיות ושם עברי נשאר בעברית. אל תתעתק ואל תתרגם שמות.
 - אל תמציא שמות, אל תשלים שם חלקי ואל תנחש שם שלא מודפס בבירור.
@@ -509,7 +522,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
         body: JSON.stringify({
           model: MODEL,
           max_tokens: MAX_TOKENS,
-          output_config: EXTRACTION_OUTPUT_CONFIG,
+          output_config: VOUCHER_OUTPUT_CONFIG,
           messages: [{ role: "user", content }],
         }),
       });
@@ -557,23 +570,58 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
         return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
       };
 
+      const sanitizeFlight = (raw: Record<string, unknown>) => ({
+        direction: raw.direction === "inbound" ? "inbound" : "outbound",
+        airline: str(raw.airline, 120),
+        flight_number: str(raw.flight_number, 20),
+        from_airport: str(raw.from_airport, 10),
+        to_airport: str(raw.to_airport, 10),
+        depart_at: isoDateTime(raw.depart_at),
+        arrive_at: isoDateTime(raw.arrive_at),
+        from_terminal: str(raw.from_terminal, 20),
+        to_terminal: str(raw.to_terminal, 20),
+        seats: str(raw.seats, 60),
+        baggage: str(raw.baggage, 120),
+        booking_ref: str(raw.booking_ref, 60),
+        notes: str(raw.notes, 500),
+      });
+
+      // Every flight segment in the document (outbound, return, connection
+      // legs). Falls back to a lone `data` object if the model answered in the
+      // old single-flight shape. A segment with neither a flight number nor
+      // both airports is noise and is dropped; an exact repeat (same flight
+      // number + departure — the same flight printed on each passenger's page)
+      // is kept once. Sorted by departure only when every segment has one,
+      // otherwise the model's (already chronological) order is kept.
+      let segments: ReturnType<typeof sanitizeFlight>[] = [];
+      if (docType === "flight") {
+        const rawSegments: unknown[] =
+          Array.isArray(parsedVision?.segments) && (parsedVision!.segments as unknown[]).length
+            ? (parsedVision!.segments as unknown[])
+          : rawData
+            ? [rawData]
+            : [];
+        const seen = new Set<string>();
+        segments = rawSegments
+          .filter((s): s is Record<string, unknown> => !!s && typeof s === "object" && !Array.isArray(s))
+          .map(sanitizeFlight)
+          .filter((s) => s.flight_number || (s.from_airport && s.to_airport))
+          .filter((s) => {
+            if (!s.flight_number || !s.depart_at) return true;
+            const key = `${s.flight_number.replace(/\s+/g, "").toUpperCase()}|${s.depart_at}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        if (segments.every((s) => s.depart_at)) {
+          segments.sort((a, b) => (a.depart_at! < b.depart_at! ? -1 : a.depart_at! > b.depart_at! ? 1 : 0));
+        }
+        segments = segments.slice(0, 8);
+      }
+
       let data: Record<string, unknown> | null = null;
-      if (docType === "flight" && rawData) {
-        data = {
-          direction: rawData.direction === "inbound" ? "inbound" : "outbound",
-          airline: str(rawData.airline, 120),
-          flight_number: str(rawData.flight_number, 20),
-          from_airport: str(rawData.from_airport, 10),
-          to_airport: str(rawData.to_airport, 10),
-          depart_at: isoDateTime(rawData.depart_at),
-          arrive_at: isoDateTime(rawData.arrive_at),
-          from_terminal: str(rawData.from_terminal, 20),
-          to_terminal: str(rawData.to_terminal, 20),
-          seats: str(rawData.seats, 60),
-          baggage: str(rawData.baggage, 120),
-          booking_ref: str(rawData.booking_ref, 60),
-          notes: str(rawData.notes, 500),
-        };
+      if (docType === "flight") {
+        data = segments[0] ?? null;
       } else if (docType === "hotel" && rawData) {
         data = {
           hotel_name: str(rawData.hotel_name, 200) ?? "",
@@ -683,9 +731,11 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
             ? `unknown_doc: stop=${visionPayload?.stop_reason} blocks=${(visionPayload?.content ?? []).map((b: { type?: string }) => b?.type).join(",")} text=${visionText.slice(0, 300)}`
             : undefined,
       });
-      // `destination` / `passengers` are additive — single-voucher callers
-      // (ImportVoucher) read only doc_type/data and ignore them.
-      return new Response(JSON.stringify({ ok: true, doc_type: finalDocType, data, destination, passengers }), {
+      // `segments` / `destination` / `passengers` are additive — `data` stays the
+      // first flight segment for any caller that only reads doc_type/data.
+      // Non-flight documents (and unknown) always get `segments: []`.
+      const outSegments = finalDocType === "flight" ? segments : [];
+      return new Response(JSON.stringify({ ok: true, doc_type: finalDocType, data, segments: outSegments, destination, passengers }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
