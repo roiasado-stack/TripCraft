@@ -63,7 +63,9 @@ export default function PeopleTab() {
   const toEdit = (p: Participant): Draft => ({
     id: p.id,
     name: p.name,
-    ageMode: p.age != null ? "age" : "range",
+    // Unknown age opens in exact-age mode, empty — range mode would preselect
+    // AGE_RANGES[5] and a plain save would silently write that guess.
+    ageMode: p.age == null && p.age_range ? "range" : "age",
     age: p.age != null ? String(p.age) : "",
     age_range: p.age_range ?? AGE_RANGES[5],
     preferences: p.preferences ?? [],

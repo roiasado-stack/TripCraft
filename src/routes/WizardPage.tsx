@@ -140,10 +140,9 @@ function transferDraftFromVoucher(d: VoucherCarData, file: File | null): Transfe
   };
 }
 
-/** Booking traveller → participant draft. Unlike the passport path (which
- *  defaults an unknown age to the 30-49 range), an unknown age stays unset
- *  here: exact-age mode with an empty age saves as age/age_range null, and the
- *  user can fill it in on the participants step. */
+/** Booking traveller → participant draft. An unknown age stays unset: exact-age
+ *  mode with an empty age saves as age/age_range null, and the user can fill it
+ *  in on the participants step (same rule as the passport-scan staging). */
 function travellerToDraft(t: BookingTraveller): PartDraft {
   if (t.age != null) {
     return { name: t.name, ageMode: "age", age: String(t.age), age_range: AGE_RANGES[5], preferences: t.preferences };
@@ -556,7 +555,9 @@ export default function WizardPage() {
             ...prev,
             ...items.map((p) => ({
               name: p.name,
-              ageMode: (p.age != null ? "age" : "range") as "age" | "range",
+              // No age and no range → exact-age mode left empty, which saves as
+              // blank. Range mode would preselect AGE_RANGES[5] and save a guess.
+              ageMode: (p.age == null && p.age_range ? "range" : "age") as "age" | "range",
               age: p.age != null ? String(p.age) : "",
               age_range: p.age_range ?? AGE_RANGES[5],
               preferences: p.preferences,
