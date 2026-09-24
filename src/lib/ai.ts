@@ -91,7 +91,8 @@ export async function generateContent(
 
 /**
  * Looks up one cover photo for `query` via the `generate` Edge Function's
- * `photo` kind (a plain Unsplash search, no LLM call). Never throws and
+ * `photo` kind (the exact English Wikipedia article for that place, or none —
+ * never a lookalike). Never throws and
  * never surfaces an error toast — a missing photo isn't a failure, it's just
  * `null`, which MediaCard already renders as its brand-gradient fallback.
  */

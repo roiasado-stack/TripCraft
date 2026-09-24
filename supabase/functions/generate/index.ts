@@ -57,7 +57,7 @@ type Body = {
    *  Narrows/primes classification; the model's own `doc_type` in the response stays authoritative. */
   hint?: "flight" | "hotel" | "car" | "other";
   tune?: string | null;
-  /** For kind: "photo" (Unsplash search term) or kind: "geocode" (place to look up). */
+  /** For kind: "photo" (free-text place, resolved to a Wikipedia article) or kind: "geocode" (place to look up). */
   query?: string;
   trip: {
     destination: string;
@@ -97,7 +97,64 @@ function describeParticipants(list: Participant[]): string {
     .join("\n");
 }
 
-function buildPrompt(body: Body): string {
+/**
+ * Title key used to spot the same place twice: drops any parenthetical
+ * ("קברי המלכים (Tombs of the Kings)" == "קברי המלכים"), Hebrew niqqud and
+ * cantillation, quotes (incl. ״ ׳), other punctuation/symbols (incl. maqaf), lowercases
+ * Latin and collapses whitespace. Falls back to the un-stripped form when the
+ * whole title was inside parentheses, so it only comes back empty for a title
+ * with no letters or digits at all.
+ */
+function normalizeTitle(title: string): string {
+  const clean = (s: string) =>
+    s
+      .replace(/[\u0591-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7]/g, "")
+      // Quotes/gershayim sit inside a word (אונסק״ו == אונסקו) — delete them;
+      // any other punctuation or symbol (hyphen, maqaf, comma…) separates words.
+      .replace(/["'`\u05F3\u05F4\u2018\u2019\u201C\u201D]/g, "")
+      .replace(/[\p{P}\p{S}]/gu, " ")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  const s = title.normalize("NFKC");
+  return clean(s.replace(/\([^)]*\)/g, " ")) || clean(s);
+}
+
+/** What the trip already holds — fed into the prompt so a repeated AI press adds new places. */
+type ExistingRow = {
+  title: string;
+  image_url: string | null;
+  kind?: string | null;
+  day_date?: string | null;
+  start_time?: string | null;
+  category?: string | null;
+};
+
+// Shared prompt rule for AI-generated suggestions/itinerary. The title is
+// looked up verbatim (wikipediaPhoto) — no search — so a null here means an
+// honest "no photo" rather than a photo of some other place.
+const WIKIPEDIA_TITLE_RULE =
+  `wikipedia_title: הכותרת המדויקת של הערך בוויקיפדיה האנגלית על המקום הספציפי הזה (למשל "Eiffel Tower" או "Tombs of the Kings (Paphos)"), או null. מלא רק אם אתה בטוח שקיים ערך בוויקיפדיה האנגלית בדיוק על המקום הזה. null למסעדות, ארוחות, בתי עסק, מלונות, טיפים, תחבורה, זמן חופשי וכל דבר שאין לו ערך משלו. לעולם אל תחזיר את הערך של העיר, האזור או המדינה שבהם המקום נמצא (לא "Paphos" למסעדה בפאפוס) — במקרה כזה החזר null.`;
+
+// Upper bound on existing titles listed in the prompt (the server-side
+// duplicate filter still checks every existing row).
+const MAX_EXISTING_IN_PROMPT = 60;
+
+/** Existing rows with duplicate titles collapsed, in the given order, capped for the prompt. */
+function uniqueForPrompt(rows: ExistingRow[]): ExistingRow[] {
+  const seen = new Set<string>();
+  const out: ExistingRow[] = [];
+  for (const r of rows) {
+    const key = normalizeTitle(r.title);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+    if (out.length >= MAX_EXISTING_IN_PROMPT) break;
+  }
+  return out;
+}
+
+function buildPrompt(body: Body, existing: ExistingRow[] = []): string {
   const { trip, participants, kind, tune } = body;
   const days = trip.start_date && trip.end_date ? daysBetween(trip.start_date, trip.end_date) : [];
   const tuneLine = tune && TUNE_HE[tune] ? `\nכיוונון מיוחד: ${TUNE_HE[tune]}` : "";
@@ -110,34 +167,69 @@ function buildPrompt(body: Body): string {
 ${describeParticipants(participants)}${tuneLine}`;
 
   if (kind === "suggestions") {
+    // Place kinds first so the capped list keeps the entries most likely to be re-suggested.
+    const saved = uniqueForPrompt([...existing].sort((a, b) => (a.kind === "tip" ? 1 : 0) - (b.kind === "tip" ? 1 : 0)));
+    const savedLines = saved.length
+      ? `
+- כבר שמורים בטיול — אל תציע אותם שוב, וגם לא וריאציות שלהם (אותו מקום בשם אחר, בכתיב אחר או באנגלית). הצע רק מקומות וטיפים חדשים:
+${saved.map((r) => r.title).join("; ")}
+- אם אין מספיק מקומות חדשים ואמיתיים — החזר פחות פריטים. אל תמציא מקומות ואל תחזור על הקיימים.`
+      : "";
     return `${context}
 
 צור המלצות מותאמות אישית לטיול הזה. החזר JSON בלבד, ללא טקסט נוסף, במבנה:
-{"items":[{"kind":"attraction|restaurant|tip","title":"שם בעברית","description":"תיאור קצר בעברית (1-2 משפטים) כולל למה זה מתאים למשתתפים","tags":["תג1","תג2"],"age_min":0,"age_max":99,"price_level":"low|mid|high","photo_query":"ביטוי חיפוש קצר באנגלית","lat":32.0853,"lng":34.7818}]}
+{"items":[{"kind":"attraction|restaurant|tip","title":"שם בעברית","description":"תיאור קצר בעברית (1-2 משפטים) כולל למה זה מתאים למשתתפים","tags":["תג1","תג2"],"age_min":0,"age_max":99,"price_level":"low|mid|high","wikipedia_title":"כותרת הערך בוויקיפדיה האנגלית או null","lat":32.0853,"lng":34.7818}]}
 
 דרישות:
 - 8 אטרקציות, 6 מסעדות, 4 טיפים מקומיים.
 - התאם לגילאים ולהעדפות שצוינו. אם יש ילדים קטנים — הוסף אפשרויות מתאימות.
 - אם צוין כשרות/צמחונות — התייחס לכך במסעדות.
-- מקומות אמיתיים וידועים ב${trip.destination}. כל הטקסט בעברית.
-- photo_query: ביטוי חיפוש קצר באנגלית (2-5 מילים) לחיפוש תמונת סטוק אמיתית של המקום הספציפי הזה — לא הכותרת בעברית, למשל "Eiffel Tower Paris" או "sushi restaurant Tokyo".
+- מקומות אמיתיים וידועים ב${trip.destination}. כל הטקסט בעברית.${savedLines}
+- ${WIKIPEDIA_TITLE_RULE}
 - lat/lng: קואורדינטות עשרוניות משוערות אך אמיתיות של המקום הספציפי, לפי הידע שלך (הערכה טובה מספיקה לסמן על מפה, לא נדרשת דיוק סקר-קרקע). לטיפים כלליים שאינם מקום ספציפי — השמט lat/lng.
 - בקיצורים עבריים (כמו חב״ד, אונסק״ו, ארה״ב) כתוב את הגרשיים בתו ״ ולא במירכאות " — מירכאות רגילות שוברות את ה-JSON.`;
   }
 
   if (kind === "itinerary") {
     const dayList = days.length ? days.join(", ") : "צור 3 ימים לדוגמה";
+    // Which days already hold items decides the scope: plan only the empty
+    // days, or — when every day is taken (or there are no trip dates to tell) —
+    // add just a few complementary activities instead of a second full plan.
+    const plannedDays = new Set(existing.map((r) => r.day_date).filter((d): d is string => !!d));
+    const emptyDays = days.filter((d) => !plannedDays.has(d));
+    const allPlanned = existing.length > 0 && emptyDays.length === 0;
+    let existingLines = "";
+    if (existing.length) {
+      const byDay = new Map<string, string[]>();
+      for (const r of uniqueForPrompt(existing)) {
+        const day = r.day_date ?? "?";
+        const time = r.start_time ? `${r.start_time.slice(0, 5)} ` : "";
+        byDay.set(day, [...(byDay.get(day) ?? []), `${time}${r.title}`]);
+      }
+      const perDay = [...byDay.entries()]
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([day, titles]) => `${day}: ${titles.join("; ")}`)
+        .join("\n");
+      const scope = allPlanned
+        ? "- לכל הימים כבר יש פריטים — אל תבנה מסלול שני. הוסף רק 2-5 פעילויות חדשות באמת בסך הכול, שמשלימות את הקיים, בימים ובשעות שבהם הן מתאימות."
+        : `- תכנן רק את הימים שעדיין אין בהם פריטים: ${emptyDays.join(", ")}. אל תוסיף פריטים לימים שכבר יש בהם פריטים.`;
+      existingLines = `
+- פריטים שכבר קיימים במסלול, לפי יום:
+${perDay}
+${scope}
+- לעולם אל תחזור על פעילות או מקום שכבר קיימים במסלול — גם לא בשם אחר, בכתיב אחר או ביום אחר.`;
+    }
     return `${context}
 
 צור מסלול יומי מוצע. הימים: ${dayList}
 החזר JSON בלבד במבנה:
-{"items":[{"day_date":"YYYY-MM-DD","start_time":"HH:MM","title":"שם הפעילות בעברית","description":"פרטים קצרים","category":"activity|food|transport|free","location":"שם מקום","photo_query":"ביטוי חיפוש קצר באנגלית","lat":32.0853,"lng":34.7818}]}
+{"items":[{"day_date":"YYYY-MM-DD","start_time":"HH:MM","title":"שם הפעילות בעברית","description":"פרטים קצרים","category":"activity|food|transport|free","location":"שם מקום","wikipedia_title":"כותרת הערך בוויקיפדיה האנגלית או null","lat":32.0853,"lng":34.7818}]}
 
 דרישות:
-- 3-5 פריטים לכל יום, בסדר הגיוני לפי שעות (בוקר/צהריים/ערב).
+- ${allPlanned ? "כל פריט בשעה הגיונית ביחס לפריטים הקיימים באותו יום." : "3-5 פריטים לכל יום שאתה מתכנן, בסדר הגיוני לפי שעות (בוקר/צהריים/ערב)."}
 - התאם לקצב המשתתפים (ילדים/מבוגרים) ולהעדפות.
-- day_date חייב להיות אחד מהתאריכים שצוינו. כל הטקסט בעברית.
-- photo_query: ביטוי חיפוש קצר באנגלית (2-5 מילים) לחיפוש תמונת סטוק אמיתית של המקום/הפעילות הספציפית הזו — לא הכותרת בעברית, למשל "hiking trail Alps".
+- day_date חייב להיות אחד מהתאריכים שצוינו. כל הטקסט בעברית.${existingLines}
+- ${WIKIPEDIA_TITLE_RULE}
 - lat/lng: קואורדינטות עשרוניות משוערות אך אמיתיות של המקום הספציפי, לפי הידע שלך (הערכה טובה מספיקה לסמן על מפה, לא נדרשת דיוק סקר-קרקע). לפריטים כלליים ללא מקום מסוים (כמו "זמן חופשי") — השמט lat/lng.
 - בקיצורים עבריים (כמו חב״ד, אונסק״ו, ארה״ב) כתוב את הגרשיים בתו ״ ולא במירכאות " — מירכאות רגילות שוברות את ה-JSON.`;
   }
@@ -227,17 +319,6 @@ function extractJson(text: string): Record<string, unknown> | null {
   return withItems[0] ?? objects[0];
 }
 
-/**
- * Looks up one Unsplash photo for `query`. Best-effort only: a missing key,
- * network failure, non-OK response, or empty result set all resolve to
- * null rather than throwing — a photo miss must never fail generation,
- * manual add, or edit. Failures are logged server-side (Edge Function logs)
- * rather than surfaced to the client, since a photo miss isn't an error.
- */
-async function searchUnsplashPhoto(query: string): Promise<string | null> {
-  return (await unsplashLookup(query)).url;
-}
-
 // Service-role client used ONLY for photo_cache (migration 012). That table is
 // deliberately not user-writable — a user who could write it could plant an
 // image every other trip then shows — so it can't go through the caller's JWT.
@@ -253,35 +334,90 @@ function adminDb(): ReturnType<typeof createClient> | null {
 }
 const photoCacheKey = (q: string) => q.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 200);
 
-/** Same lookup, plus a short reason when it comes back empty — fed into the
- *  generation diagnostics in agent_runs so a photo outage is visible. */
-async function unsplashLookup(query: string): Promise<{ url: string | null; fail?: string; cached?: boolean }> {
-  const cacheKey = photoCacheKey(query);
-  if (!cacheKey) return { url: null, fail: "empty_query" };
+/**
+ * Cleans a Wikipedia article title as the model wrote it (JSON field or the
+ * `photo` kind's one-line answer): first line only, a pasted /wiki/ URL or
+ * [[link]] unwrapped, quotes stripped, underscores → spaces. NONE/null, a
+ * Hebrew answer or an implausibly long one all mean "no article" → null.
+ */
+function parseWikipediaTitle(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  let t = raw.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+  const fromUrl = t.match(/wikipedia\.org\/wiki\/([^\s?#]+)/i);
+  if (fromUrl) {
+    try {
+      t = decodeURIComponent(fromUrl[1]);
+    } catch {
+      t = fromUrl[1];
+    }
+  }
+  t = t.replace(/^\[\[|\]\]$/g, "").replace(/^["“”`]+|["“”`]+$/g, "");
+  if (/^'.*'$/.test(t)) t = t.slice(1, -1);
+  t = t.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  if (!t || /^(none|null|n\/a)\.?$/i.test(t)) return null;
+  if (t.length > 150 || /[\u0590-\u05FF]/.test(t)) return null;
+  return t;
+}
+
+const WIKIPEDIA_USER_AGENT = "TripCraft/1.0 (https://tripcraft-lac.vercel.app)";
+
+/** Only ever store/show images served from Wikimedia's own upload hosts. */
+function isWikimediaImage(u: unknown): u is string {
+  if (typeof u !== "string") return false;
+  try {
+    const p = new URL(u);
+    return p.protocol === "https:" && (p.hostname === "upload.wikimedia.org" || p.hostname === "thumb.wikimedia.org");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The page image of the English Wikipedia article with EXACTLY this title
+ * (redirects followed, so alternate names resolve to the canonical article).
+ * Deliberately no free-text search fallback: search maps "Baths of Aphrodite"
+ * to Adonis Baths and "Paphos seafood restaurant" to Taco Bell — a miss must
+ * stay a miss (null), which MediaCard renders as its gradient fallback.
+ *
+ * Best-effort, never throws: any failure resolves to { url: null, fail } with
+ * a short reason, fed into the generation diagnostics in agent_runs. Hits are
+ * cached in photo_cache under `wiki:<title>` (misses aren't — the article or
+ * its image may appear later).
+ */
+async function wikipediaPhoto(title: string): Promise<{ url: string | null; fail?: string; cached?: boolean }> {
+  const clean = title.replace(/_/g, " ").replace(/\s+/g, " ").trim().slice(0, 250);
+  const normalized = photoCacheKey(clean);
+  if (!normalized) return { url: null, fail: "empty_title" };
+  const cacheKey = `wiki:${normalized}`;
   const db = adminDb();
   if (db) {
     try {
       const { data } = await db.from("photo_cache").select("url").eq("query_key", cacheKey).maybeSingle();
       const cachedUrl = (data as { url?: string } | null)?.url;
-      if (cachedUrl) return { url: cachedUrl, cached: true };
+      if (isWikimediaImage(cachedUrl)) return { url: cachedUrl, cached: true };
     } catch {
-      // Cache is an optimization only — fall through to Unsplash.
+      // Cache is an optimization only — fall through to Wikipedia.
     }
   }
-  const key = Deno.env.get("UNSPLASH_ACCESS_KEY");
-  if (!key) return { url: null, fail: "no_key" };
   try {
-    const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=landscape`;
-    const res = await fetch(url, { headers: { Authorization: `Client-ID ${key}` } });
+    const url =
+      "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&redirects=1" +
+      `&prop=pageimages&piprop=thumbnail&pithumbsize=800&titles=${encodeURIComponent(clean)}`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": WIKIPEDIA_USER_AGENT },
+      signal: AbortSignal.timeout(8000),
+    });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      console.error("Unsplash search failed", res.status, body);
-      return { url: null, fail: `http_${res.status}:${body.slice(0, 80)}` };
+      console.error("Wikipedia lookup failed", res.status, body.slice(0, 200));
+      return { url: null, fail: `http_${res.status}` };
     }
     const data = await res.json();
-    const photo = data?.results?.[0];
-    if (!photo?.urls?.regular) return { url: null, fail: `no_results:${query.slice(0, 40)}` };
-    const found = `${photo.urls.regular}&utm_source=tripcraft&utm_medium=referral`;
+    const page = data?.query?.pages?.[0];
+    if (!page || page.missing || page.invalid) return { url: null, fail: `missing:${clean.slice(0, 40)}` };
+    const found = page.thumbnail?.source;
+    if (!found) return { url: null, fail: `no_image:${clean.slice(0, 40)}` };
+    if (!isWikimediaImage(found)) return { url: null, fail: "bad_host" };
     if (db) {
       try {
         // Awaited on purpose: an un-awaited write can be cut off when the function returns.
@@ -292,14 +428,14 @@ async function unsplashLookup(query: string): Promise<{ url: string | null; fail
     }
     return { url: found };
   } catch (e) {
-    console.error("Unsplash search threw", e);
+    console.error("Wikipedia lookup threw", e);
     return { url: null, fail: `exception:${String(e).slice(0, 80)}` };
   }
 }
 
 /**
  * Looks up approximate coordinates for `query` via OpenStreetMap's free
- * Nominatim API. Same resilience contract as searchUnsplashPhoto: never
+ * Nominatim API. Same resilience contract as wikipediaPhoto: never
  * throws, resolves to null on any failure (empty result set, network error,
  * non-OK response, unparsable numbers) — a geocoding miss must never block
  * add/edit or generation. Failures are logged server-side only.
@@ -401,11 +537,10 @@ Deno.serve(async (req) => {
 
     // The daily cap tracks Anthropic token spend (agent_runs) — every kind
     // that calls the LLM is capped, including "passports" below. "photo" and
-    // "geocode" are the exceptions: a plain Unsplash lookup and a plain
-    // Nominatim lookup respectively, neither an LLM call nor agent_runs
-    // logging on their own, so neither must be blocked by this. (Their
-    // internal Hebrew-translation sub-call has its own, separate cap check —
-    // see translateHebrewQuery below.)
+    // "geocode" are gated separately below instead of rejected here: their
+    // small LLM sub-call (Wikipedia-title resolution / Hebrew translation) is
+    // simply skipped over the cap, and the request still answers { ok: true }
+    // with a null photo / the untranslated query, never a 429.
     if (body.kind !== "photo" && body.kind !== "geocode") {
       const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
       if ((spentToday ?? 0) >= DAILY_CAP_USD) {
@@ -847,15 +982,14 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       });
     }
 
-    // Shared by kind:"photo" (Unsplash search) and kind:"geocode" (Nominatim
-    // lookup) — both need a Latin-script query, and manually-typed titles /
-    // destinations are Hebrew. AI-generated items already come with an
-    // English photo_query and skip this (their lat/lng come straight from
-    // the model, too — see buildPrompt — so geocode never sees them either).
+    // Used by kind:"geocode" (Nominatim lookup), which needs a Latin-script
+    // query — manually-typed titles / destinations are Hebrew. AI-generated
+    // items never go through it (their lat/lng come straight from the model —
+    // see buildPrompt).
     // Best-effort: a translation failure just falls back to the original
     // (Hebrew) query, which will likely miss — no worse than before, never
     // blocks the response. Gated by the same daily cap as any other LLM
-    // call, since unlike its callers this sub-call does cost money.
+    // call, since unlike its caller this sub-call does cost money.
     const translateHebrewQuery = async (query: string, logKind: string): Promise<string> => {
       if (!/[֐-׿]/.test(query)) return query;
       const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
@@ -894,19 +1028,74 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       }
     };
 
-    // `photo` needs no LLM call — just an Unsplash lookup — so it's handled
-    // right here, early, before any call to Anthropic (and it already skipped
-    // the daily cost cap above, since that cap is LLM-spend only).
+    // `photo` (manual add, "מובילים" picks, itinerary edit): the client sends
+    // free text like "<title> <destination>", usually Hebrew. One small LLM
+    // call names the exact English Wikipedia article for that place (or NONE),
+    // then wikipediaPhoto looks that title up verbatim. Never an error to the
+    // client: over the daily cap, NONE, or any failure → { ok: true, image_url: null }.
     if (body.kind === "photo") {
-      const query = await translateHebrewQuery((body.query ?? "").trim(), "generate_photo_translate");
-      const image_url = await searchUnsplashPhoto(query);
-      return new Response(JSON.stringify({ ok: true, image_url }), {
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
+      const query = (body.query ?? "").trim().slice(0, 300);
+      const photoResponse = (image_url: string | null) =>
+        new Response(JSON.stringify({ ok: true, image_url }), {
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      if (!query) return photoResponse(null);
+      const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
+      if ((spentToday ?? 0) >= DAILY_CAP_USD) return photoResponse(null);
+      try {
+        const start = Date.now();
+        const tRes = await fetch(ANTHROPIC_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({
+            model: MODEL,
+            max_tokens: MAX_TOKENS,
+            output_config: EXTRACTION_OUTPUT_CONFIG,
+            messages: [{
+              role: "user",
+              content: `Place (may be in Hebrew, usually followed by the trip destination): "${query}"
+
+Reply with ONLY the exact title of the English Wikipedia article about this specific place — no explanation, no quotes, no URL.
+Reply with the single word NONE if you are not confident an English Wikipedia article exists for exactly this place (most restaurants, cafes, shops, hotels, tours and generic activities have none).
+Never answer with the article of the surrounding city, region or country — e.g. not "Paphos" for a restaurant in Paphos. In that case answer NONE.`,
+            }],
+          }),
+        });
+        const tLatency = Date.now() - start;
+        if (!tRes.ok) {
+          const detail = await tRes.text().catch(() => "");
+          console.error("Wikipedia title lookup failed", tRes.status);
+          await logRun({ kind: "generate_photo_title", tripId: body.trip_id, inputTokens: 0, outputTokens: 0, costUsd: 0, latencyMs: tLatency, status: "error", errorMessage: detail });
+          return photoResponse(null);
+        }
+        const tPayload = await tRes.json();
+        const usage = tPayload?.usage ?? {};
+        const inputTokens = Number(usage.input_tokens ?? 0);
+        const outputTokens = Number(usage.output_tokens ?? 0);
+        const costUsd = (inputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (outputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+        const title = parseWikipediaTitle(extractText(tPayload));
+        const photo: { url: string | null; fail?: string; cached?: boolean } = title
+          ? await wikipediaPhoto(title)
+          : { url: null, fail: "none" };
+        await logRun({
+          kind: "generate_photo_title",
+          tripId: body.trip_id,
+          inputTokens,
+          outputTokens,
+          costUsd,
+          latencyMs: tLatency,
+          status: "ok",
+          errorMessage: `diag: title=${title ?? "NONE"} photo=${photo.url ? (photo.cached ? "cached" : "found") : photo.fail}`,
+        });
+        return photoResponse(photo.url);
+      } catch (e) {
+        console.error("Wikipedia title lookup threw", e);
+        return photoResponse(null);
+      }
     }
 
-    // `geocode` is the same shape as `photo`: no LLM call of its own (just a
-    // Nominatim lookup), handled early, exempt from the daily cap above.
+    // `geocode` has no LLM call of its own (just a Nominatim lookup plus the
+    // Hebrew-translation sub-call), handled early, exempt from the daily cap above.
     if (body.kind === "geocode") {
       const query = await translateHebrewQuery((body.query ?? "").trim(), "generate_geocode_translate");
       const coords = await geocodeWithNominatim(query);
@@ -914,6 +1103,37 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
+
+    // What this trip already has in the target table — feeds the prompt's
+    // "don't repeat" list, the duplicate-title filter and the shared-photo
+    // check below, so pressing the AI button again adds new places instead of
+    // the same ones twice. Caller's JWT (RLS applies; ownership verified
+    // above). A failed read only means no dedupe context — never a failed run.
+    let existing: ExistingRow[] = [];
+    try {
+      if (body.kind === "suggestions") {
+        const { data } = await supabase
+          .from("suggestions")
+          .select("title, image_url, kind")
+          .eq("trip_id", body.trip_id)
+          .order("created_at", { ascending: true })
+          .limit(1000);
+        existing = (data ?? []) as ExistingRow[];
+      } else if (body.kind === "itinerary") {
+        const { data } = await supabase
+          .from("itinerary_items")
+          .select("title, image_url, day_date, start_time, category")
+          .eq("trip_id", body.trip_id)
+          .order("day_date", { ascending: true })
+          .order("start_time", { ascending: true, nullsFirst: false })
+          .limit(1000);
+        existing = (data ?? []) as ExistingRow[];
+      }
+    } catch (e) {
+      console.error("Existing rows lookup threw", e);
+      existing = [];
+    }
+    existing = existing.filter((r) => typeof r.title === "string" && r.title.trim() !== "");
 
     const runStart = Date.now();
     const llm = await fetch(ANTHROPIC_URL, {
@@ -926,7 +1146,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        messages: [{ role: "user", content: buildPrompt(body) }],
+        messages: [{ role: "user", content: buildPrompt(body, existing) }],
       }),
     });
     const latencyMs = Date.now() - runStart;
@@ -972,41 +1192,105 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
     }
 
     let inserted = 0;
+    let dupStats = "";
 
-    // Both AI-generated kinds get one Unsplash lookup per item, keyed off the
-    // model's own `photo_query` (falling back to the Hebrew title if it left
-    // it out — the model doesn't reliably include every optional field for
-    // every item in a long list). Either way, run it through the same
-    // Hebrew-translate step "photo"/"geocode" already use: translateHebrewQuery
-    // no-ops instantly (no API call) for an already-English photo_query, so
-    // this only costs anything for the items that actually fell back to a
-    // Hebrew title. allSettled means a slow/failed lookup for one item can
-    // never fail the whole insert — it just leaves that row's image_url null.
-    const photoQueryOf = async (raw: unknown): Promise<string> => {
-      const i = raw as Record<string, unknown>;
-      const q = String(i.photo_query ?? i.title ?? "");
-      return translateHebrewQuery(q, "generate_photo_translate");
-    };
+    // Both AI-generated kinds get one Wikipedia lookup per item, keyed off the
+    // model's own `wikipedia_title` — the exact article about that place (see
+    // WIKIPEDIA_TITLE_RULE). An item with no title gets no lookup and no photo:
+    // no guessing from the Hebrew title, no search. allSettled means a slow or
+    // failed lookup for one item can never fail the whole insert — it just
+    // leaves that row's image_url null.
     const photoUrlAt = (results: PromiseSettledResult<{ url: string | null; fail?: string }>[], idx: number): string | null => {
       const r = results[idx];
       return r?.status === "fulfilled" ? r.value.url : null;
     };
     // `skip` marks items that aren't a place (general tips, free time,
-    // transport) — no photo lookup for those, which also saves Unsplash quota.
-    const lookupPhotos = async (list: unknown[], skip: (i: Record<string, unknown>) => boolean) => {
+    // transport) — no photo lookup for those.
+    const lookupPhotos = async (list: Record<string, unknown>[], skip: (i: Record<string, unknown>) => boolean) => {
+      const titles = list.map((i) => (skip(i) ? null : parseWikipediaTitle(i.wikipedia_title)));
       const results = await Promise.allSettled(
-        list.map(async (raw): Promise<{ url: string | null; fail?: string; cached?: boolean }> =>
-          skip(raw as Record<string, unknown>) ? { url: null } : unsplashLookup(await photoQueryOf(raw)),
-        ),
+        list.map(async (_i, idx): Promise<{ url: string | null; fail?: string; cached?: boolean }> => {
+          const title = titles[idx];
+          return title ? wikipediaPhoto(title) : { url: null };
+        }),
       );
-      const skipped = list.filter((raw) => skip(raw as Record<string, unknown>)).length;
+      const skipped = list.filter(skip).length;
+      const noTitle = titles.filter((t, idx) => !t && !skip(list[idx])).length;
       const found = results.filter((r) => r.status === "fulfilled" && r.value.url).length;
       const cached = results.filter((r) => r.status === "fulfilled" && r.value.cached).length;
       const firstFail = results
         .map((r) => (r.status === "fulfilled" ? r.value.fail : `rejected:${String(r.reason).slice(0, 60)}`))
         .find((f) => f);
-      photoStats = `photos=${found}/${list.length - skipped} cached=${cached} skipped=${skipped}${firstFail ? ` first_fail=${firstFail}` : ""}`;
+      photoStats = `photos=${found}/${list.length - skipped} cached=${cached} no_title=${noTitle} skipped=${skipped}${firstFail ? ` first_fail=${firstFail}` : ""}`;
       return results;
+    };
+
+    // Safety net behind the prompt's "don't repeat" list: drop a generated
+    // item whose duplicate key matches an existing row of this table or an
+    // earlier item in this batch. The key is the normalized title, except in
+    // the itinerary where meals, free time and transport legitimately repeat
+    // day to day ("ארוחת בוקר במלון"), so those are unique per day only; a
+    // place or activity stays unique across the whole trip.
+    const dupKey = (r: { title: string; day_date?: string | null; category?: string | null }): string => {
+      const t = normalizeTitle(r.title);
+      if (!t) return "";
+      const perDay = body.kind === "itinerary" && (r.category === "food" || r.category === "free" || r.category === "transport");
+      return perDay ? `${r.day_date ?? ""}|${t}` : t;
+    };
+    const dropDuplicates = <T extends { row: { title: string; day_date?: string | null; category?: string | null } }>(list: T[]): T[] => {
+      const seen = new Set(existing.map(dupKey).filter(Boolean));
+      return list.filter(({ row }) => {
+        const key = dupKey(row);
+        if (!key) return true;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    };
+
+    // One photo per place: if an image URL is already used — by an existing
+    // row of this table or an earlier row of this batch — for a DIFFERENT
+    // normalized title, this row's copy is a misleading repeat, so it falls
+    // back to no photo. The same place may share a photo across tables
+    // (suggestions vs itinerary) since each table is checked on its own.
+    const clearSharedPhotos = <R extends { title: string; image_url: string | null }>(rows: R[]): { rows: R[]; cleared: number } => {
+      const owner = new Map<string, string>();
+      for (const r of existing) {
+        if (r.image_url && !owner.has(r.image_url)) owner.set(r.image_url, normalizeTitle(r.title));
+      }
+      let cleared = 0;
+      const out = rows.map((r) => {
+        if (!r.image_url) return r;
+        const key = normalizeTitle(r.title);
+        const prev = owner.get(r.image_url);
+        if (prev === undefined) {
+          owner.set(r.image_url, key);
+          return r;
+        }
+        if (prev === key) return r;
+        cleared++;
+        return { ...r, image_url: null };
+      });
+      return { rows: out, cleared };
+    };
+
+    // Every generated item was a duplicate (or otherwise unusable): same
+    // response as the empty-reply path, but the diagnostics say which it was.
+    const noNewItems = async (reason: string, dupDropped: number) => {
+      await logRun({
+        kind: `generate_${body.kind}`,
+        tripId: body.trip_id,
+        inputTokens,
+        outputTokens,
+        costUsd,
+        latencyMs,
+        status: "ok",
+        errorMessage: `diag: ${reason} stop=${payload?.stop_reason} json_blocks=${jsonBlocks} items=${items.length} dup_dropped=${dupDropped} existing=${existing.length} rows=0`,
+      });
+      return new Response(JSON.stringify({ error: "no_items", inserted: 0 }), {
+        status: 200,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
     };
 
     // The model's own best-guess coordinates (see buildPrompt) — no extra
@@ -1022,50 +1306,66 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       return typeof v === "number" && Number.isFinite(v) ? v : null;
     };
 
+    // Order for both kinds: build + validate rows, drop duplicates, then look
+    // up photos only for the survivors, then clear photos shared between places.
     if (body.kind === "suggestions") {
-      const photoResults = await lookupPhotos(items, (i) => i.kind === "tip" || i.kind === "gear");
-      const rows = items.map((raw, idx) => {
+      const built = items.map((raw) => {
         const i = raw as Record<string, unknown>;
         return {
-          trip_id: body.trip_id,
-          kind: ["attraction", "restaurant", "tip", "gear"].includes(String(i.kind)) ? String(i.kind) : "attraction",
-          title: String(i.title ?? "").slice(0, 300),
-          description: i.description ? String(i.description) : null,
-          tags: Array.isArray(i.tags) ? (i.tags as unknown[]).map(String).slice(0, 8) : [],
-          age_min: typeof i.age_min === "number" ? i.age_min : null,
-          age_max: typeof i.age_max === "number" ? i.age_max : null,
-          price_level: i.price_level ? String(i.price_level) : null,
-          image_url: photoUrlAt(photoResults, idx),
-          lat: latOf(i),
-          lng: lngOf(i),
+          raw: i,
+          row: {
+            trip_id: body.trip_id,
+            kind: ["attraction", "restaurant", "tip", "gear"].includes(String(i.kind)) ? String(i.kind) : "attraction",
+            title: String(i.title ?? "").slice(0, 300),
+            description: i.description ? String(i.description) : null,
+            tags: Array.isArray(i.tags) ? (i.tags as unknown[]).map(String).slice(0, 8) : [],
+            age_min: typeof i.age_min === "number" ? i.age_min : null,
+            age_max: typeof i.age_max === "number" ? i.age_max : null,
+            price_level: i.price_level ? String(i.price_level) : null,
+            lat: latOf(i),
+            lng: lngOf(i),
+          },
         };
-      }).filter((r) => r.title);
+      }).filter(({ row }) => row.title);
+      const kept = dropDuplicates(built);
+      const dupDropped = built.length - kept.length;
+      if (!kept.length) return await noNewItems(dupDropped ? "all_duplicates" : "no_valid_rows", dupDropped);
+      const photoResults = await lookupPhotos(kept.map((k) => k.raw), (i) => i.kind === "tip" || i.kind === "gear");
+      const { rows, cleared } = clearSharedPhotos(kept.map((k, idx) => ({ ...k.row, image_url: photoUrlAt(photoResults, idx) })));
       const { error } = await supabase.from("suggestions").insert(rows);
       if (error) throw error;
       inserted = rows.length;
+      dupStats = `dup_dropped=${dupDropped} photo_dup_cleared=${cleared} existing=${existing.length}`;
     } else if (body.kind === "itinerary") {
-      const photoResults = await lookupPhotos(items, (i) => i.category === "transport" || i.category === "free");
-      const rows = items.map((raw, idx) => {
+      const built = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
         return {
-          trip_id: body.trip_id,
-          day_date: String(i.day_date ?? body.trip.start_date ?? new Date().toISOString().slice(0, 10)),
-          start_time: i.start_time ? String(i.start_time) : null,
-          title: String(i.title ?? "").slice(0, 300),
-          description: i.description ? String(i.description) : null,
-          category: ["activity", "food", "transport", "flight", "hotel", "free"].includes(String(i.category))
-            ? String(i.category)
-            : "activity",
-          location: i.location ? String(i.location) : null,
-          sort_order: idx,
-          image_url: photoUrlAt(photoResults, idx),
-          lat: latOf(i),
-          lng: lngOf(i),
+          raw: i,
+          row: {
+            trip_id: body.trip_id,
+            day_date: String(i.day_date ?? body.trip.start_date ?? new Date().toISOString().slice(0, 10)),
+            start_time: i.start_time ? String(i.start_time) : null,
+            title: String(i.title ?? "").slice(0, 300),
+            description: i.description ? String(i.description) : null,
+            category: ["activity", "food", "transport", "flight", "hotel", "free"].includes(String(i.category))
+              ? String(i.category)
+              : "activity",
+            location: i.location ? String(i.location) : null,
+            sort_order: idx,
+            lat: latOf(i),
+            lng: lngOf(i),
+          },
         };
-      }).filter((r) => r.title && /^\d{4}-\d{2}-\d{2}$/.test(r.day_date));
+      }).filter(({ row }) => row.title && /^\d{4}-\d{2}-\d{2}$/.test(row.day_date));
+      const kept = dropDuplicates(built);
+      const dupDropped = built.length - kept.length;
+      if (!kept.length) return await noNewItems(dupDropped ? "all_duplicates" : "no_valid_rows", dupDropped);
+      const photoResults = await lookupPhotos(kept.map((k) => k.raw), (i) => i.category === "transport" || i.category === "free");
+      const { rows, cleared } = clearSharedPhotos(kept.map((k, idx) => ({ ...k.row, image_url: photoUrlAt(photoResults, idx) })));
       const { error } = await supabase.from("itinerary_items").insert(rows);
       if (error) throw error;
       inserted = rows.length;
+      dupStats = `dup_dropped=${dupDropped} photo_dup_cleared=${cleared} existing=${existing.length}`;
     } else {
       const rows = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
@@ -1089,7 +1389,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       costUsd,
       latencyMs,
       status: "ok",
-      errorMessage: `diag: stop=${payload?.stop_reason} json_blocks=${jsonBlocks} items=${items.length} rows=${inserted}${photoStats ? ` ${photoStats}` : ""}`,
+      errorMessage: `diag: stop=${payload?.stop_reason} json_blocks=${jsonBlocks} items=${items.length} rows=${inserted}${dupStats ? ` ${dupStats}` : ""}${photoStats ? ` ${photoStats}` : ""}`,
     });
     return new Response(JSON.stringify({ ok: true, inserted }), {
       headers: { ...cors, "Content-Type": "application/json" },

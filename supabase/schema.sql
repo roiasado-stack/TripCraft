@@ -304,7 +304,7 @@ GRANT ALL ON public.knowledge_chunks TO service_role;
 REVOKE ALL ON public.knowledge_chunks FROM anon, authenticated;
 CREATE INDEX IF NOT EXISTS knowledge_chunks_destination_idx ON public.knowledge_chunks (destination);
 
--- Photo cache for the generate function's Unsplash lookups (migration 012).
+-- Photo cache for the generate function's photo lookups (migration 012; Wikipedia, keys `wiki:<title>`).
 -- Service-role only: users must never be able to plant an image other trips show.
 CREATE TABLE IF NOT EXISTS public.photo_cache (
   query_key TEXT PRIMARY KEY,

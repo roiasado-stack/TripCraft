@@ -71,12 +71,17 @@ placeholder or disabled.
   is ever missing — keep handling that case rather than assuming it's always up.
 - Google login is enabled in Supabase Auth (Providers → Google), with its own OAuth client in
   the "Travel App" Google Cloud project.
-- `generate` also auto-attaches a cover photo (Unsplash, `kind: "photo"`) and coordinates
+- `generate` also auto-attaches a cover photo (Wikipedia, `kind: "photo"`) and coordinates
   (Nominatim, `kind: "geocode"`) to suggestions/itinerary items — manual add/edit and AI
-  generation both go through this, no user-typed URL/coordinates anywhere. Needs
-  `UNSPLASH_ACCESS_KEY` as a Supabase secret; missing/invalid key just means no photos (same
-  graceful-degradation pattern as a missing `ANTHROPIC_API_KEY`, not a hard failure). Both this
-  and geocoding translate Hebrew queries to English first (`translateHebrewQuery`) since neither
-  Unsplash nor Nominatim search Hebrew well.
+  generation both go through this, no user-typed URL/coordinates anywhere. Photos are the page
+  image of the exact English Wikipedia article for that place (AI items carry `wikipedia_title`;
+  `kind: "photo"` asks Claude for the title or NONE). No key, and no search fallback on purpose —
+  a miss stays null and shows MediaCard's fallback. Hits are cached in the service-role-only
+  `photo_cache` (`wiki:` keys). `UNSPLASH_ACCESS_KEY` is no longer used. Geocoding translates
+  Hebrew queries to English first (`translateHebrewQuery`) since Nominatim searches Hebrew badly.
+  Wikimedia images carry CC licenses (e.g. CC BY-SA) whose attribution isn't displayed yet —
+  needed before public/production use.
+- Repeated AI presses don't duplicate: `generate` lists the trip's existing suggestions/itinerary
+  in the prompt and drops items whose normalized title (`normalizeTitle`) already exists.
 
 There is no offline support.
