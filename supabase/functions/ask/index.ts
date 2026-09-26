@@ -57,6 +57,21 @@ const PRICE_PER_MTOK_OUTPUT_USD = 5.0;
 // model call).
 const DAILY_CAP_USD = 2.0;
 
+// App-wide, per-day (migration 014): the per-user cap alone doesn't bound
+// total spend while signup is open. Shared with the other Edge Function —
+// both read the same agent_runs total.
+const APP_DAILY_CAP_USD = 5.0;
+
+/** True once the caller or the whole app has hit today's spend cap. */
+// deno-lint-ignore no-explicit-any
+async function overDailyCap(supabase: any): Promise<boolean> {
+  const [mine, app] = await Promise.all([
+    supabase.rpc("my_agent_daily_cost_usd"),
+    supabase.rpc("app_agent_daily_cost_usd"),
+  ]);
+  return (mine.data ?? 0) >= DAILY_CAP_USD || (app.data ?? 0) >= APP_DAILY_CAP_USD;
+}
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -315,8 +330,7 @@ Deno.serve(async (req) => {
     const message = (body.message ?? "").trim();
     if (!message) return json({ error: "empty_message" }, 400);
 
-    const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
-    if ((spentToday ?? 0) >= DAILY_CAP_USD) {
+    if (await overDailyCap(supabase)) {
       return json({ error: "daily_cap_reached" }, 429);
     }
 

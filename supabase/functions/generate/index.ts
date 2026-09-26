@@ -34,6 +34,21 @@ const PRICE_PER_MTOK_OUTPUT_USD = 10.0;
 // same agent_runs table, so my_agent_daily_cost_usd() sums across both).
 const DAILY_CAP_USD = 2.0;
 
+// App-wide, per-day (migration 014): the per-user cap alone doesn't bound
+// total spend while signup is open. Shared with the other Edge Function —
+// both read the same agent_runs total.
+const APP_DAILY_CAP_USD = 5.0;
+
+/** True once the caller or the whole app has hit today's spend cap. */
+// deno-lint-ignore no-explicit-any
+async function overDailyCap(supabase: any): Promise<boolean> {
+  const [mine, app] = await Promise.all([
+    supabase.rpc("my_agent_daily_cost_usd"),
+    supabase.rpc("app_agent_daily_cost_usd"),
+  ]);
+  return (mine.data ?? 0) >= DAILY_CAP_USD || (app.data ?? 0) >= APP_DAILY_CAP_USD;
+}
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -542,8 +557,7 @@ Deno.serve(async (req) => {
     // simply skipped over the cap, and the request still answers { ok: true }
     // with a null photo / the untranslated query, never a 429.
     if (body.kind !== "photo" && body.kind !== "geocode") {
-      const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
-      if ((spentToday ?? 0) >= DAILY_CAP_USD) {
+      if (await overDailyCap(supabase)) {
         return new Response(JSON.stringify({ error: "daily_cap_reached" }), {
           status: 429,
           headers: { ...cors, "Content-Type": "application/json" },
@@ -992,8 +1006,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
     // call, since unlike its caller this sub-call does cost money.
     const translateHebrewQuery = async (query: string, logKind: string): Promise<string> => {
       if (!/[֐-׿]/.test(query)) return query;
-      const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
-      if ((spentToday ?? 0) >= DAILY_CAP_USD) return query;
+      if (await overDailyCap(supabase)) return query;
       try {
         const start = Date.now();
         const tRes = await fetch(ANTHROPIC_URL, {
@@ -1040,8 +1053,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
           headers: { ...cors, "Content-Type": "application/json" },
         });
       if (!query) return photoResponse(null);
-      const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
-      if ((spentToday ?? 0) >= DAILY_CAP_USD) return photoResponse(null);
+      if (await overDailyCap(supabase)) return photoResponse(null);
       try {
         const start = Date.now();
         const tRes = await fetch(ANTHROPIC_URL, {
