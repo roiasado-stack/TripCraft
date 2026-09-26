@@ -11,7 +11,13 @@ import { Button, Card, Field, Input, Modal } from "@/components/ui";
  * We store the link rather than the photos: albums stay where people already
  * keep them, and nothing private is copied into the app.
  */
-export function PhotoAlbumCard({ trip, editable = true }: { trip: Trip; editable?: boolean }) {
+export function PhotoAlbumCard({
+  trip,
+  editable = true,
+}: {
+  trip: Pick<Trip, "id" | "photos_album_url">;
+  editable?: boolean;
+}) {
   const toast = useToast();
   const [url, setUrl] = useState(trip.photos_album_url ?? "");
   const [open, setOpen] = useState(false);
@@ -39,7 +45,12 @@ export function PhotoAlbumCard({ trip, editable = true }: { trip: Trip; editable
     toast.success(value ? "אלבום התמונות נשמר 📸" : "הקישור הוסר");
   };
 
-  if (!editable && !url) return null;
+  // The save check above is client-side only — the column can be written
+  // straight through the API, and this card renders on the public share page.
+  // Never put a non-http(s) URL (e.g. javascript:) in an href.
+  const safeUrl = url && isSafeHttpUrl(url) ? url : "";
+
+  if (!editable && !safeUrl) return null;
 
   return (
     <>
@@ -49,15 +60,15 @@ export function PhotoAlbumCard({ trip, editable = true }: { trip: Trip; editable
         </div>
         <div className="min-w-0 flex-1">
           <div className="font-bold">אלבום התמונות המשותף</div>
-          {url ? (
+          {safeUrl ? (
             <a
-              href={url}
+              href={safeUrl}
               target="_blank"
               rel="noopener noreferrer"
               dir="ltr"
               className="block truncate text-xs text-primary underline underline-offset-2"
             >
-              {url}
+              {safeUrl}
             </a>
           ) : (
             <div className="text-xs text-muted-foreground">
@@ -65,9 +76,9 @@ export function PhotoAlbumCard({ trip, editable = true }: { trip: Trip; editable
             </div>
           )}
         </div>
-        {url && (
+        {safeUrl && (
           <a
-            href={url}
+            href={safeUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="grid size-9 shrink-0 place-items-center rounded-xl border border-border text-primary"

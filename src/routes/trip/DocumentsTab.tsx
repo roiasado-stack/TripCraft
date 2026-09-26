@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { DOC_CATEGORIES, docCategoryLabel } from "@/lib/trip-options";
 import { ImportVoucher, type VoucherResult } from "@/components/ImportVoucher";
 import { DOCS_BUCKET as BUCKET, uploadTripDocument } from "@/lib/documents";
+import { isSafeHttpUrl } from "@/lib/maps";
 
 export default function DocumentsTab() {
   const { trip, participants } = useTrip();
@@ -150,6 +151,10 @@ export default function DocumentsTab() {
       toast.error("צריך שם וקישור");
       return;
     }
+    if (!isSafeHttpUrl(linkModal.url.trim())) {
+      toast.error("הקישור צריך להתחיל ב-https://");
+      return;
+    }
     await supabase.from("documents").insert({
       trip_id: trip.id,
       name: linkModal.name.trim(),
@@ -164,6 +169,10 @@ export default function DocumentsTab() {
 
   const open = async (doc: DocumentRow) => {
     if (doc.external_url) {
+      if (!isSafeHttpUrl(doc.external_url)) {
+        toast.error("הקישור לא תקין — צריך להתחיל ב-https://");
+        return;
+      }
       window.open(doc.external_url, "_blank", "noopener");
       return;
     }

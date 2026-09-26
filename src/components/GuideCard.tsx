@@ -4,7 +4,7 @@ import { whatsappUrl } from "@/lib/maps";
 import { Card } from "@/components/ui";
 
 /** Guide contact for an organized trip — renders nothing without a name. */
-export function GuideCard({ trip }: { trip: Trip }) {
+export function GuideCard({ trip }: { trip: Pick<Trip, "guide_name" | "guide_phone"> }) {
   if (!trip.guide_name) return null;
   const wa = whatsappUrl(trip.guide_phone);
 

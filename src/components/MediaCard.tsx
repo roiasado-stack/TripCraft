@@ -1,5 +1,41 @@
 import type { ReactNode } from "react";
+import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/**
+ * upload.wikimedia.org image → its file description page, where the author and
+ * license are listed. Photos come from Wikipedia under CC licenses that
+ * require attribution; linking each image to that page is how we give it
+ * (see /credits). Null for anything that isn't a Wikimedia upload.
+ */
+export function wikimediaFilePage(url?: string | null): string | null {
+  const m = (url ?? "").match(/^https:\/\/upload\.wikimedia\.org\/wikipedia\/([a-z-]+)\/(?:thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/?#]+)/);
+  if (!m) return null;
+  const host = m[1] === "commons" ? "commons.wikimedia.org" : `${m[1]}.wikipedia.org`;
+  return `https://${host}/wiki/File:${m[2]}`;
+}
+
+/** Small ⓘ in the image corner linking to the photo's author/license page. */
+function ImageCredit({ imageUrl, compact }: { imageUrl: string; compact?: boolean }) {
+  const page = wikimediaFilePage(imageUrl);
+  if (!page) return null;
+  return (
+    <a
+      href={page}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      aria-label="מקור התמונה ורישיון (ויקיפדיה)"
+      title="מקור התמונה ורישיון (ויקיפדיה)"
+      className={cn(
+        "absolute start-1 top-1 grid place-items-center rounded-full bg-black/45 text-white",
+        compact ? "size-4" : "size-6",
+      )}
+    >
+      <Info className={compact ? "size-3" : "size-3.5"} />
+    </a>
+  );
+}
 
 type Gradient = "sea" | "sunset" | "surf";
 
@@ -59,6 +95,7 @@ export function CardCoverImage({
       ) : (
         <Fallback gradient={gradient} icon={icon} />
       )}
+      {hasImage && <ImageCredit imageUrl={imageUrl!} />}
       {/* Bottom gradient: dark-to-transparent works for legible light text on
           top of any photo (or the brand gradient) in both light and dark mode. */}
       {(hasImage || children) && (
@@ -95,12 +132,13 @@ export function CardThumbnail({
   className?: string;
 }) {
   return (
-    <div className={cn("shrink-0 overflow-hidden", size, rounded, className)}>
+    <div className={cn("relative shrink-0 overflow-hidden", size, rounded, className)}>
       {imageUrl ? (
         <img src={imageUrl} alt={alt} className="size-full object-cover" loading="lazy" />
       ) : (
         <Fallback gradient={gradient} icon={icon} />
       )}
+      {imageUrl && <ImageCredit imageUrl={imageUrl} compact />}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { AlertTriangle, FileUp, IdCard, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -170,6 +171,13 @@ export function ImportParticipants({
           <p className="-mt-1 text-center text-xs text-muted-foreground">
             צלם, או בחר עד 8 תמונות/מסמכי PDF מהגלריה, מהקבצים או מ-Google Drive — נזהה שם וגיל
             אוטומטית. דורש הפעלת AI.
+          </p>
+          <p className="-mt-2 text-center text-[11px] text-muted-foreground">
+            התמונות נשלחות לעיבוד אצל ספק ה-AI (Anthropic) ואינן נשמרות אצלנו. סרקו רק דרכונים שיש לכם
+            רשות לשתף.{" "}
+            <Link to="/privacy" className="underline underline-offset-2">
+              מדיניות הפרטיות
+            </Link>
           </p>
           <input
             ref={passportRef}

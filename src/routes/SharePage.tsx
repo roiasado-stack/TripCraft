@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import type { Flight, ItineraryItem, Stay, Suggestion, Trip } from "@/lib/types";
+import type { SharedTripPayload } from "@/lib/types";
 import { Card, FullSpinner } from "@/components/ui";
 import { TripUpdates } from "@/components/TripUpdates";
 import { PhotoAlbumCard } from "@/components/PhotoAlbumCard";
 import { GuideCard } from "@/components/GuideCard";
 import { MapLink } from "@/components/MapLink";
 import { resolveMapUrl } from "@/lib/maps";
+import { LegalLinks } from "@/routes/LegalPages";
 import {
   daysBetween,
   destinationFlag,
@@ -21,44 +22,26 @@ import {
 
 export default function SharePage() {
   const { slug } = useParams();
-  const [trip, setTrip] = useState<Trip | null>(null);
-  const [flights, setFlights] = useState<Flight[]>([]);
-  const [stays, setStays] = useState<Stay[]>([]);
-  const [itinerary, setItinerary] = useState<ItineraryItem[]>([]);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [agency, setAgency] = useState<{ name: string | null; color: string | null } | null>(null);
+  const [shared, setShared] = useState<SharedTripPayload | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "notfound">("loading");
 
   useEffect(() => {
     (async () => {
       if (!slug) return;
-      const { data: t } = await supabase.from("trips").select("*").eq("share_slug", slug).eq("is_shared", true).maybeSingle();
-      if (!t) {
+      // One slug-gated RPC (migration 013): anonymous visitors have no table
+      // access, so the trip can't be listed without its link.
+      const { data } = await supabase.rpc("get_shared_trip", { p_slug: slug });
+      if (!data) {
         setState("notfound");
         return;
       }
-      const trip = t as Trip;
-      setTrip(trip);
-      const [f, s, it, sg, prof] = await Promise.all([
-        supabase.from("flights").select("*").eq("trip_id", trip.id).order("depart_at"),
-        supabase.from("stays").select("*").eq("trip_id", trip.id).order("check_in"),
-        supabase.from("itinerary_items").select("*").eq("trip_id", trip.id).order("day_date").order("sort_order"),
-        supabase.from("suggestions").select("*").eq("trip_id", trip.id).order("created_at"),
-        supabase.from("profiles").select("agency_name, agency_color").eq("id", trip.user_id).maybeSingle(),
-      ]);
-      setFlights((f.data as Flight[]) ?? []);
-      setStays((s.data as Stay[]) ?? []);
-      setItinerary((it.data as ItineraryItem[]) ?? []);
-      setSuggestions((sg.data as Suggestion[]) ?? []);
-      setAgency((prof.data as { agency_name: string | null; agency_color: string | null } | null)
-        ? { name: (prof.data as any).agency_name, color: (prof.data as any).agency_color }
-        : null);
+      setShared(data as SharedTripPayload);
       setState("ready");
     })();
   }, [slug]);
 
   if (state === "loading") return <FullSpinner label="טוען טיול…" />;
-  if (state === "notfound" || !trip)
+  if (state === "notfound" || !shared)
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
         <div className="text-5xl">🔒</div>
@@ -67,6 +50,7 @@ export default function SharePage() {
       </div>
     );
 
+  const { trip, agency, flights, stays, itinerary, suggestions, updates } = shared;
   const accent = agency?.color || undefined;
   const duration = tripDuration(trip.start_date, trip.end_date);
   const days = new Set<string>();
@@ -99,7 +83,7 @@ export default function SharePage() {
 
       {/* Read-only announcements and the shared album: what a client most
           wants from a link an agent sent them. */}
-      <TripUpdates tripId={trip.id} editable={false} />
+      <TripUpdates tripId={trip.id} editable={false} preloaded={updates} />
       <PhotoAlbumCard trip={trip} editable={false} />
 
       {/* flights */}
@@ -196,6 +180,7 @@ export default function SharePage() {
       <p className="mt-8 text-center text-xs text-muted-foreground">
         נבנה עם <span className="font-bold">TripCraft</span> 🌴
       </p>
+      <LegalLinks className="mt-2" />
     </div>
   );
 }

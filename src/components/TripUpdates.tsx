@@ -20,10 +20,19 @@ function kindMeta(kind: string) {
  * Announcements for a trip — schedule changes, gate updates, "meet at 8".
  * Read-only viewers (shared link) see them too, which is the point for agents.
  */
-export function TripUpdates({ tripId, editable = true }: { tripId: string; editable?: boolean }) {
+export function TripUpdates({
+  tripId,
+  editable = true,
+  preloaded,
+}: {
+  tripId: string;
+  editable?: boolean;
+  /** Already-fetched updates (the share page gets them from get_shared_trip) — skips the query. */
+  preloaded?: Omit<TripUpdate, "trip_id">[];
+}) {
   const toast = useToast();
-  const [updates, setUpdates] = useState<TripUpdate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [updates, setUpdates] = useState<Omit<TripUpdate, "trip_id">[]>(preloaded ?? []);
+  const [loading, setLoading] = useState(!preloaded);
   const [draft, setDraft] = useState<{ title: string; body: string; kind: string; is_pinned: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -39,6 +48,7 @@ export function TripUpdates({ tripId, editable = true }: { tripId: string; edita
   };
 
   useEffect(() => {
+    if (preloaded) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
@@ -71,7 +81,7 @@ export function TripUpdates({ tripId, editable = true }: { tripId: string; edita
     await supabase.from("trip_updates").delete().eq("id", id);
   };
 
-  const togglePin = async (u: TripUpdate) => {
+  const togglePin = async (u: Omit<TripUpdate, "trip_id">) => {
     await supabase.from("trip_updates").update({ is_pinned: !u.is_pinned }).eq("id", u.id);
     load();
   };

@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Gauge, LogOut, Moon, Sun } from "lucide-react";
+import { ChevronRight, Gauge, LogOut, Moon, Sun, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
-import { Button, Card, Field, Input } from "@/components/ui";
+import { Button, Card, Field, Input, Modal } from "@/components/ui";
+import { DOCS_BUCKET } from "@/lib/documents";
+import { LegalLinks } from "@/routes/LegalPages";
+
+const DELETE_CONFIRM_WORD = "מחיקה";
 
 export default function SettingsPage() {
   const { user, profile, roles, isAgent, isAdmin, refreshProfile, signOut } = useAuth();
@@ -16,6 +20,47 @@ export default function SettingsPage() {
   const [agencyName, setAgencyName] = useState(profile?.agency_name ?? "");
   const [agencyColor, setAgencyColor] = useState(profile?.agency_color ?? "#12b3b0");
   const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  // Right to erasure. Files go first: storage can't be cleared from SQL, and
+  // once delete_my_account() (migration 013) runs there's no session left to
+  // do it with. The RPC then deletes trips (cascading to everything under
+  // them), usage rows, roles, profile and the auth user.
+  const deleteAccount = async () => {
+    if (!user) return;
+    setDeleting(true);
+    try {
+      const bucket = supabase.storage.from(DOCS_BUCKET);
+      const paths: string[] = [];
+      const { data: top, error: listErr } = await bucket.list(user.id, { limit: 1000 });
+      if (listErr) throw listErr;
+      for (const entry of top ?? []) {
+        const path = `${user.id}/${entry.name}`;
+        if (entry.id) {
+          paths.push(path);
+          continue;
+        }
+        // Folders (one per trip) come back with a null id.
+        const { data: files, error } = await bucket.list(path, { limit: 1000 });
+        if (error) throw error;
+        for (const f of files ?? []) paths.push(`${path}/${f.name}`);
+      }
+      for (let i = 0; i < paths.length; i += 100) {
+        const { error } = await bucket.remove(paths.slice(i, i + 100));
+        if (error) throw error;
+      }
+      const { error } = await supabase.rpc("delete_my_account");
+      if (error) throw error;
+      await signOut();
+      toast.success("החשבון וכל המידע נמחקו. להתראות 👋");
+      navigate("/auth", { replace: true });
+    } catch {
+      toast.error("המחיקה נכשלה. נסו שוב או פנו אלינו.");
+      setDeleting(false);
+    }
+  };
 
   const saveProfile = async () => {
     if (!user) return;
@@ -117,7 +162,50 @@ export default function SettingsPage() {
         התנתקות
       </Button>
 
-      <p className="mt-6 text-center text-xs text-muted-foreground">TripCraft · גרסה 0.1</p>
+      <Button
+        variant="ghost"
+        size="lg"
+        className="mt-3 w-full text-destructive"
+        onClick={() => {
+          setDeleteConfirm("");
+          setDeleteOpen(true);
+        }}
+      >
+        <Trash2 className="size-5" />
+        מחיקת החשבון
+      </Button>
+
+      <LegalLinks className="mt-6" />
+      <p className="mt-3 text-center text-xs text-muted-foreground">TripCraft · גרסה 0.1</p>
+
+      <Modal
+        open={deleteOpen}
+        onClose={() => !deleting && setDeleteOpen(false)}
+        title="מחיקת החשבון"
+        footer={
+          <>
+            <Button variant="ghost" className="flex-1" disabled={deleting} onClick={() => setDeleteOpen(false)}>
+              ביטול
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1"
+              loading={deleting}
+              disabled={deleteConfirm.trim() !== DELETE_CONFIRM_WORD}
+              onClick={deleteAccount}
+            >
+              מחיקה לצמיתות
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-3 text-sm text-muted-foreground">
+          כל הטיולים, המשתתפים, המסמכים שהועלו, הצ'אטים וקישורי השיתוף יימחקו לצמיתות. אי אפשר לבטל את הפעולה.
+        </p>
+        <Field label={`כדי לאשר, הקלידו "${DELETE_CONFIRM_WORD}"`}>
+          <Input value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} />
+        </Field>
+      </Modal>
     </div>
   );
 }

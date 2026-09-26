@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button, Card, FullSpinner, Input, Label } from "@/components/ui";
 import { Mail } from "lucide-react";
+import { LegalLinks } from "@/routes/LegalPages";
 
 type Mode = "signin" | "signup";
 
@@ -171,8 +172,17 @@ export default function AuthPage() {
         </Card>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          בהמשך הרישום אתה מסכים לתנאי השימוש ומדיניות הפרטיות.
+          ההרשמה או הכניסה מהוות הסכמה ל
+          <Link to="/terms" className="font-semibold underline underline-offset-2">
+            תנאי השימוש
+          </Link>{" "}
+          ול
+          <Link to="/privacy" className="font-semibold underline underline-offset-2">
+            מדיניות הפרטיות
+          </Link>
+          .
         </p>
+        <LegalLinks className="mt-3" />
       </div>
     </div>
   );

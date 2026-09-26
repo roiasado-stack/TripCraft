@@ -27,3 +27,4 @@ supabase/.temp/
 
 # tsc -b incremental build cache — regenerated every build, not source.
 tsconfig.tsbuildinfo
+.tmp/

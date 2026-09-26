@@ -47,18 +47,23 @@ There are no tests, no linter, and no formatter. Don't add them unless asked.
 - `supabase/schema.sql` is the full, idempotent schema; incremental changes go in a new numbered
   file under `supabase/migrations/`. Both are applied by pasting into the SQL Editor — there is
   no CLI migration flow here.
-- **Every table needs RLS.** Owner access via `public.owns_trip(trip_id)`; public read for shared
-  trips via `public.trip_is_shared(trip_id)` granted to `anon`. Copy the pattern in the `DO $$` loop
-  in `schema.sql` when adding a child table, and index `trip_id`.
+- **Every table needs RLS.** Owner access via `public.owns_trip(trip_id)`. Copy the pattern in the
+  `DO $$` loop in `schema.sql` when adding a child table, and index `trip_id`. **No table gets an
+  `anon` grant or a "shared read" policy** — that let anyone list every shared trip without the
+  slug (closed in migration 013).
 - Roles live in `user_roles`, never on `profiles`.
 - Documents go in the private `trip-docs` bucket, keyed `<auth.uid()>/…` — the storage policies
   depend on that first path segment.
 
 ## Two audiences, two paths
 
-`/share/:slug` (`SharePage`) is read-only and served to **anonymous** visitors. Anything new that
-should appear there needs an `anon` SELECT grant plus a `shared read` policy, and the page must
-never assume a logged-in user. Everything else sits behind `ProtectedRoute`.
+`/share/:slug` (`SharePage`) is read-only and served to **anonymous** visitors. It reads everything
+through one RPC, `get_shared_trip(slug)` (migration 013), which returns only the fields the page
+renders. Anything new that should appear there goes into that function (new migration) and
+`SharedTripPayload` in `@/lib/types` — never booking refs, participants, documents or notes. The
+page must never assume a logged-in user. Everything else sits behind `ProtectedRoute`, except the
+public legal pages (`/terms`, `/privacy`, `/credits`, `/accessibility` in `LegalPages.tsx`; business
+details in `@/lib/legal`). A new data flow to a third party means updating `/privacy`.
 
 ## AI and Google login are live
 
@@ -79,8 +84,8 @@ placeholder or disabled.
   a miss stays null and shows MediaCard's fallback. Hits are cached in the service-role-only
   `photo_cache` (`wiki:` keys). `UNSPLASH_ACCESS_KEY` is no longer used. Geocoding translates
   Hebrew queries to English first (`translateHebrewQuery`) since Nominatim searches Hebrew badly.
-  Wikimedia images carry CC licenses (e.g. CC BY-SA) whose attribution isn't displayed yet —
-  needed before public/production use.
+  Wikimedia images carry CC licenses (e.g. CC BY-SA): each image shows an ⓘ link to its file page
+  (author + license) via `wikimediaFilePage` in `MediaCard`, plus the `/credits` page.
 - Repeated AI presses don't duplicate: `generate` lists the trip's existing suggestions/itinerary
   in the prompt and drops items whose normalized title (`normalizeTitle`) already exists.
 

@@ -47,6 +47,26 @@ export interface TripUpdate {
   created_at: string;
 }
 
+/**
+ * What get_shared_trip(slug) returns (migration 013) — exactly the fields
+ * /share/:slug renders. Anonymous visitors have no table access at all.
+ */
+export interface SharedTripPayload {
+  trip: Pick<
+    Trip,
+    "id" | "title" | "destination" | "start_date" | "end_date" | "cover_emoji" | "guide_name" | "guide_phone" | "photos_album_url"
+  >;
+  agency: { name: string | null; color: string | null } | null;
+  flights: Pick<Flight, "id" | "from_airport" | "to_airport" | "airline" | "flight_number" | "depart_at">[];
+  stays: Pick<Stay, "id" | "hotel_name" | "address" | "check_in" | "check_out" | "map_url">[];
+  itinerary: Pick<
+    ItineraryItem,
+    "id" | "day_date" | "start_time" | "title" | "description" | "category" | "location" | "map_url"
+  >[];
+  suggestions: Pick<Suggestion, "id" | "kind" | "title" | "description" | "location" | "map_url">[];
+  updates: Omit<TripUpdate, "trip_id">[];
+}
+
 export interface Participant {
   id: string;
   trip_id: string;
