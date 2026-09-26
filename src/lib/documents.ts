@@ -20,6 +20,8 @@ export async function uploadTripDocument(opts: {
   category: string;
   participantId?: string | null;
   name?: string;
+  /** "private" (uploader only, the default) or "members" (everyone on the trip). */
+  visibility?: "private" | "members";
 }): Promise<void> {
   const { userId, tripId, file } = opts;
   if (file.size > MAX_DOC_BYTES) throw new Error("file_too_large");
@@ -33,6 +35,7 @@ export async function uploadTripDocument(opts: {
     category: opts.category,
     participant_id: opts.participantId || null,
     storage_path: path,
+    visibility: opts.visibility ?? "private",
   });
   if (insErr) throw insErr;
 }

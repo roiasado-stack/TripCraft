@@ -3,6 +3,7 @@ import { FileUp, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { ItineraryItem } from "@/lib/types";
 import { useTrip } from "./TripLayout";
+import { can } from "@/lib/permissions";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, EmptyState, Field, Input, Label, Modal, Segmented, Spinner, Textarea } from "@/components/ui";
 import { ImportItinerary } from "@/components/ImportItinerary";
@@ -41,7 +42,8 @@ type Draft = {
 };
 
 export default function ItineraryTab() {
-  const { trip, participants } = useTrip();
+  const { trip, role, participants } = useTrip();
+  const canEdit = can(role, "edit");
   const toast = useToast();
   const [items, setItems] = useState<ItineraryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -166,6 +168,7 @@ export default function ItineraryTab() {
       <ScreenTitle
         title="מסלול"
         action={
+          canEdit && (
           <div className="flex gap-1.5">
             <Button size="sm" variant="outline" onClick={() => setImporting(true)} aria-label="ייבוא מסלול">
               <FileUp className="size-4" />
@@ -175,6 +178,7 @@ export default function ItineraryTab() {
               AI
             </Button>
           </div>
+          )
         }
       />
 
@@ -198,8 +202,9 @@ export default function ItineraryTab() {
         <EmptyState
           emoji="🗓️"
           title="עדיין אין מסלול"
-          description="הוסף תאריכים לטיול או פריט ראשון, או תן ל-AI להציע מסלול יומי."
+          description={canEdit ? "הוסף תאריכים לטיול או פריט ראשון, או תן ל-AI להציע מסלול יומי." : "בעל הטיול עוד לא בנה מסלול."}
           action={
+            canEdit && (
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button onClick={() => setEditing({ day_date: defaultDay, start_time: "", title: "", description: "", category: "activity", location: "", image_url: null, lat: null, lng: null })}>
                 <Plus className="size-4" /> הוספת פריט
@@ -208,6 +213,7 @@ export default function ItineraryTab() {
                 <FileUp className="size-4" /> ייבוא מסלול
               </Button>
             </div>
+            )
           }
         />
       ) : view === "map" ? (
@@ -253,6 +259,7 @@ export default function ItineraryTab() {
                           </div>
                         )}
                       </div>
+                      {canEdit && (
                       <div className="flex shrink-0 flex-col gap-1">
                         <button onClick={() => setEditing({ id: it.id, day_date: it.day_date, start_time: it.start_time ?? "", title: it.title, description: it.description ?? "", category: it.category, location: it.location ?? "", image_url: it.image_url ?? null, lat: it.lat ?? null, lng: it.lng ?? null })} className="text-muted-foreground" aria-label="עריכה">
                           <Pencil className="size-4" />
@@ -261,15 +268,18 @@ export default function ItineraryTab() {
                           <Trash2 className="size-4" />
                         </button>
                       </div>
+                      )}
                     </Card>
                   );
                 })}
-                <button
-                  onClick={() => setEditing({ day_date: day, start_time: "", title: "", description: "", category: "activity", location: "", image_url: null, lat: null, lng: null })}
-                  className="flex items-center justify-center gap-1 rounded-2xl border border-dashed border-border py-2.5 text-sm font-semibold text-muted-foreground"
-                >
-                  <Plus className="size-4" /> הוספה ליום זה
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => setEditing({ day_date: day, start_time: "", title: "", description: "", category: "activity", location: "", image_url: null, lat: null, lng: null })}
+                    className="flex items-center justify-center gap-1 rounded-2xl border border-dashed border-border py-2.5 text-sm font-semibold text-muted-foreground"
+                  >
+                    <Plus className="size-4" /> הוספה ליום זה
+                  </button>
+                )}
               </div>
             </div>
           ))}

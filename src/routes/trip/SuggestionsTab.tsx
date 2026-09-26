@@ -4,6 +4,7 @@ import { CalendarPlus, Compass, Heart, MessageCircle, Plus, Sparkles, Trash2 } f
 import { supabase } from "@/lib/supabase";
 import type { Suggestion } from "@/lib/types";
 import { useTrip } from "./TripLayout";
+import { can } from "@/lib/permissions";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, Chip, EmptyState, Field, Input, Modal, Segmented, Spinner, Textarea } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
@@ -24,7 +25,9 @@ const TUNE: { value: TuneOption; label: string }[] = [
 ];
 
 export default function SuggestionsTab() {
-  const { trip, participants } = useTrip();
+  const { trip, role, participants } = useTrip();
+  const canParticipate = can(role, "participate");
+  const canEdit = can(role, "edit");
   const navigate = useNavigate();
   const toast = useToast();
   const [items, setItems] = useState<Suggestion[]>([]);
@@ -164,8 +167,9 @@ export default function SuggestionsTab() {
       <ScreenTitle
         title="מומלצים"
         action={
+          canParticipate && (
           <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" onClick={() => setManual({ kind: "attraction", title: "", description: "" })}>
+            <Button size="sm" variant="outline" onClick={() => setManual({ kind: "attraction", title: "", description: "" })} aria-label="הוספת המלצה">
               <Plus className="size-4" />
             </Button>
             <Button size="sm" variant="outline" loading={picking} onClick={addDestinationPicks}>
@@ -178,6 +182,7 @@ export default function SuggestionsTab() {
               <Sparkles className="size-4" /> AI
             </Button>
           </div>
+          )
         }
       />
 
@@ -242,7 +247,7 @@ export default function SuggestionsTab() {
           title={items.length === 0 ? "אין עדיין המלצות" : "אין תוצאות לסינון"}
           description={items.length === 0 ? "תן ל-AI להציע אטרקציות ומסעדות מותאמות למשתתפים ולהעדפות שלכם." : undefined}
           action={
-            items.length === 0 ? (
+            items.length === 0 && canParticipate ? (
               <Button onClick={() => setShowGen(true)}>
                 <Sparkles className="size-4" /> יצירת המלצות
               </Button>
@@ -290,17 +295,23 @@ export default function SuggestionsTab() {
                       <DirectionsLink place={s.location ?? s.title} near={trip.destination} />
                     </div>
                   )}
+                  {canParticipate && (
                   <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
                     <button onClick={() => toggleLike(s)} className={cn("flex items-center gap-1 text-sm font-semibold", s.liked ? "text-accent" : "text-muted-foreground")}>
                       <Heart className={cn("size-4", s.liked && "fill-current")} /> אהבתי
                     </button>
-                    <button onClick={() => addToItinerary(s)} className="flex items-center gap-1 text-sm font-semibold text-primary">
-                      <CalendarPlus className="size-4" /> למסלול
-                    </button>
-                    <button onClick={() => remove(s.id)} className="mr-auto text-destructive" aria-label="מחיקה">
-                      <Trash2 className="size-4" />
-                    </button>
+                    {canEdit && (
+                      <>
+                        <button onClick={() => addToItinerary(s)} className="flex items-center gap-1 text-sm font-semibold text-primary">
+                          <CalendarPlus className="size-4" /> למסלול
+                        </button>
+                        <button onClick={() => remove(s.id)} className="ms-auto text-destructive" aria-label="מחיקה">
+                          <Trash2 className="size-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
+                  )}
                 </div>
               </Card>
             );

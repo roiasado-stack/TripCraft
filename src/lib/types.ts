@@ -33,8 +33,36 @@ export interface Trip {
   is_template: boolean;
   photos_album_url: string | null;
   image_url: string | null;
+  /** Public page offers "try it yourself" (migration 016). Owner-only toggle. */
+  is_showcase: boolean;
+  /** Set on demo copies: the showcase this trip was cloned from. */
+  demo_source_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Caller's relationship to a trip, from the trip_role() RPC (migration 015). */
+export type TripRole = "owner" | "editor" | "participant" | "viewer";
+export type MemberRole = Exclude<TripRole, "owner">;
+
+export interface TripMember {
+  id: string;
+  trip_id: string;
+  user_id: string;
+  role: MemberRole;
+  status: "pending" | "active";
+  display_name: string | null;
+  created_at: string;
+}
+
+export interface TripInvite {
+  id: string;
+  trip_id: string;
+  role: MemberRole;
+  token: string;
+  requires_approval: boolean;
+  revoked_at: string | null;
+  created_at: string;
 }
 
 export interface TripUpdate {
@@ -44,6 +72,7 @@ export interface TripUpdate {
   body: string | null;
   kind: string; // info | warning | urgent
   is_pinned: boolean;
+  created_by?: string | null;
   created_at: string;
 }
 
@@ -55,7 +84,7 @@ export interface SharedTripPayload {
   trip: Pick<
     Trip,
     "id" | "title" | "destination" | "start_date" | "end_date" | "cover_emoji" | "guide_name" | "guide_phone" | "photos_album_url"
-  >;
+  > & { is_showcase?: boolean };
   agency: { name: string | null; color: string | null } | null;
   flights: Pick<Flight, "id" | "from_airport" | "to_airport" | "airline" | "flight_number" | "depart_at">[];
   stays: Pick<Stay, "id" | "hotel_name" | "address" | "check_in" | "check_out" | "map_url">[];
@@ -172,6 +201,9 @@ export interface DocumentRow {
   name: string;
   storage_path: string | null;
   external_url: string | null;
+  /** "private" = uploader only; "members" = everyone on the trip (migration 015). */
+  visibility: "private" | "members";
+  uploaded_by: string | null;
   created_at: string;
 }
 
@@ -183,6 +215,7 @@ export interface ChecklistItem {
   is_done: boolean;
   is_shared: boolean;
   sort_order: number;
+  created_by?: string | null;
   created_at: string;
 }
 

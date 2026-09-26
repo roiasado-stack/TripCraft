@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, Info, Megaphone, Pin, Plus, Siren, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import type { TripUpdate } from "@/lib/types";
+import type { TripRole, TripUpdate } from "@/lib/types";
+import { useAuth } from "@/hooks/use-auth";
+import { can } from "@/lib/permissions";
 import { Button, Card, Chip, Field, Input, Modal, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -22,15 +24,22 @@ function kindMeta(kind: string) {
  */
 export function TripUpdates({
   tripId,
+  role,
   editable = true,
   preloaded,
 }: {
   tripId: string;
+  /** Caller's role: participants post and manage their own; editors manage all. */
+  role?: TripRole;
   editable?: boolean;
   /** Already-fetched updates (the share page gets them from get_shared_trip) — skips the query. */
   preloaded?: Omit<TripUpdate, "trip_id">[];
 }) {
   const toast = useToast();
+  const { user } = useAuth();
+  const canPost = editable && (role === undefined || can(role, "participate"));
+  const canManage = (u: Omit<TripUpdate, "trip_id">) =>
+    editable && (role === undefined || can(role, "edit") || (can(role, "participate") && u.created_by === user?.id));
   const [updates, setUpdates] = useState<Omit<TripUpdate, "trip_id">[]>(preloaded ?? []);
   const [loading, setLoading] = useState(!preloaded);
   const [draft, setDraft] = useState<{ title: string; body: string; kind: string; is_pinned: boolean } | null>(null);
@@ -87,7 +96,7 @@ export function TripUpdates({
   };
 
   if (loading) return null;
-  if (!editable && updates.length === 0) return null;
+  if (!canPost && updates.length === 0) return null;
 
   return (
     <section className="mt-4">
@@ -96,7 +105,7 @@ export function TripUpdates({
           <Megaphone className="size-4 text-accent" />
           עדכונים חשובים
         </h3>
-        {editable && (
+        {canPost && (
           <Button
             size="sm"
             variant="outline"
@@ -129,7 +138,7 @@ export function TripUpdates({
                   </div>
                   {u.body && <p className="mt-0.5 whitespace-pre-wrap text-sm text-muted-foreground">{u.body}</p>}
                 </div>
-                {editable && (
+                {canManage(u) && (
                   <div className="flex shrink-0 flex-col gap-1.5">
                     <button onClick={() => togglePin(u)} className="text-muted-foreground" aria-label="נעיצה">
                       <Pin className={cn("size-4", u.is_pinned && "fill-current text-accent")} />

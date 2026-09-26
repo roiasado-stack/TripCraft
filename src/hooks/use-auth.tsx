@@ -11,18 +11,27 @@ type AuthState = {
   loading: boolean;
   isAgent: boolean;
   isAdmin: boolean;
+  /** A "try it yourself" demo session (anonymous sign-in, migration 016). */
+  isAnonymous: boolean;
   signInWithPassword: (email: string, password: string) => Promise<{ error: string | null }>;
   signUpWithPassword: (
     email: string,
     password: string,
     fullName: string,
+    returnTo?: string,
   ) => Promise<{ error: string | null; needsConfirmation: boolean }>;
-  signInWithGoogle: () => Promise<{ error: string | null }>;
+  /** `returnTo` is an in-app path (e.g. /join/:token) to land on after Google. */
+  signInWithGoogle: (returnTo?: string) => Promise<{ error: string | null }>;
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState>({} as AuthState);
+
+/** Only same-app absolute paths ("/join/abc"), never "//evil.com" or a full URL. */
+export function safeReturnPath(path?: string | null): string {
+  return path && /^\/(?!\/)[\w\-./]*$/.test(path) ? path : "/";
+}
 
 /** Translate common Supabase auth errors to friendly Hebrew. */
 function heError(message?: string): string {
@@ -92,17 +101,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     isAgent: roles.includes("agent") || roles.includes("admin"),
     isAdmin: roles.includes("admin"),
+    isAnonymous: session?.user?.is_anonymous === true,
     signInWithPassword: async (email, password) => {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       return { error: error ? heError(error.message) : null };
     },
-    signUpWithPassword: async (email, password, fullName) => {
+    signUpWithPassword: async (email, password, fullName, returnTo) => {
       const { data: signUpData, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: { full_name: fullName },
-          emailRedirectTo: `${window.location.origin}/`,
+          emailRedirectTo: `${window.location.origin}${safeReturnPath(returnTo)}`,
         },
       });
       if (error) return { error: heError(error.message), needsConfirmation: false };
@@ -110,10 +120,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const needsConfirmation = !signUpData.session;
       return { error: null, needsConfirmation };
     },
-    signInWithGoogle: async () => {
+    signInWithGoogle: async (returnTo) => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/` },
+        options: { redirectTo: `${window.location.origin}${safeReturnPath(returnTo)}` },
       });
       return { error: error ? heError(error.message) : null };
     },

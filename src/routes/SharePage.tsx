@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { Wand2 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import type { SharedTripPayload } from "@/lib/types";
-import { Card, FullSpinner } from "@/components/ui";
+import { Button, Card, FullSpinner } from "@/components/ui";
 import { TripUpdates } from "@/components/TripUpdates";
 import { PhotoAlbumCard } from "@/components/PhotoAlbumCard";
 import { GuideCard } from "@/components/GuideCard";
@@ -23,6 +26,31 @@ import {
 export default function SharePage() {
   const { slug } = useParams();
   const [shared, setShared] = useState<SharedTripPayload | null>(null);
+  const [trying, setTrying] = useState(false);
+  const { session } = useAuth();
+  const toast = useToast();
+  const navigate = useNavigate();
+
+  // "Try it yourself" (migration 016): a signed-out visitor gets an anonymous
+  // session, then a personal copy of this showcase to edit. A second click
+  // returns the same copy.
+  const tryIt = async () => {
+    if (!slug) return;
+    setTrying(true);
+    try {
+      if (!session) {
+        const { error } = await supabase.auth.signInAnonymously();
+        if (error) throw error;
+      }
+      const { data, error } = await supabase.rpc("clone_showcase_trip", { p_slug: slug });
+      if (error || !data) throw error ?? new Error("no_trip");
+      navigate(`/trip/${data as string}`);
+    } catch (e) {
+      console.error(e);
+      toast.error("לא הצלחנו לפתוח עותק לניסיון. נסו שוב בעוד רגע.");
+      setTrying(false);
+    }
+  };
   const [state, setState] = useState<"loading" | "ready" | "notfound">("loading");
 
   useEffect(() => {
@@ -78,6 +106,19 @@ export default function SharePage() {
           </p>
         )}
       </div>
+
+      {trip.is_showcase && (
+        <Card className="mt-4 flex flex-col gap-2 p-4 text-center">
+          <div className="font-bold">רוצים לנסות בעצמכם?</div>
+          <p className="text-sm text-muted-foreground">
+            קבלו עותק אישי של הטיול הזה, שנו מה שבא לכם ונסו את הסוכן החכם. בלי הרשמה.
+          </p>
+          <Button size="lg" variant="accent" loading={trying} onClick={tryIt}>
+            <Wand2 className="size-5" />
+            נסו בעצמכם
+          </Button>
+        </Card>
+      )}
 
       <GuideCard trip={trip} />
 

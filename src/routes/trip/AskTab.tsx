@@ -4,7 +4,8 @@ import { supabase } from "@/lib/supabase";
 import type { AgentCard, PendingAction, TripChatMessage } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
-import { Button, Card, Chip, Spinner, Textarea } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, Spinner, Textarea } from "@/components/ui";
+import { can } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { askAgent, confirmAgentAction, type AskTurn } from "@/lib/ai";
 import { MapLink } from "@/components/MapLink";
@@ -20,7 +21,8 @@ const STARTERS = [
 ];
 
 export default function AskTab() {
-  const { trip } = useTrip();
+  const { trip, role } = useTrip();
+  const canEdit = can(role, "edit");
   const toast = useToast();
   const [messages, setMessages] = useState<TripChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,6 +178,21 @@ export default function AskTab() {
     toast.success("השיחה נמחקה");
   };
 
+  // Viewers can read the trip but not use the agent (the ask function refuses
+  // them too), so explain instead of showing a composer that would fail.
+  if (!can(role, "participate")) {
+    return (
+      <div className="px-4">
+        <TripHeader trip={trip} subtitle="שאלות והמלצות" />
+        <EmptyState
+          emoji="💬"
+          title="הסוכן זמין למשתתפים בטיול"
+          description="יש לך הרשאת צפייה. בעל הטיול יכול לשנות אותך למשתתף כדי שתוכל לשאול את הסוכן."
+        />
+      </div>
+    );
+  }
+
   return (
     // Fills the viewport minus TripLayout's pb-24, so the composer is pushed to
     // the bottom by the growing message area. `sticky` alone only pins once the
@@ -258,14 +275,16 @@ export default function AskTab() {
                             >
                               <Heart className="size-4" /> {added[key] ? "נוסף" : "למומלצים"}
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={added[key]}
-                              onClick={() => addToItinerary(card, key)}
-                            >
-                              <CalendarPlus className="size-4" /> למסלול
-                            </Button>
+                            {canEdit && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={added[key]}
+                                onClick={() => addToItinerary(card, key)}
+                              >
+                                <CalendarPlus className="size-4" /> למסלול
+                              </Button>
+                            )}
                           </div>
                         </Card>
                       );

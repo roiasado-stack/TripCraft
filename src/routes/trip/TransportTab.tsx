@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import type { Flight, Stay, Transfer } from "@/lib/types";
 import { useTrip } from "./TripLayout";
+import { can } from "@/lib/permissions";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, Field, FullSpinner, Input, Modal, Segmented } from "@/components/ui";
 import { DirectionsLink, LinkChip, MapLink } from "@/components/MapLink";
@@ -154,7 +155,8 @@ function duration(from?: string | null, to?: string | null): string | null {
 }
 
 export default function TransportTab() {
-  const { trip } = useTrip();
+  const { trip, role } = useTrip();
+  const canEdit = can(role, "edit");
   const toast = useToast();
   const [flights, setFlights] = useState<Flight[]>([]);
   const [stays, setStays] = useState<Stay[]>([]);
@@ -234,9 +236,11 @@ export default function TransportTab() {
       <section className="mb-6">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="font-bold">✈️ טיסות</h3>
-          <Button size="sm" variant="outline" onClick={() => setEditing({ ...blankFlight })}>
-            <Plus className="size-4" />
-          </Button>
+          {canEdit && (
+            <Button size="sm" variant="outline" onClick={() => setEditing({ ...blankFlight })} aria-label="הוספת טיסה">
+              <Plus className="size-4" />
+            </Button>
+          )}
         </div>
         {flights.length === 0 ? (
           <Card className="p-4 text-center text-sm text-muted-foreground">לא הוזנו טיסות.</Card>
@@ -253,6 +257,7 @@ export default function TransportTab() {
                       {f.airline} {f.flight_number}
                     </span>
                   </div>
+                  {canEdit && (
                   <div className="flex shrink-0 gap-2">
                     <button
                       onClick={() => setEditing(flightToDraft(f))}
@@ -265,6 +270,7 @@ export default function TransportTab() {
                       <Trash2 className="size-4" />
                     </button>
                   </div>
+                  )}
                 </div>
 
                 <div className="flex items-start justify-between gap-2">

@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import type { Participant } from "@/lib/types";
 import { useTrip } from "./TripLayout";
+import { can } from "@/lib/permissions";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { ImportParticipants } from "@/components/ImportParticipants";
 import { Button, Card, Chip, EmptyState, Field, Input, Label, Modal, Segmented } from "@/components/ui";
@@ -21,7 +22,8 @@ type Draft = {
 const blank: Draft = { name: "", ageMode: "age", age: "", age_range: AGE_RANGES[5], preferences: [] };
 
 export default function PeopleTab() {
-  const { trip, participants, reloadParticipants } = useTrip();
+  const { trip, role, participants, reloadParticipants } = useTrip();
+  const canEdit = can(role, "edit");
   const toast = useToast();
   const [editing, setEditing] = useState<Draft | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -89,12 +91,15 @@ export default function PeopleTab() {
       <ScreenTitle
         title={`משתתפים (${participants.length})`}
         action={
-          <Button size="sm" variant="outline" onClick={() => setEditing({ ...blank })}>
-            <Plus className="size-4" />
-          </Button>
+          canEdit && (
+            <Button size="sm" variant="outline" onClick={() => setEditing({ ...blank })} aria-label="הוספת משתתף">
+              <Plus className="size-4" />
+            </Button>
+          )
         }
       />
 
+      {canEdit && (
       <button
         onClick={() => setBulkOpen(true)}
         className="mb-4 flex w-full items-center gap-3 rounded-3xl border-2 border-dashed border-primary bg-primary-soft/50 p-4 text-right transition active:scale-[0.99]"
@@ -107,6 +112,7 @@ export default function PeopleTab() {
           <div className="text-xs text-muted-foreground">רשימת שמות, Excel, או סריקת דרכונים</div>
         </div>
       </button>
+      )}
 
       {participants.length === 0 ? (
         <EmptyState
@@ -136,6 +142,7 @@ export default function PeopleTab() {
                   </div>
                 )}
               </div>
+              {canEdit && (
               <div className="flex shrink-0 flex-col gap-1.5">
                 <button onClick={() => setEditing(toEdit(p))} className="text-muted-foreground" aria-label="עריכה">
                   <Pencil className="size-4" />
@@ -144,6 +151,7 @@ export default function PeopleTab() {
                   <Trash2 className="size-4" />
                 </button>
               </div>
+              )}
             </Card>
           ))}
         </div>

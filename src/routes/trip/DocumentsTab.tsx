@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, LinkIcon, ScanLine, Trash2, Upload } from "lucide-react";
+import { Download, ExternalLink, LinkIcon, Lock, ScanLine, Trash2, Upload, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import type { DocumentRow } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
-import { Button, Card, Chip, EmptyState, Field, Input, Modal, Spinner } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, Field, Input, Modal, Segmented, Spinner } from "@/components/ui";
+import { can } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { DOC_CATEGORIES, docCategoryLabel } from "@/lib/trip-options";
 import { ImportVoucher, type VoucherResult } from "@/components/ImportVoucher";
@@ -13,8 +14,12 @@ import { DOCS_BUCKET as BUCKET, uploadTripDocument } from "@/lib/documents";
 import { isSafeHttpUrl } from "@/lib/maps";
 
 export default function DocumentsTab() {
-  const { trip, participants } = useTrip();
-  const { user } = useAuth();
+  const { trip, role, participants } = useTrip();
+  const { user, isAnonymous } = useAuth();
+  const canParticipate = can(role, "participate");
+  // Voucher scans write flights/stays/transfers (editor-level) and are off for demo sessions.
+  const canScan = can(role, "edit") && !isAnonymous;
+  const [visibility, setVisibility] = useState<"private" | "members">("private");
   const toast = useToast();
   const [docs, setDocs] = useState<DocumentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +47,19 @@ export default function DocumentsTab() {
    *  oversize file) for the caller to catch and toast appropriately. */
   const uploadDocument = async (file: File, fields: { category: string; participantId?: string | null; name?: string }) => {
     if (!user) throw new Error("not_authenticated");
-    await uploadTripDocument({ userId: user.id, tripId: trip.id, file, ...fields });
+    await uploadTripDocument({ userId: user.id, tripId: trip.id, file, visibility, ...fields });
+  };
+
+  /** Uploader-only: switch a document between "only me" and "all members". */
+  const toggleVisibility = async (doc: DocumentRow) => {
+    const next = doc.visibility === "members" ? "private" : "members";
+    const { error } = await supabase.from("documents").update({ visibility: next }).eq("id", doc.id);
+    if (error) {
+      toast.error("לא הצלחנו לשנות את ההרשאה.");
+      return;
+    }
+    toast.success(next === "members" ? "כל חברי הטיול יכולים לראות את המסמך" : "המסמך גלוי רק לך");
+    load();
   };
 
   const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,6 +178,7 @@ export default function DocumentsTab() {
       category,
       participant_id: participantId || null,
       external_url: linkModal.url.trim(),
+      visibility,
     });
     setLinkModal(null);
     toast.success("הקישור נשמר 🔗");
@@ -201,7 +219,19 @@ export default function DocumentsTab() {
       <ScreenTitle title="מסמכים" />
 
       {/* upload controls */}
+      {canParticipate && (
       <Card className="mb-4 flex flex-col gap-3 p-4">
+        <div>
+          <div className="mb-1.5 text-sm font-semibold">מי יראה את המסמך</div>
+          <Segmented
+            value={visibility}
+            onChange={setVisibility}
+            options={[
+              { value: "private", label: "רק אני", emoji: "🔒" },
+              { value: "members", label: "כל חברי הטיול", emoji: "👥" },
+            ]}
+          />
+        </div>
         <div>
           <div className="mb-1.5 text-sm font-semibold">קטגוריה</div>
           <div className="flex flex-wrap gap-1.5">
@@ -230,9 +260,11 @@ export default function DocumentsTab() {
           </div>
         )}
         <div className="flex gap-2">
-          <Button className="flex-1" loading={uploading} onClick={() => fileRef.current?.click()}>
-            <Upload className="size-4" /> העלאת קובץ
-          </Button>
+          {!isAnonymous && (
+            <Button className="flex-1" loading={uploading} onClick={() => fileRef.current?.click()}>
+              <Upload className="size-4" /> העלאת קובץ
+            </Button>
+          )}
           <Button variant="outline" className="flex-1" onClick={() => setLinkModal({ name: "", url: "" })}>
             <LinkIcon className="size-4" /> קישור חיצוני
           </Button>
@@ -242,10 +274,13 @@ export default function DocumentsTab() {
             Browse…) — "Browse" is also how Files-provider apps like Google
             Drive show up as an upload source, so this covers both. */}
         <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={onPickFile} />
-        <Button variant="soft" onClick={() => setVoucherOpen(true)}>
-          <ScanLine className="size-4" /> סריקת שובר הזמנה
-        </Button>
+        {canScan && (
+          <Button variant="soft" onClick={() => setVoucherOpen(true)}>
+            <ScanLine className="size-4" /> סריקת שובר הזמנה
+          </Button>
+        )}
       </Card>
+      )}
 
       {/* filter */}
       <div className="mb-3 flex flex-wrap gap-1.5">
@@ -280,12 +315,26 @@ export default function DocumentsTab() {
                   {doc.external_url && <ExternalLink className="size-3" />}
                 </div>
               </div>
+              {doc.uploaded_by === user?.id ? (
+                <button
+                  onClick={() => toggleVisibility(doc)}
+                  className="grid size-9 place-items-center rounded-xl border border-border text-muted-foreground"
+                  aria-label={doc.visibility === "members" ? "גלוי לכל חברי הטיול — להפוך לפרטי" : "גלוי רק לי — לשתף עם חברי הטיול"}
+                  title={doc.visibility === "members" ? "גלוי לכל חברי הטיול" : "גלוי רק לי"}
+                >
+                  {doc.visibility === "members" ? <Users className="size-4" /> : <Lock className="size-4" />}
+                </button>
+              ) : (
+                <Users className="size-4 shrink-0 text-muted-foreground" aria-label="שותף איתך" />
+              )}
               <button onClick={() => open(doc)} className="grid size-9 place-items-center rounded-xl border border-border text-primary" aria-label="פתיחה">
                 {doc.external_url ? <ExternalLink className="size-4" /> : <Download className="size-4" />}
               </button>
-              <button onClick={() => remove(doc)} className="text-destructive" aria-label="מחיקה">
-                <Trash2 className="size-4" />
-              </button>
+              {doc.uploaded_by === user?.id && (
+                <button onClick={() => remove(doc)} className="text-destructive" aria-label="מחיקה">
+                  <Trash2 className="size-4" />
+                </button>
+              )}
             </Card>
           ))}
         </div>

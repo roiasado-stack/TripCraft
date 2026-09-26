@@ -3,13 +3,15 @@ import { NavLink, Outlet, useNavigate, useOutletContext, useParams } from "react
 import { CalendarDays, CheckSquare, FileText, Home, MapPinned } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
-import type { Participant, Trip } from "@/lib/types";
+import type { Participant, Trip, TripRole } from "@/lib/types";
 import { Button, FullSpinner } from "@/components/ui";
 import { ShareSheet } from "@/components/ShareSheet";
 import { cn } from "@/lib/utils";
 
 export type TripContext = {
   trip: Trip;
+  /** Caller's role on this trip — gate controls with `can()` from @/lib/permissions. */
+  role: TripRole;
   participants: Participant[];
   reloadParticipants: () => Promise<void>;
   openShare: () => void;
@@ -30,8 +32,9 @@ const TABS = [
 export default function TripLayout() {
   const { tripId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAnonymous } = useAuth();
   const [trip, setTrip] = useState<Trip | null>(null);
+  const [role, setRole] = useState<TripRole | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "notfound">("loading");
   const [shareOpen, setShareOpen] = useState(false);
@@ -45,20 +48,18 @@ export default function TripLayout() {
   useEffect(() => {
     (async () => {
       if (!tripId || !user) return;
-      // Same reason as the list query: "shared trips readable" also covers
-      // `authenticated`, so a plain lookup by id would open the full owner UI
-      // for anyone else's shared trip. Visitors belong on /share/:slug.
-      const { data, error } = await supabase
-        .from("trips")
-        .select("*")
-        .eq("id", tripId)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (error || !data) {
+      // RLS returns the trip to its owner and active members only (migration
+      // 015); the role decides which controls each screen shows.
+      const [{ data, error }, { data: tripRole }] = await Promise.all([
+        supabase.from("trips").select("*").eq("id", tripId).maybeSingle(),
+        supabase.rpc("trip_role", { _trip_id: tripId }),
+      ]);
+      if (error || !data || !tripRole) {
         setState("notfound");
         return;
       }
       setTrip(data as Trip);
+      setRole(tripRole as TripRole);
       await reloadParticipants();
       setState("ready");
     })();
@@ -66,7 +67,7 @@ export default function TripLayout() {
   }, [tripId, user]);
 
   if (state === "loading") return <FullSpinner label="טוען את הטיול…" />;
-  if (state === "notfound" || !trip)
+  if (state === "notfound" || !trip || !role)
     return (
       <div className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center gap-4 px-6 text-center">
         <div className="text-5xl">🧭</div>
@@ -78,6 +79,7 @@ export default function TripLayout() {
 
   const ctx: TripContext = {
     trip,
+    role,
     participants,
     reloadParticipants,
     openShare: () => setShareOpen(true),
@@ -85,10 +87,16 @@ export default function TripLayout() {
 
   return (
     <div className="mx-auto min-h-screen max-w-lg pb-24">
+      {isAnonymous && (
+        <div className="sticky top-0 z-30 bg-sun px-4 py-2 text-center text-xs font-semibold text-sun-foreground">
+          מצב דמו: זה עותק אישי שלכם, ואפשר לשנות בו הכול. הוא יימחק אוטומטית אחרי 7 ימים.
+        </div>
+      )}
       <Outlet context={ctx} />
 
       <ShareSheet
         trip={trip}
+        role={role}
         open={shareOpen}
         onClose={() => setShareOpen(false)}
         onChange={(patch) => setTrip((t) => (t ? { ...t, ...patch } : t))}

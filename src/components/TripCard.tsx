@@ -1,13 +1,23 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Calendar, MapPin, Trash2 } from "lucide-react";
-import type { Trip } from "@/lib/types";
+import type { Trip, TripRole } from "@/lib/types";
+import { ROLE_LABELS } from "@/lib/permissions";
 import { Badge, Button, Modal } from "@/components/ui";
 import { daysUntil, destinationFlag, formatHeb, tripTypeEmoji, tripTypeLabel } from "@/lib/trip-options";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 
-export function TripCard({ trip, onDeleted }: { trip: Trip; onDeleted?: (id: string) => void }) {
+export function TripCard({
+  trip,
+  role = "owner",
+  onDeleted,
+}: {
+  trip: Trip;
+  /** A trip shared with the caller shows its role instead of the delete button. */
+  role?: TripRole;
+  onDeleted?: (id: string) => void;
+}) {
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -65,20 +75,23 @@ export function TripCard({ trip, onDeleted }: { trip: Trip; onDeleted?: (id: str
               </Badge>
             )}
             {countdown && <Badge tone={countdown.tone}>{countdown.text}</Badge>}
+            {role !== "owner" && <Badge tone="accent">{ROLE_LABELS[role]}</Badge>}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setConfirmOpen(true);
-          }}
-          aria-label="מחיקת טיול"
-          className="grid size-9 shrink-0 place-items-center self-start rounded-xl text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2 className="size-4" />
-        </button>
+        {role === "owner" && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setConfirmOpen(true);
+            }}
+            aria-label="מחיקת טיול"
+            className="grid size-9 shrink-0 place-items-center self-start rounded-xl text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        )}
       </Link>
 
       <Modal
