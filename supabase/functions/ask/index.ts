@@ -62,14 +62,23 @@ const DAILY_CAP_USD = 2.0;
 // both read the same agent_runs total.
 const APP_DAILY_CAP_USD = 5.0;
 
-/** True once the caller or the whole app has hit today's spend cap. */
+// "Try it yourself" visitors (anonymous sessions, migration 016): a taste of
+// the AI, not a free tier — a few questions each, and a hard ceiling for all
+// of them together.
+const DEMO_DAILY_CAP_USD = 0.1;
+const DEMO_APP_DAILY_CAP_USD = 1.0;
+
+/** True once the caller, the demo pool (for anonymous callers) or the whole app has hit today's cap. */
 // deno-lint-ignore no-explicit-any
-async function overDailyCap(supabase: any): Promise<boolean> {
-  const [mine, app] = await Promise.all([
+async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<boolean> {
+  const [mine, app, demo] = await Promise.all([
     supabase.rpc("my_agent_daily_cost_usd"),
     supabase.rpc("app_agent_daily_cost_usd"),
+    isAnonymous ? supabase.rpc("anon_agent_daily_cost_usd") : Promise.resolve({ data: 0 }),
   ]);
-  return (mine.data ?? 0) >= DAILY_CAP_USD || (app.data ?? 0) >= APP_DAILY_CAP_USD;
+  if ((app.data ?? 0) >= APP_DAILY_CAP_USD) return true;
+  if (isAnonymous) return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD;
+  return (mine.data ?? 0) >= DAILY_CAP_USD;
 }
 
 const cors = {
@@ -206,23 +215,23 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as Body;
 
-    // Ownership check, shared by both branches below. Comparing user_id
-    // explicitly is required, not decorative: the "shared trips readable"
-    // policy also applies to `authenticated`, so a plain select by id
-    // succeeds for anyone's shared trip — without this check any signed-in
-    // user could spend the project's API budget, or write itinerary/
-    // suggestion rows, on someone else's shared trip.
-    const [{ data: auth }, { data: trip }] = await Promise.all([
+    // Role check, shared by both branches below (migration 015). Viewers can
+    // read the trip but not use the agent; RLS would also refuse their writes,
+    // but checking here keeps them from spending the API budget at all.
+    const [{ data: auth }, { data: trip }, { data: role }] = await Promise.all([
       supabase.auth.getUser(),
       supabase
         .from("trips")
         .select("id, user_id, destination, trip_type, budget_level, start_date, end_date, notes")
         .eq("id", body.trip_id)
         .maybeSingle(),
+      supabase.rpc("trip_role", { _trip_id: body.trip_id }),
     ]);
-    if (!auth?.user || !trip || trip.user_id !== auth.user.id) {
+    if (!auth?.user || !trip || !["owner", "editor", "participant"].includes(role)) {
       return json({ error: "forbidden" }, 403);
     }
+    const canEditItinerary = role === "owner" || role === "editor";
+    const isAnonymous = auth.user.is_anonymous === true;
 
     const logRun = async (fields: {
       kind: string;
@@ -260,6 +269,7 @@ Deno.serve(async (req) => {
       const start = Date.now();
       try {
         if (action.tool === "add_to_itinerary") {
+          if (!canEditItinerary) return json({ error: "forbidden" }, 403);
           const dayDate = String(action.input.day_date ?? "");
           const title = String(action.input.title ?? "").trim().slice(0, 300);
           if (!/^\d{4}-\d{2}-\d{2}$/.test(dayDate) || !title) {
@@ -330,7 +340,7 @@ Deno.serve(async (req) => {
     const message = (body.message ?? "").trim();
     if (!message) return json({ error: "empty_message" }, 400);
 
-    if (await overDailyCap(supabase)) {
+    if (await overDailyCap(supabase, isAnonymous)) {
       return json({ error: "daily_cap_reached" }, 429);
     }
 
@@ -397,7 +407,9 @@ Deno.serve(async (req) => {
               cache_control: { type: "ephemeral" },
             },
           ],
-          tools: TOOLS,
+          // Participants can't write the itinerary, so the agent isn't offered
+          // a card they could never approve.
+          tools: canEditItinerary ? TOOLS : TOOLS.filter((t) => t.name !== "add_to_itinerary"),
           messages: convo,
         }),
       });

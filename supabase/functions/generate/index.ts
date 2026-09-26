@@ -39,14 +39,22 @@ const DAILY_CAP_USD = 2.0;
 // both read the same agent_runs total.
 const APP_DAILY_CAP_USD = 5.0;
 
-/** True once the caller or the whole app has hit today's spend cap. */
+// "Try it yourself" visitors (anonymous sessions, migration 016): a taste of
+// the AI, not a free tier. Same numbers as the ask function.
+const DEMO_DAILY_CAP_USD = 0.1;
+const DEMO_APP_DAILY_CAP_USD = 1.0;
+
+/** True once the caller, the demo pool (for anonymous callers) or the whole app has hit today's cap. */
 // deno-lint-ignore no-explicit-any
-async function overDailyCap(supabase: any): Promise<boolean> {
-  const [mine, app] = await Promise.all([
+async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<boolean> {
+  const [mine, app, demo] = await Promise.all([
     supabase.rpc("my_agent_daily_cost_usd"),
     supabase.rpc("app_agent_daily_cost_usd"),
+    isAnonymous ? supabase.rpc("anon_agent_daily_cost_usd") : Promise.resolve({ data: 0 }),
   ]);
-  return (mine.data ?? 0) >= DAILY_CAP_USD || (app.data ?? 0) >= APP_DAILY_CAP_USD;
+  if ((app.data ?? 0) >= APP_DAILY_CAP_USD) return true;
+  if (isAnonymous) return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD;
+  return (mine.data ?? 0) >= DAILY_CAP_USD;
 }
 
 const cors = {
@@ -556,8 +564,18 @@ Deno.serve(async (req) => {
     // small LLM sub-call (Wikipedia-title resolution / Hebrew translation) is
     // simply skipped over the cap, and the request still answers { ok: true }
     // with a null photo / the untranslated query, never a 429.
+    const isAnonymous = auth.user.is_anonymous === true;
+    // Demo sessions never send documents to the model: scans are costly
+    // vision calls and would mean a stranger's passport photo reaching us.
+    if (isAnonymous && (body.kind === "passports" || body.kind === "voucher")) {
+      return new Response(JSON.stringify({ error: "demo_not_allowed" }), {
+        status: 403,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
     if (body.kind !== "photo" && body.kind !== "geocode") {
-      if (await overDailyCap(supabase)) {
+      if (await overDailyCap(supabase, isAnonymous)) {
         return new Response(JSON.stringify({ error: "daily_cap_reached" }), {
           status: 429,
           headers: { ...cors, "Content-Type": "application/json" },
@@ -977,19 +995,13 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       });
     }
 
-    // Verify the caller actually owns this trip before generating anything.
-    // Comparing user_id explicitly is required, not decorative: the "shared
-    // trips readable" policy also applies to `authenticated`, so a plain
-    // select by id succeeds for anyone's shared trip too (same issue already
-    // fixed in ../ask/index.ts) — without this check any signed-in user could
-    // spend the project's API budget generating content on someone else's
-    // shared trip.
-    const { data: trip, error: tripErr } = await supabase
-      .from("trips")
-      .select("id, user_id")
-      .eq("id", body.trip_id)
-      .maybeSingle();
-    if (tripErr || !trip || trip.user_id !== auth.user.id) {
+    // Verify the caller's role on this trip before generating anything
+    // (migration 015). The itinerary is editor-level; suggestions, checklist,
+    // photos and geocoding (used when a participant adds a suggestion) are
+    // participant-level. Viewers can't spend the API budget at all.
+    const { data: role } = await supabase.rpc("trip_role", { _trip_id: body.trip_id });
+    const allowed = body.kind === "itinerary" ? ["owner", "editor"] : ["owner", "editor", "participant"];
+    if (!allowed.includes(role)) {
       return new Response(JSON.stringify({ error: "trip not found" }), {
         status: 404,
         headers: { ...cors, "Content-Type": "application/json" },
@@ -1006,7 +1018,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
     // call, since unlike its caller this sub-call does cost money.
     const translateHebrewQuery = async (query: string, logKind: string): Promise<string> => {
       if (!/[֐-׿]/.test(query)) return query;
-      if (await overDailyCap(supabase)) return query;
+      if (await overDailyCap(supabase, isAnonymous)) return query;
       try {
         const start = Date.now();
         const tRes = await fetch(ANTHROPIC_URL, {
@@ -1053,7 +1065,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
           headers: { ...cors, "Content-Type": "application/json" },
         });
       if (!query) return photoResponse(null);
-      if (await overDailyCap(supabase)) return photoResponse(null);
+      if (await overDailyCap(supabase, isAnonymous)) return photoResponse(null);
       try {
         const start = Date.now();
         const tRes = await fetch(ANTHROPIC_URL, {
