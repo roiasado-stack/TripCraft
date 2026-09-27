@@ -11,6 +11,8 @@ import { DirectionsLink, MapLink } from "@/components/MapLink";
 import { CardThumbnail } from "@/components/MediaCard";
 import { mapsUrl, resolveMapUrl } from "@/lib/maps";
 import { useToast } from "@/hooks/use-toast";
+import { ambientPhoto } from "@/lib/photos";
+import { FillPhotos } from "@/components/FillPhotos";
 import { generateContent, searchCoordinates, searchPhoto } from "@/lib/ai";
 import { daysBetween, formatDayHeb, ITINERARY_CATEGORIES, itineraryCategory } from "@/lib/trip-options";
 import { TripMap, type TripMapItem } from "@/components/TripMap";
@@ -182,6 +184,15 @@ export default function ItineraryTab() {
         }
       />
 
+      {canEdit && (
+        <FillPhotos
+          tripId={trip.id}
+          destination={trip.destination}
+          missing={items.filter((i) => i.category === "activity" && !i.image_url).length}
+          onDone={load}
+        />
+      )}
+
       {!loading && days.length > 0 && (
         <Segmented
           className="mb-3"
@@ -238,7 +249,8 @@ export default function ItineraryTab() {
                   return (
                     <Card key={it.id} className="flex items-start gap-3 p-3">
                       <CardThumbnail
-                        imageUrl={it.image_url}
+                        imageUrl={it.image_url ?? ambientPhoto(it.category === "food", it.title)}
+                        illustrative={!it.image_url && it.category === "food"}
                         alt={it.title}
                         gradient="sunset"
                         size="size-10"

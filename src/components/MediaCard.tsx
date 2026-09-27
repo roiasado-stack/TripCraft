@@ -3,36 +3,43 @@ import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * upload.wikimedia.org image → its file description page, where the author and
+ * Wikimedia image (upload.* or thumb.*) → its file description page, where the author and
  * license are listed. Photos come from Wikipedia under CC licenses that
  * require attribution; linking each image to that page is how we give it
  * (see /credits). Null for anything that isn't a Wikimedia upload.
  */
 export function wikimediaFilePage(url?: string | null): string | null {
-  const m = (url ?? "").match(/^https:\/\/upload\.wikimedia\.org\/wikipedia\/([a-z-]+)\/(?:thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/?#]+)/);
+  // Wikipedia serves thumbnails from both upload.* and thumb.wikimedia.org.
+  const m = (url ?? "").match(/^https:\/\/(?:upload|thumb)\.wikimedia\.org\/wikipedia\/([a-z-]+)\/(?:thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/?#]+)/);
   if (!m) return null;
   const host = m[1] === "commons" ? "commons.wikimedia.org" : `${m[1]}.wikipedia.org`;
   return `https://${host}/wiki/File:${m[2]}`;
 }
 
-/** Small ⓘ in the image corner linking to the photo's author/license page. */
-function ImageCredit({ imageUrl, compact }: { imageUrl: string; compact?: boolean }) {
+/**
+ * Small ⓘ in the image corner linking to the photo's author/license page.
+ * `illustrative` marks a stand-in ambience photo (see @/lib/photos) so it's
+ * never mistaken for the venue itself.
+ */
+function ImageCredit({ imageUrl, compact, illustrative }: { imageUrl: string; compact?: boolean; illustrative?: boolean }) {
   const page = wikimediaFilePage(imageUrl);
   if (!page) return null;
+  const label = illustrative ? "תמונה להמחשה, לא של המקום עצמו. מקור ורישיון" : "מקור התמונה ורישיון (ויקיפדיה)";
   return (
     <a
       href={page}
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
-      aria-label="מקור התמונה ורישיון (ויקיפדיה)"
-      title="מקור התמונה ורישיון (ויקיפדיה)"
+      aria-label={label}
+      title={label}
       className={cn(
-        "absolute start-1 top-1 grid place-items-center rounded-full bg-black/45 text-white",
-        compact ? "size-4" : "size-6",
+        "absolute start-1 top-1 flex items-center gap-1 rounded-full bg-black/45 text-white",
+        compact ? "size-4 justify-center" : "h-6 min-w-6 justify-center px-1.5",
       )}
     >
       <Info className={compact ? "size-3" : "size-3.5"} />
+      {illustrative && !compact && <span className="text-[11px] font-semibold">להמחשה</span>}
     </a>
   );
 }
@@ -74,6 +81,7 @@ export function CardCoverImage({
   className,
   cornerSlot,
   children,
+  illustrative,
 }: {
   imageUrl?: string | null;
   alt: string;
@@ -82,6 +90,8 @@ export function CardCoverImage({
   className?: string;
   cornerSlot?: ReactNode;
   children?: ReactNode;
+  /** A stand-in ambience photo, not the place itself — labelled as such. */
+  illustrative?: boolean;
 }) {
   const hasImage = !!imageUrl;
   return (
@@ -95,7 +105,7 @@ export function CardCoverImage({
       ) : (
         <Fallback gradient={gradient} icon={icon} />
       )}
-      {hasImage && <ImageCredit imageUrl={imageUrl!} />}
+      {hasImage && <ImageCredit imageUrl={imageUrl!} illustrative={illustrative} />}
       {/* Bottom gradient: dark-to-transparent works for legible light text on
           top of any photo (or the brand gradient) in both light and dark mode. */}
       {(hasImage || children) && (
@@ -122,6 +132,7 @@ export function CardThumbnail({
   size = "size-11",
   rounded = "rounded-2xl",
   className,
+  illustrative,
 }: {
   imageUrl?: string | null;
   alt: string;
@@ -130,6 +141,7 @@ export function CardThumbnail({
   size?: string;
   rounded?: string;
   className?: string;
+  illustrative?: boolean;
 }) {
   return (
     <div className={cn("relative shrink-0 overflow-hidden", size, rounded, className)}>
@@ -138,7 +150,7 @@ export function CardThumbnail({
       ) : (
         <Fallback gradient={gradient} icon={icon} />
       )}
-      {imageUrl && <ImageCredit imageUrl={imageUrl} compact />}
+      {imageUrl && <ImageCredit imageUrl={imageUrl} compact illustrative={illustrative} />}
     </div>
   );
 }

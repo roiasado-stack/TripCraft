@@ -425,7 +425,7 @@ async function wikipediaPhoto(title: string): Promise<{ url: string | null; fail
   try {
     const url =
       "https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&redirects=1" +
-      `&prop=pageimages&piprop=thumbnail&pithumbsize=800&titles=${encodeURIComponent(clean)}`;
+      `&prop=pageimages&piprop=thumbnail&pithumbsize=1280&titles=${encodeURIComponent(clean)}`;
     const res = await fetch(url, {
       headers: { "User-Agent": WIKIPEDIA_USER_AGENT },
       signal: AbortSignal.timeout(8000),

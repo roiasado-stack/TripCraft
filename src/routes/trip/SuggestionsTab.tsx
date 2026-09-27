@@ -8,6 +8,8 @@ import { can } from "@/lib/permissions";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, Chip, EmptyState, Field, Input, Modal, Segmented, Spinner, Textarea } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
+import { ambientPhoto } from "@/lib/photos";
+import { FillPhotos } from "@/components/FillPhotos";
 import { generateContent, searchCoordinates, searchPhoto, type TuneOption } from "@/lib/ai";
 import { cn } from "@/lib/utils";
 import { SUGGESTION_KINDS } from "@/lib/trip-options";
@@ -186,6 +188,15 @@ export default function SuggestionsTab() {
         }
       />
 
+      {canEdit && (
+        <FillPhotos
+          tripId={trip.id}
+          destination={trip.destination}
+          missing={items.filter((i) => i.kind === "attraction" && !i.image_url).length}
+          onDone={load}
+        />
+      )}
+
       {/* Dietary needs: live searches, because kosher venues change often. */}
       {(needsKosher || needsVeg) && (
         <Card className="mb-3 p-3">
@@ -267,7 +278,8 @@ export default function SuggestionsTab() {
             return (
               <Card key={s.id} className="overflow-hidden p-0">
                 <CardCoverImage
-                  imageUrl={s.image_url}
+                  imageUrl={s.image_url ?? ambientPhoto(s.kind === "restaurant", s.title)}
+                  illustrative={!s.image_url && s.kind === "restaurant"}
                   alt={s.title}
                   gradient="sea"
                   icon={<span className="text-4xl">{kind?.emoji ?? "📍"}</span>}
