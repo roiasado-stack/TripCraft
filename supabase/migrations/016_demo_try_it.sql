@@ -183,7 +183,7 @@ BEGIN
     SELECT id FROM auth.users WHERE is_anonymous AND created_at < now() - interval '7 days';
   DELETE FROM public.trips WHERE user_id IN (SELECT id FROM _expired_demo);
   DELETE FROM public.trip_members WHERE user_id IN (SELECT id FROM _expired_demo);
-  DELETE FROM public.agent_runs WHERE user_id IN (SELECT id FROM _expired_demo);
+  -- agent_runs are kept on purpose (see "AI spend survives deletion" below).
   DELETE FROM public.user_roles WHERE user_id IN (SELECT id FROM _expired_demo);
   DELETE FROM public.profiles WHERE id IN (SELECT id FROM _expired_demo);
   DELETE FROM auth.users WHERE id IN (SELECT id FROM _expired_demo);
@@ -195,6 +195,14 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.clone_showcase_trip(text), public.anon_agent_daily_cost_usd() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.clone_showcase_trip(text), public.anon_agent_daily_cost_usd() TO authenticated;
 REVOKE EXECUTE ON FUNCTION public.cleanup_demo_users() FROM PUBLIC, anon, authenticated;
+
+-- AI spend survives deletion --------------------------------------------------
+-- agent_runs.trip_id was ON DELETE CASCADE (migration 004), so deleting a trip
+-- deleted its usage rows — and the daily caps are sums of those rows. Spend $2,
+-- delete the trip, spend again. Usage now outlives the trip.
+ALTER TABLE public.agent_runs DROP CONSTRAINT IF EXISTS agent_runs_trip_id_fkey;
+ALTER TABLE public.agent_runs ADD CONSTRAINT agent_runs_trip_id_fkey
+  FOREIGN KEY (trip_id) REFERENCES public.trips(id) ON DELETE SET NULL;
 
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 SELECT cron.schedule('cleanup-demo-users', '17 3 * * *', 'SELECT public.cleanup_demo_users()');

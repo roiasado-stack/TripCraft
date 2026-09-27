@@ -189,6 +189,25 @@ CREATE POLICY "participants update" ON public.checklist_items FOR UPDATE TO auth
 CREATE POLICY "participants delete" ON public.checklist_items FOR DELETE TO authenticated
   USING (public.can_participate_trip(trip_id) AND (is_shared OR created_by = auth.uid()));
 
+-- Authorship never changes, and only its author or an editor can move an item
+-- between the shared list and someone's personal list — otherwise a participant
+-- could pull a shared item into their private list and hide it from everyone.
+CREATE OR REPLACE FUNCTION public.guard_checklist_update()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF NEW.created_by IS DISTINCT FROM OLD.created_by AND auth.uid() IS NOT NULL THEN
+    RAISE EXCEPTION 'checklist author cannot change' USING ERRCODE = '42501';
+  END IF;
+  IF NEW.is_shared IS DISTINCT FROM OLD.is_shared AND OLD.created_by IS DISTINCT FROM auth.uid()
+     AND NOT public.can_edit_trip(OLD.trip_id) THEN
+    RAISE EXCEPTION 'only the author can move this item' USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS checklist_guard ON public.checklist_items;
+CREATE TRIGGER checklist_guard BEFORE UPDATE ON public.checklist_items FOR EACH ROW EXECUTE FUNCTION public.guard_checklist_update();
+
 -- Policies: trip updates (participants post; edit/delete only their own) -------
 DROP POLICY IF EXISTS "owner all" ON public.trip_updates;
 DROP POLICY IF EXISTS "members read" ON public.trip_updates;
@@ -350,7 +369,9 @@ BEGIN
   -- Shared checklist items they added stay on the trip, owned by its owner.
   UPDATE public.checklist_items c SET created_by = t.user_id
     FROM public.trips t WHERE c.trip_id = t.id AND c.created_by = uid;
-  DELETE FROM public.agent_runs WHERE user_id = uid;
+  -- agent_runs stay: they are what the daily AI caps sum, so deleting them
+  -- would let anyone reset the app-wide cap by deleting an account. Once the
+  -- auth user is gone the row's user_id no longer identifies anyone.
   DELETE FROM public.user_roles WHERE user_id = uid;
   DELETE FROM public.profiles WHERE id = uid;
   DELETE FROM auth.users WHERE id = uid;

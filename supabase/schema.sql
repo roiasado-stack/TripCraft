@@ -250,8 +250,9 @@ CREATE INDEX IF NOT EXISTS trip_chat_messages_trip_idx
 CREATE TABLE IF NOT EXISTS public.agent_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   -- Nullable: passport-scan calls (generate kind="passports") happen during
-  -- participant import and aren't tied to a trip — everything else always has one.
-  trip_id UUID REFERENCES public.trips(id) ON DELETE CASCADE,
+  -- participant import and aren't tied to a trip. SET NULL, not CASCADE: the
+  -- daily AI caps sum these rows, so they must outlive a deleted trip (016).
+  trip_id UUID REFERENCES public.trips(id) ON DELETE SET NULL,
   user_id UUID NOT NULL,
   kind TEXT NOT NULL,                                -- ask | generate_suggestions | generate_itinerary | generate_checklist | generate_passports
   input_tokens INT NOT NULL DEFAULT 0,
