@@ -170,15 +170,19 @@ export default function SuggestionsTab() {
         title="מומלצים"
         action={
           canParticipate && (
-          <div className="flex gap-1.5">
+          // Four buttons don't fit beside the title on a 390px phone; in RTL the
+          // row then spills off the left edge and the browser zooms the whole
+          // page out. Labels hide below 420px (icons + aria-labels stay) and the
+          // row may wrap as a last resort.
+          <div className="flex flex-wrap justify-end gap-1.5">
             <Button size="sm" variant="outline" onClick={() => setManual({ kind: "attraction", title: "", description: "" })} aria-label="הוספת המלצה">
               <Plus className="size-4" />
             </Button>
-            <Button size="sm" variant="outline" loading={picking} onClick={addDestinationPicks}>
-              <Compass className="size-4" /> מובילים
+            <Button size="sm" variant="outline" loading={picking} onClick={addDestinationPicks} aria-label="המקומות המובילים ביעד">
+              <Compass className="size-4" /> <span className="max-[420px]:hidden">מובילים</span>
             </Button>
-            <Button size="sm" variant="outline" onClick={() => navigate("../ask")}>
-              <MessageCircle className="size-4" /> שאל
+            <Button size="sm" variant="outline" onClick={() => navigate("../ask")} aria-label="שאל את הסוכן">
+              <MessageCircle className="size-4" /> <span className="max-[420px]:hidden">שאל</span>
             </Button>
             <Button size="sm" variant="soft" onClick={() => setShowGen(true)}>
               <Sparkles className="size-4" /> AI

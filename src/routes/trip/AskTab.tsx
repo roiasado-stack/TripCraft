@@ -245,7 +245,7 @@ export default function AskTab() {
                       : "border border-border bg-card text-card-foreground",
                   )}
                 >
-                  {m.content}
+                  {richText(m.content)}
                 </div>
 
                 {m.cards?.length > 0 && (
@@ -392,5 +392,20 @@ export default function AskTab() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * The agent is told to answer in plain text, but models still slip in
+ * **bold**. Render those runs as <strong> (React text nodes — no HTML is
+ * parsed) and drop any stray asterisks, so users never see raw markup.
+ */
+function richText(text: string) {
+  return text.split(/(\*\*[^*\n]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
+      <strong key={i}>{part.slice(2, -2)}</strong>
+    ) : (
+      part.replace(/\*\*/g, "")
+    ),
   );
 }

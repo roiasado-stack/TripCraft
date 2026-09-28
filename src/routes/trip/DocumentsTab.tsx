@@ -13,6 +13,18 @@ import { ImportVoucher, type VoucherResult } from "@/components/ImportVoucher";
 import { DOCS_BUCKET as BUCKET, uploadTripDocument } from "@/lib/documents";
 import { isSafeHttpUrl } from "@/lib/maps";
 
+/**
+ * A scanned voucher's times come back as local wall-clock time with no zone
+ * ("2026-10-04T07:40:00"). Postgres would read that as UTC and the trip would
+ * show the flight 2-3 hours late, so convert it the same way manual entry
+ * does: read as local time, store as UTC.
+ */
+function localToIso(value: string | null): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 export default function DocumentsTab() {
   const { trip, role, participants } = useTrip();
   const { user, isAnonymous } = useAuth();
@@ -101,8 +113,8 @@ export default function DocumentsTab() {
             flight_number: d.flight_number,
             from_airport: d.from_airport,
             to_airport: d.to_airport,
-            depart_at: d.depart_at,
-            arrive_at: d.arrive_at,
+            depart_at: localToIso(d.depart_at),
+            arrive_at: localToIso(d.arrive_at),
             from_terminal: d.from_terminal,
             to_terminal: d.to_terminal,
             seats: d.seats,
@@ -134,8 +146,8 @@ export default function DocumentsTab() {
           provider: d.provider,
           pickup_location: d.pickup_location,
           dropoff_location: d.dropoff_location,
-          pickup_at: d.pickup_at,
-          return_at: d.return_at,
+          pickup_at: localToIso(d.pickup_at),
+          return_at: localToIso(d.return_at),
           booking_ref: d.booking_ref,
           phone: d.phone,
           url: d.url,
