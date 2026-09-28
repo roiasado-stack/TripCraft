@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
-import { searchPhoto } from "./ai";
+import { fetchPlacePhoto, resolvePlaceId, searchPhoto, type PlacePhoto } from "./ai";
 
 /**
  * Photos for places that have no photo of their own.
@@ -65,4 +66,74 @@ export async function fillMissingPhotos(tripId: string, destination: string): Pr
     if (!error) filled++;
   }
   return filled;
+}
+
+// Session-only: Google's terms forbid storing its photos or photo URLs, so a
+// fetched photo lives in memory until the page reloads. Keyed by place ID so a
+// card that re-renders doesn't spend another request.
+const googlePhotos = new Map<string, Promise<PlacePhoto | null>>();
+const resolving = new Map<string, Promise<string | null>>();
+
+/**
+ * The photo a suggestion card shows, best first:
+ *  1. its stored Wikipedia photo (image_url),
+ *  2. a fresh Google photo of the venue, when it has a place ID — editors
+ *     resolve and store the ID the first time the card is shown,
+ *  3. for restaurants, the ambience photo (labelled illustrative).
+ * Attractions without a Wikipedia photo also try Google. Tips and gear don't.
+ */
+export function useSuggestionPhoto(opts: {
+  tripId: string;
+  destination: string;
+  id: string;
+  kind: string;
+  title: string;
+  imageUrl: string | null;
+  placeId: string | null | undefined;
+  lat: number | null;
+  lng: number | null;
+  /** Only editors may write google_place_id (participants can only like). */
+  canResolve: boolean;
+}): { url: string | null; illustrative: boolean; google: PlacePhoto | null } {
+  const isFood = opts.kind === "restaurant";
+  const wantsGoogle = !opts.imageUrl && (isFood || opts.kind === "attraction");
+  const [google, setGoogle] = useState<PlacePhoto | null>(null);
+
+  useEffect(() => {
+    if (!wantsGoogle) return;
+    let cancelled = false;
+    (async () => {
+      let placeId = opts.placeId ?? null;
+      if (placeId === null && opts.canResolve) {
+        let pending = resolving.get(opts.id);
+        if (!pending) {
+          pending = resolvePlaceId(opts.tripId, `${opts.title} ${opts.destination}`, { lat: opts.lat, lng: opts.lng }).then(
+            async (found) => {
+              if (found !== null) await supabase.from("suggestions").update({ google_place_id: found }).eq("id", opts.id);
+              return found;
+            },
+          );
+          resolving.set(opts.id, pending);
+        }
+        placeId = await pending;
+      }
+      if (!placeId) return;
+      let photo = googlePhotos.get(placeId);
+      if (!photo) {
+        photo = fetchPlacePhoto(opts.tripId, placeId);
+        googlePhotos.set(placeId, photo);
+      }
+      const got = await photo;
+      if (!cancelled) setGoogle(got);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opts.id, opts.placeId, wantsGoogle]);
+
+  if (opts.imageUrl) return { url: opts.imageUrl, illustrative: false, google: null };
+  if (google) return { url: google.url, illustrative: false, google };
+  const ambient = ambientPhoto(isFood, opts.title);
+  return { url: ambient, illustrative: !!ambient, google: null };
 }

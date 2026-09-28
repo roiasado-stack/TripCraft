@@ -188,6 +188,8 @@ export interface Suggestion {
   location: string | null;
   map_url: string | null;
   image_url: string | null;
+  /** Google place ID for a fresh venue photo ('' = looked up, no match). Migration 017. */
+  google_place_id?: string | null;
   lat: number | null;
   lng: number | null;
   created_at: string;

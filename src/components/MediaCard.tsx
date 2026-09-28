@@ -1,6 +1,43 @@
 import type { ReactNode } from "react";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { PlacePhoto } from "@/lib/ai";
+
+/**
+ * Credits Google Places requires on its photos: the photographer (linked) and
+ * "Google Maps", linking to the photo on Google Maps, in the same container.
+ */
+function GoogleCredit({ photo }: { photo: PlacePhoto }) {
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
+  return (
+    <div
+      className="absolute bottom-1.5 start-1.5 flex max-w-[85%] items-center gap-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[12px] text-white"
+      style={{ fontFamily: "Roboto, Heebo, system-ui, sans-serif" }}
+      dir="ltr"
+    >
+      {photo.author?.name && (
+        <a
+          href={photo.author.uri || photo.mapsUri || undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={stop}
+          className="truncate underline-offset-2 hover:underline"
+        >
+          📷 {photo.author.name}
+        </a>
+      )}
+      <a
+        href={photo.mapsUri || "https://maps.google.com"}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={stop}
+        className="shrink-0 font-medium"
+      >
+        Google Maps
+      </a>
+    </div>
+  );
+}
 
 /**
  * Wikimedia image (upload.* or thumb.*) → its file description page, where the author and
@@ -82,6 +119,7 @@ export function CardCoverImage({
   cornerSlot,
   children,
   illustrative,
+  googlePhoto,
 }: {
   imageUrl?: string | null;
   alt: string;
@@ -92,6 +130,8 @@ export function CardCoverImage({
   children?: ReactNode;
   /** A stand-in ambience photo, not the place itself — labelled as such. */
   illustrative?: boolean;
+  /** Set when imageUrl came from Google Places — shows its required credits. */
+  googlePhoto?: PlacePhoto | null;
 }) {
   const hasImage = !!imageUrl;
   return (
@@ -106,6 +146,7 @@ export function CardCoverImage({
         <Fallback gradient={gradient} icon={icon} />
       )}
       {hasImage && <ImageCredit imageUrl={imageUrl!} illustrative={illustrative} />}
+      {hasImage && googlePhoto && <GoogleCredit photo={googlePhoto} />}
       {/* Bottom gradient: dark-to-transparent works for legible light text on
           top of any photo (or the brand gradient) in both light and dark mode. */}
       {(hasImage || children) && (

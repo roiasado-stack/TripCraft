@@ -74,7 +74,12 @@ type PassportImage = { media_type: string; data: string };
 
 type Body = {
   trip_id: string;
-  kind: "suggestions" | "itinerary" | "checklist" | "passports" | "photo" | "geocode" | "voucher";
+  kind: "suggestions" | "itinerary" | "checklist" | "passports" | "photo" | "geocode" | "voucher" | "place_resolve" | "place_photo";
+  /** For kind: "place_resolve" — optional location bias (the item's coordinates). */
+  lat?: number | null;
+  lng?: number | null;
+  /** For kind: "place_photo" — a Google place ID stored by an earlier place_resolve. */
+  place_id?: string;
   images?: PassportImage[];
   /** For kind: "voucher" — the document category the user picked before uploading, if any.
    *  Narrows/primes classification; the model's own `doc_type` in the response stays authoritative. */
@@ -574,7 +579,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (body.kind !== "photo" && body.kind !== "geocode") {
+    // Google Places kinds spend Google quota, not Anthropic tokens: they're
+    // bounded by the daily quota caps set in Google Cloud, not by agent_runs.
+    if (body.kind !== "photo" && body.kind !== "geocode" && body.kind !== "place_resolve" && body.kind !== "place_photo") {
       if (await overDailyCap(supabase, isAnonymous)) {
         return new Response(JSON.stringify({ error: "daily_cap_reached" }), {
           status: 429,
@@ -1058,6 +1065,79 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
     // call names the exact English Wikipedia article for that place (or NONE),
     // then wikipediaPhoto looks that title up verbatim. Never an error to the
     // client: over the daily cap, NONE, or any failure → { ok: true, image_url: null }.
+    // Google Places (migration 017). Only the place ID may be stored under
+    // Google's terms, so place_resolve returns an ID for the client to save
+    // and place_photo fetches a fresh, short-lived photo URL on every view.
+    // Both answer { ok: true, … null } on any miss or failure — the card then
+    // shows its ambience photo. Demo sessions never spend Google quota.
+    if (body.kind === "place_resolve" || body.kind === "place_photo") {
+      const none = (extra: Record<string, unknown>) =>
+        new Response(JSON.stringify({ ok: true, ...extra }), { headers: { ...cors, "Content-Type": "application/json" } });
+      const googleKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
+      if (!googleKey || isAnonymous) return none(body.kind === "place_resolve" ? { place_id: null } : { url: null });
+
+      if (body.kind === "place_resolve") {
+        const query = (body.query ?? "").trim().slice(0, 300);
+        if (!query) return none({ place_id: null });
+        try {
+          const req: Record<string, unknown> = { textQuery: query, pageSize: 1 };
+          if (typeof body.lat === "number" && typeof body.lng === "number") {
+            req.locationBias = { circle: { center: { latitude: body.lat, longitude: body.lng }, radius: 3000 } };
+          }
+          // Field mask "places.id" only = the free "Text Search Essentials (IDs Only)" SKU.
+          const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Goog-Api-Key": googleKey, "X-Goog-FieldMask": "places.id" },
+            body: JSON.stringify(req),
+            signal: AbortSignal.timeout(8000),
+          });
+          if (!res.ok) {
+            console.error("Places text search failed", res.status, (await res.text().catch(() => "")).slice(0, 200));
+            return none({ place_id: null });
+          }
+          const data = await res.json();
+          // "" = looked up, no match — stored so the client doesn't ask again.
+          return none({ place_id: data?.places?.[0]?.id ?? "" });
+        } catch (e) {
+          console.error("Places text search threw", e);
+          return none({ place_id: null });
+        }
+      }
+
+      const placeId = (body.place_id ?? "").trim();
+      if (!/^[\w-]{10,300}$/.test(placeId)) return none({ url: null });
+      try {
+        const det = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
+          headers: { "X-Goog-Api-Key": googleKey, "X-Goog-FieldMask": "photos" },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!det.ok) {
+          console.error("Place details failed", det.status, (await det.text().catch(() => "")).slice(0, 200));
+          return none({ url: null });
+        }
+        const photo = (await det.json())?.photos?.[0];
+        if (!photo?.name) return none({ url: null });
+        const media = await fetch(
+          `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=1280&skipHttpRedirect=true`,
+          { headers: { "X-Goog-Api-Key": googleKey }, signal: AbortSignal.timeout(8000) },
+        );
+        if (!media.ok) {
+          console.error("Place photo failed", media.status, (await media.text().catch(() => "")).slice(0, 200));
+          return none({ url: null });
+        }
+        const url = (await media.json())?.photoUri;
+        const author = photo.authorAttributions?.[0];
+        return none({
+          url: typeof url === "string" && url.startsWith("https://") ? url : null,
+          author: author ? { name: String(author.displayName ?? ""), uri: String(author.uri ?? "") } : null,
+          maps_uri: typeof photo.googleMapsUri === "string" ? photo.googleMapsUri : null,
+        });
+      } catch (e) {
+        console.error("Place photo threw", e);
+        return none({ url: null });
+      }
+    }
+
     if (body.kind === "photo") {
       const query = (body.query ?? "").trim().slice(0, 300);
       const photoResponse = (image_url: string | null) =>

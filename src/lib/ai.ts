@@ -177,3 +177,46 @@ export async function confirmAgentAction(trip: Trip, action: PendingAction): Pro
     return { ok: false, error: e instanceof Error ? e.message : "unknown" };
   }
 }
+
+/**
+ * Google place ID for a venue (generate kind "place_resolve", migration 017).
+ * Returns "" when Google has no match (store it, so we don't ask again) and
+ * null when the lookup itself failed or isn't available (demo, no key).
+ */
+export async function resolvePlaceId(
+  tripId: string,
+  query: string,
+  coords?: { lat: number | null; lng: number | null },
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke("generate", {
+      body: { trip_id: tripId, kind: "place_resolve", query, lat: coords?.lat ?? null, lng: coords?.lng ?? null },
+    });
+    if (error) return null;
+    const id = (data as { place_id?: string | null })?.place_id;
+    return typeof id === "string" ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export type PlacePhoto = { url: string; author: { name: string; uri: string } | null; mapsUri: string | null };
+
+/**
+ * A fresh Google photo for a stored place ID (generate kind "place_photo").
+ * Google's terms forbid storing the photo or its URL, so callers keep it in
+ * memory for the session only. Null on any miss — including when the daily
+ * Google quota is used up — and the card falls back to its ambience photo.
+ */
+export async function fetchPlacePhoto(tripId: string, placeId: string): Promise<PlacePhoto | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke("generate", {
+      body: { trip_id: tripId, kind: "place_photo", place_id: placeId },
+    });
+    if (error) return null;
+    const res = data as { url?: string | null; author?: PlacePhoto["author"]; maps_uri?: string | null };
+    return res?.url ? { url: res.url, author: res.author ?? null, mapsUri: res.maps_uri ?? null } : null;
+  } catch {
+    return null;
+  }
+}

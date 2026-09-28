@@ -8,7 +8,7 @@ import { can } from "@/lib/permissions";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, Chip, EmptyState, Field, Input, Modal, Segmented, Spinner, Textarea } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
-import { ambientPhoto } from "@/lib/photos";
+import { useSuggestionPhoto } from "@/lib/photos";
 import { FillPhotos } from "@/components/FillPhotos";
 import { generateContent, searchCoordinates, searchPhoto, type TuneOption } from "@/lib/ai";
 import { cn } from "@/lib/utils";
@@ -277,11 +277,11 @@ export default function SuggestionsTab() {
             const kind = SUGGESTION_KINDS.find((k) => k.value === s.kind);
             return (
               <Card key={s.id} className="overflow-hidden p-0">
-                <CardCoverImage
-                  imageUrl={s.image_url ?? ambientPhoto(s.kind === "restaurant", s.title)}
-                  illustrative={!s.image_url && s.kind === "restaurant"}
-                  alt={s.title}
-                  gradient="sea"
+                <SuggestionCover
+                  s={s}
+                  tripId={trip.id}
+                  destination={trip.destination}
+                  canResolve={canEdit}
                   icon={<span className="text-4xl">{kind?.emoji ?? "📍"}</span>}
                   cornerSlot={
                     <span className="inline-flex items-center gap-1 rounded-full bg-card/90 px-2.5 py-1 text-xs font-semibold text-foreground shadow-soft backdrop-blur">
@@ -394,5 +394,46 @@ export default function SuggestionsTab() {
         )}
       </Modal>
     </div>
+  );
+}
+
+/** Cover photo for one suggestion: Wikipedia, then Google, then ambience (see useSuggestionPhoto). */
+function SuggestionCover({
+  s,
+  tripId,
+  destination,
+  canResolve,
+  icon,
+  cornerSlot,
+}: {
+  s: Suggestion;
+  tripId: string;
+  destination: string;
+  canResolve: boolean;
+  icon: React.ReactNode;
+  cornerSlot: React.ReactNode;
+}) {
+  const photo = useSuggestionPhoto({
+    tripId,
+    destination,
+    id: s.id,
+    kind: s.kind,
+    title: s.title,
+    imageUrl: s.image_url,
+    placeId: s.google_place_id,
+    lat: s.lat,
+    lng: s.lng,
+    canResolve,
+  });
+  return (
+    <CardCoverImage
+      imageUrl={photo.url}
+      illustrative={photo.illustrative}
+      googlePhoto={photo.google}
+      alt={s.title}
+      gradient="sea"
+      icon={icon}
+      cornerSlot={cornerSlot}
+    />
   );
 }
