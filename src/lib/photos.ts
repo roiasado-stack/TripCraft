@@ -19,6 +19,7 @@ import { fetchPlacePhoto, resolvePlaceId, searchPhoto, type PlacePhoto } from ".
 const COMMONS = "https://thumb.wikimedia.org/wikipedia/commons/thumb";
 const AMBIENT = {
   restaurant: `${COMMONS}/f/f3/Restaurant_room_of_Amantaka_luxury_Resort_%26_Hotel_in_Luang_Prabang_Laos.jpg/1280px-Restaurant_room_of_Amantaka_luxury_Resort_%26_Hotel_in_Luang_Prabang_Laos.jpg`,
+  restaurant2: `${COMMONS}/7/72/Restaurant_table_at_Amantaka_luxury_Resort_%26_Hotel_in_Luang_Prabang_Laos.jpg/1280px-Restaurant_table_at_Amantaka_luxury_Resort_%26_Hotel_in_Luang_Prabang_Laos.jpg`,
   cafe: `${COMMONS}/3/35/A_cup_of_coffee_in_Mohk.jpg/1280px-A_cup_of_coffee_in_Mohk.jpg`,
   bakery: `${COMMONS}/3/3b/Home_made_sour_dough_bread.jpg/1280px-Home_made_sour_dough_bread.jpg`,
   dessert: `${COMMONS}/a/a6/Apple_cake_with_vanilla_ice_cream_2.jpg/1280px-Apple_cake_with_vanilla_ice_cream_2.jpg`,
@@ -32,14 +33,19 @@ const RULES: [RegExp, keyof typeof AMBIENT][] = [
   [/גלידה|קינוח|עוג|מתוק|שוקולד|gelato|ice ?cream|dessert|sweet|cake/i, "dessert"],
   [/מאפ|לחם|בייגל|קרואסון|ארוחת בוקר|bakery|bread|breakfast|brunch|bagel/i, "bakery"],
   [/שוק|market|bazaar/i, "market"],
-  [/פיצה|איטלק|פסטה|pizza|pasta|trattoria|italian/i, "pizza"],
+  [/פיצ|איטלק|פסטה|pizza|pasta|trattoria|italian/i, "pizza"],
 ];
 
 /** An ambience photo for a food place without its own photo, or null when the item isn't food. */
 export function ambientPhoto(isFood: boolean, title: string): string | null {
   if (!isFood) return null;
   const hit = RULES.find(([re]) => re.test(title));
-  return AMBIENT[hit ? hit[1] : "restaurant"];
+  if (hit) return AMBIENT[hit[1]];
+  // Two generic restaurant photos, picked by title, so a list of unmatched
+  // restaurants doesn't show one image over and over.
+  let h = 0;
+  for (const ch of title) h = (h + ch.charCodeAt(0)) % 2;
+  return h ? AMBIENT.restaurant2 : AMBIENT.restaurant;
 }
 
 /**
