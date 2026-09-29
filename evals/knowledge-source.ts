@@ -32,9 +32,18 @@ export const KNOWLEDGE_CHUNKS: KnowledgeChunk[] = [
     category: "chabad",
     title: "בתי חב״ד בקפריסין",
     content:
-      "בקפריסין יש בית חב״ד מרכזי בלרנקה: Chabad - CJCC (Cyprus Jewish Community Centres), כתובת Apollodorou 4, Larnaca 6020, טלפון +357-24-668-753, אתר ChabadCyprus.com, בראשות הרב אריה זאב רסקין. בלימסול פועל Chabad House of Limassol, כתובת Porfyriou Dikaiou 5, Limassol 3095, טלפון +357-25-363-770, אתר chabadlimassol.com, בראשות הרב יאיר בייץ. קיימים גם סניפים קטנים יותר באיה נאפה, בפאפוס ובקפריסין הצפונית.",
+      "בקפריסין יש בית חב״ד מרכזי בלרנקה: Chabad - CJCC (Cyprus Jewish Community Centres), כתובת Apollodorou 4, Larnaca 6020, טלפון +357-24-668-753, אתר ChabadCyprus.com, בראשות הרב אריה זאב רסקין. בלימסול פועל Chabad House of Limassol, כתובת Porfyriou Dikaiou 5, Limassol 3095, טלפון +357-25-363-770, אתר chabadlimassol.com, בראשות הרב יאיר בייץ. בפאפוס פועל בית חב״ד משלה (פירוט בפריט נפרד), וקיימים גם סניפים באיה נאפה ובקפריסין הצפונית.",
     source_url: "https://www.chabad.org/jewish-centers/118616/Larnaca/Synagogue/Chabad-CJCC-Cyprus-Jewish-Community-Centres",
     source_verified_on: VERIFIED,
+  },
+  {
+    destination: "cyprus",
+    category: "chabad",
+    title: "בית חב״ד פאפוס",
+    content:
+      "בפאפוס פועל בית חב״ד: Chabad of Paphos, כתובת 5 Othellou Street, Kato Paphos 8042 (באזור התיירותי קאטו פאפוס), טלפון +357-99-981770, אתר chabad-paphos.com, בראשות הרב איציק אייזנבך ורעייתו חנה. במקום בית כנסת עם תפילות יומיות ובשבת, ארוחות שבת וחג פתוחות לכולם, ומסעדה כשרה למהדרין.",
+    source_url: "https://chabad-paphos.com/en/about/",
+    source_verified_on: "2026-09-29",
   },
   {
     destination: "cyprus",
