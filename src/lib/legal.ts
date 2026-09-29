@@ -5,13 +5,13 @@
  */
 export const LEGAL = {
   /** Registered business name (or the owner's full name for an עוסק פטור/מורשה). */
-  businessName: "[שם העסק]",
+  businessName: "TripCraft",
   /** ע.מ / ח.פ number. */
   businessId: "[מספר עוסק / ח.פ]",
   /** Postal address for legal notices. */
-  address: "[כתובת למשלוח דואר]",
+  address: "ירושלים",
   /** Contact address for privacy requests, account questions and legal notices. */
-  contactEmail: "[כתובת מייל]",
+  contactEmail: "Roi.asado@gmail.com",
   /** Accessibility coordinator — name, and a phone or email to reach them. */
   accessibilityContact: "[שם רכז/ת הנגישות ודרך ליצירת קשר]",
   /** City whose courts have jurisdiction. */
