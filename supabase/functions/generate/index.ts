@@ -547,7 +547,9 @@ Deno.serve(async (req) => {
       errorMessage?: string;
     }) => {
       try {
-        await supabase.from("agent_runs").insert({
+        // Service role only (migration 018): users can't write usage rows, or a
+        // fake cost could fill the app-wide cap and switch AI off for everyone.
+        await adminDb()?.from("agent_runs").insert({
           trip_id: fields.tripId,
           user_id: auth.user.id,
           kind: fields.kind,

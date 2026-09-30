@@ -263,13 +263,14 @@ CREATE TABLE IF NOT EXISTS public.agent_runs (
   error_message TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-GRANT SELECT, INSERT ON public.agent_runs TO authenticated;
+-- Only the Edge Functions (service role) write usage rows (migration 018): a
+-- user-written row with a made-up cost could fill the app-wide AI cap.
+GRANT SELECT ON public.agent_runs TO authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.agent_runs FROM authenticated;
 GRANT ALL ON public.agent_runs TO service_role;
 REVOKE ALL ON public.agent_runs FROM anon;
 ALTER TABLE public.agent_runs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "own insert" ON public.agent_runs;
-CREATE POLICY "own insert" ON public.agent_runs FOR INSERT TO authenticated
-WITH CHECK (user_id = auth.uid());
 DROP POLICY IF EXISTS "admin read" ON public.agent_runs;
 CREATE POLICY "admin read" ON public.agent_runs FOR SELECT TO authenticated
 USING (public.has_role(auth.uid(), 'admin'));

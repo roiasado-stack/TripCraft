@@ -33,7 +33,11 @@ export function ShareSheet({
   const toggle = async () => {
     setBusy(true);
     const next = !trip.is_shared;
-    const { error } = await supabase.from("trips").update({ is_shared: next }).eq("id", trip.id);
+    // A showcase must stay shared (guard_trip_update), so unsharing ends it too.
+    const { error } = await supabase
+      .from("trips")
+      .update(next ? { is_shared: true } : { is_shared: false, is_showcase: false })
+      .eq("id", trip.id);
     setBusy(false);
     if (error) {
       toast.error("לא הצלחנו לעדכן את השיתוף");

@@ -81,6 +81,18 @@ async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<boolea
   return (mine.data ?? 0) >= DAILY_CAP_USD;
 }
 
+// Service-role client for agent_runs writes, which users can't do themselves (018).
+let adminClient: ReturnType<typeof createClient> | null = null;
+function adminDb(): ReturnType<typeof createClient> | null {
+  if (!adminClient) {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) return null;
+    adminClient = createClient(url, key, { auth: { persistSession: false } });
+  }
+  return adminClient;
+}
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -243,7 +255,9 @@ Deno.serve(async (req) => {
       errorMessage?: string;
     }) => {
       try {
-        await supabase.from("agent_runs").insert({
+        // Service role only (migration 018): users can't write usage rows, or a
+        // fake cost could fill the app-wide cap and switch AI off for everyone.
+        await adminDb()?.from("agent_runs").insert({
           trip_id: body.trip_id,
           user_id: auth.user.id,
           kind: fields.kind,
