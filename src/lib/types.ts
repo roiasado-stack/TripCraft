@@ -50,7 +50,7 @@ export interface TripMember {
   trip_id: string;
   user_id: string;
   role: MemberRole;
-  status: "pending" | "active";
+  status: "pending" | "active" | "removed";
   display_name: string | null;
   created_at: string;
 }

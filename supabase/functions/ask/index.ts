@@ -207,6 +207,11 @@ function mapUrlFor(location: unknown, destination: string): string | null {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
+  // Estimated usage row held while the model runs, so parallel questions count
+  // against the caps in flight (see generate/index.ts). logRun replaces it with
+  // the real row; finally deletes it if no model call happened.
+  let reservation: string | null = null;
+
   try {
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) return json({ error: "ANTHROPIC_API_KEY is not set" }, 500);
@@ -257,7 +262,7 @@ Deno.serve(async (req) => {
       try {
         // Service role only (migration 018): users can't write usage rows, or a
         // fake cost could fill the app-wide cap and switch AI off for everyone.
-        await adminDb()?.from("agent_runs").insert({
+        const row = {
           trip_id: body.trip_id,
           user_id: auth.user.id,
           kind: fields.kind,
@@ -267,7 +272,14 @@ Deno.serve(async (req) => {
           latency_ms: fields.latencyMs,
           status: fields.status,
           error_message: fields.errorMessage?.slice(0, 500) ?? null,
-        });
+        };
+        if (reservation && fields.kind === "ask") {
+          const id = reservation;
+          reservation = null;
+          await adminDb()?.from("agent_runs").update(row).eq("id", id);
+        } else {
+          await adminDb()?.from("agent_runs").insert(row);
+        }
       } catch {
         // Monitoring must never break the chat response.
       }
@@ -357,6 +369,13 @@ Deno.serve(async (req) => {
     if (await overDailyCap(supabase, isAnonymous)) {
       return json({ error: "daily_cap_reached" }, 429);
     }
+    // Held estimate (about 4x the measured average question) until the real cost is logged.
+    const { data: held } = (await adminDb()
+      ?.from("agent_runs")
+      .insert({ trip_id: body.trip_id, user_id: auth.user.id, kind: "ask", cost_usd: 0.02, status: "pending" })
+      .select("id")
+      .single()) ?? { data: null };
+    if (held) reservation = (held as { id: string }).id;
 
     const [participants, itinerary, stays, flights, suggestions, checklist] = await Promise.all([
       supabase.from("participants").select("name, age, age_range, preferences").eq("trip_id", body.trip_id),
@@ -514,5 +533,7 @@ Deno.serve(async (req) => {
     return json({ ok: true, answer: finalAnswer, cards: [], pendingActions });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "unknown" }, 500);
+  } finally {
+    if (reservation) await adminDb()?.from("agent_runs").delete().eq("id", reservation);
   }
 });

@@ -1,7 +1,15 @@
 -- ============================================================================
--- TripCraft — full database schema
--- Paste this whole file into the Supabase SQL Editor and run it once.
--- Safe to run on a fresh project. Creates tables, RLS, roles, storage, security.
+-- TripCraft — base database schema
+-- For a NEW project only: run this file once, then every
+-- supabase/migrations/0NN_*.sql in order (002 onward). The migrations are part
+-- of the schema, not optional patches: 002 adds tables this file doesn't
+-- create, 013 adds the public share RPC, 015 replaces the owner-only policies
+-- below with role-based ones, and 016–019 build on that.
+--
+-- Never re-run this file on an existing database. Its original "owner all"
+-- policies would be added back next to 015's, and Postgres ORs policies
+-- together, so the stricter rules (private documents, demo limits) would stop
+-- applying. Change an existing database with a new migration instead.
 -- ============================================================================
 
 -- Roles ----------------------------------------------------------------------

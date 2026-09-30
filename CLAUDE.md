@@ -54,7 +54,9 @@ There are no tests, no linter, and no formatter. Don't add them unless asked.
 
 ## Supabase schema
 
-- `supabase/schema.sql` is the full, idempotent schema; incremental changes go in a new numbered
+- `supabase/schema.sql` is the **base** schema for a new project only; the full schema is that file
+  plus every migration in order (015 replaces its owner-only policies). Never re-run `schema.sql` on
+  an existing database — its old policies would be OR'd back in. Changes go in a new numbered
   file under `supabase/migrations/`. Both are applied by pasting into the SQL Editor — there is
   no CLI migration flow here.
 - **Every table needs RLS.** Trip child tables use the role helpers from migration 015:

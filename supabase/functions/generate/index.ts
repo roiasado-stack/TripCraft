@@ -42,6 +42,8 @@ const APP_DAILY_CAP_USD = 5.0;
 // "Try it yourself" visitors (anonymous sessions, migration 016): a taste of
 // the AI, not a free tier. Same numbers as the ask function.
 const DEMO_DAILY_CAP_USD = 0.1;
+// Google place photos per signed-up user per day (the shared Google quota is about 100/day).
+const PLACE_PHOTOS_PER_USER_PER_DAY = 30;
 const DEMO_APP_DAILY_CAP_USD = 1.0;
 
 /** True once the caller, the demo pool (for anonymous callers) or the whole app has hit today's cap. */
@@ -481,6 +483,7 @@ async function geocodeWithNominatim(query: string): Promise<{ lat: number; lng: 
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
     const res = await fetch(url, {
       headers: { "User-Agent": "TripCraft/1.0 (travel planning app)" },
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
       console.error("Nominatim search failed", res.status, await res.text().catch(() => ""));
@@ -501,6 +504,12 @@ async function geocodeWithNominatim(query: string): Promise<{ lat: number; lng: 
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+
+  // A usage row inserted before the model call with an estimated cost, so
+  // requests running in parallel count against the caps while in flight.
+  // logRun turns it into the real row; if no model call happened, finally
+  // deletes it.
+  let reservation: { id: string; kind: string } | null = null;
 
   try {
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -549,7 +558,7 @@ Deno.serve(async (req) => {
       try {
         // Service role only (migration 018): users can't write usage rows, or a
         // fake cost could fill the app-wide cap and switch AI off for everyone.
-        await adminDb()?.from("agent_runs").insert({
+        const row = {
           trip_id: fields.tripId,
           user_id: auth.user.id,
           kind: fields.kind,
@@ -559,7 +568,14 @@ Deno.serve(async (req) => {
           latency_ms: fields.latencyMs,
           status: fields.status,
           error_message: fields.errorMessage?.slice(0, 500) ?? null,
-        });
+        };
+        if (reservation && reservation.kind === fields.kind) {
+          const id = reservation.id;
+          reservation = null;
+          await adminDb()?.from("agent_runs").update(row).eq("id", id);
+        } else {
+          await adminDb()?.from("agent_runs").insert(row);
+        }
       } catch {
         // Monitoring must never break generation.
       }
@@ -590,6 +606,15 @@ Deno.serve(async (req) => {
           headers: { ...cors, "Content-Type": "application/json" },
         });
       }
+      // Hold an estimate of this request's cost (above the measured averages)
+      // until the real numbers are logged.
+      const estimateUsd = body.kind === "suggestions" || body.kind === "itinerary" ? 0.06 : 0.03;
+      const { data: held } = (await adminDb()
+        ?.from("agent_runs")
+        .insert({ trip_id: body.trip_id ?? null, user_id: auth.user.id, kind: `generate_${body.kind}`, cost_usd: estimateUsd, status: "pending" })
+        .select("id")
+        .single()) ?? { data: null };
+      if (held) reservation = { id: (held as { id: string }).id, kind: `generate_${body.kind}` };
     }
 
     // Passport scanning returns parsed travellers to the client for review and
@@ -1108,6 +1133,21 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
 
       const placeId = (body.place_id ?? "").trim();
       if (!/^[\w-]{10,300}$/.test(placeId)) return none({ url: null });
+      // Photo lookups spend the shared Google quota (about 100 a day), so one
+      // user can't use it all: each lookup is a cost-0 agent_runs row, counted per UTC day.
+      const db = adminDb();
+      if (db) {
+        const dayStart = new Date();
+        dayStart.setUTCHours(0, 0, 0, 0);
+        const { count } = await db
+          .from("agent_runs")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", auth.user.id)
+          .eq("kind", "google_place_photo")
+          .gte("created_at", dayStart.toISOString());
+        if ((count ?? 0) >= PLACE_PHOTOS_PER_USER_PER_DAY) return none({ url: null });
+        await db.from("agent_runs").insert({ trip_id: body.trip_id ?? null, user_id: auth.user.id, kind: "google_place_photo", cost_usd: 0, status: "ok" });
+      }
       try {
         const det = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`, {
           headers: { "X-Goog-Api-Key": googleKey, "X-Goog-FieldMask": "photos" },
@@ -1505,5 +1545,7 @@ Never answer with the article of the surrounding city, region or country — e.g
       status: 500,
       headers: { ...cors, "Content-Type": "application/json" },
     });
+  } finally {
+    if (reservation) await adminDb()?.from("agent_runs").delete().eq("id", reservation.id);
   }
 });

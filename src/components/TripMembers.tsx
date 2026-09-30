@@ -55,6 +55,7 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
       toast.error("לא הצלחנו ליצור קישור הזמנה");
       return;
     }
+    toast.success("קישור ההזמנה נוצר 🔗");
     load();
   };
 
@@ -77,7 +78,11 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
       .from("trip_invites")
       .update({ requires_approval: !invite.requires_approval })
       .eq("id", invite.id);
-    if (error) toast.error("העדכון נכשל");
+    if (error) {
+      toast.error("העדכון נכשל");
+      return;
+    }
+    toast.success(invite.requires_approval ? "מצטרפים חדשים ייכנסו מיד" : "כל מצטרף חדש יחכה לאישור שלך");
     load();
   };
 
@@ -105,7 +110,9 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
   };
 
   const removeMember = async (m: TripMember, done: string) => {
-    const { error } = await supabase.from("trip_members").delete().eq("id", m.id);
+    // Kept as 'removed' rather than deleted, so a still-live invite link can't
+    // bring them straight back (accept_trip_invite returns an existing row as is).
+    const { error } = await supabase.from("trip_members").update({ status: "removed" }).eq("id", m.id);
     if (error) {
       toast.error("ההסרה נכשלה");
       return;

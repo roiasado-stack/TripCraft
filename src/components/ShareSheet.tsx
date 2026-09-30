@@ -109,7 +109,7 @@ export function ShareSheet({
           className={`relative h-7 w-12 shrink-0 rounded-full transition ${trip.is_shared ? "bg-primary" : "bg-muted"}`}
         >
           <span
-            className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-all ${trip.is_shared ? "left-0.5" : "right-0.5"}`}
+            className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-all ${trip.is_shared ? "end-0.5" : "start-0.5"}`}
           />
         </button>
       </div>
@@ -152,7 +152,7 @@ export function ShareSheet({
               className={`relative h-7 w-12 shrink-0 rounded-full transition ${trip.is_showcase ? "bg-primary" : "bg-muted"}`}
             >
               <span
-                className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-all ${trip.is_showcase ? "left-0.5" : "right-0.5"}`}
+                className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-all ${trip.is_showcase ? "end-0.5" : "start-0.5"}`}
               />
             </button>
           </div>

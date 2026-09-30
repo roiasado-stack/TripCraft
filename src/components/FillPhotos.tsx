@@ -26,11 +26,16 @@ export function FillPhotos({
 
   const run = async () => {
     setBusy(true);
-    const filled = await fillMissingPhotos(tripId, destination);
-    setBusy(false);
-    if (filled === 0) toast.error("לא נמצאו תמונות חדשות. למקומות בלי ערך בוויקיפדיה אין תמונה אמיתית.");
-    else toast.success(`נוספו ${filled} תמונות 🖼️`);
-    onDone();
+    try {
+      const filled = await fillMissingPhotos(tripId, destination);
+      if (filled === 0) toast.error("לא נמצאו תמונות חדשות. למקומות בלי ערך בוויקיפדיה אין תמונה אמיתית.");
+      else toast.success(`נוספו ${filled} תמונות 🖼️`);
+      onDone();
+    } catch {
+      toast.error("השלמת התמונות נכשלה. נסו שוב בעוד רגע.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (

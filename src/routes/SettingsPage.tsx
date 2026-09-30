@@ -146,7 +146,7 @@ export default function SettingsPage() {
           aria-checked={theme === "dark"}
           className={`relative h-7 w-12 rounded-full transition ${theme === "dark" ? "bg-primary" : "bg-muted"}`}
         >
-          <span className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-all ${theme === "dark" ? "left-0.5" : "right-0.5"}`} />
+          <span className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-all ${theme === "dark" ? "end-0.5" : "start-0.5"}`} />
         </button>
       </Card>
 

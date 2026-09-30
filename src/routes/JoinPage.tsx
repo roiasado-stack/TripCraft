@@ -35,7 +35,10 @@ export default function JoinPage() {
   const returnPath = `/join/${token}`;
 
   useEffect(() => {
-    supabase.rpc("invite_preview", { p_token: token }).then(({ data }) => setPreview((data as Preview | null) ?? null));
+    // A failed lookup shows the same "invite not valid" card as an unknown token.
+    supabase
+      .rpc("invite_preview", { p_token: token })
+      .then(({ data }) => setPreview((data as Preview | null) ?? null), () => setPreview(null));
   }, [token]);
 
   const join = async () => {
@@ -46,7 +49,11 @@ export default function JoinPage() {
       toast.error(error.message.includes("invalid_invite") ? "ההזמנה כבר לא בתוקף." : "ההצטרפות נכשלה. נסו שוב.");
       return;
     }
-    const result = data as { trip_id: string; status: "pending" | "active" | "owner" };
+    const result = data as { trip_id: string; status: "pending" | "active" | "owner" | "removed" };
+    if (result.status === "removed") {
+      toast.error("בעל הטיול הסיר אותך מהטיול, ולכן הקישור לא מצרף אותך שוב. אפשר לבקש ממנו להוסיף אותך מחדש.");
+      return;
+    }
     if (result.status === "pending") {
       setPending(true);
       return;
