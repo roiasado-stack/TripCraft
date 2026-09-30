@@ -17,11 +17,14 @@ export function PreflightPanel({
   participants,
   existing,
   onAdded,
+  readOnly = false,
 }: {
   trip: Trip;
   participants: Participant[];
   existing: ChecklistItem[];
   onAdded: () => void;
+  /** Viewers see the list but can't add to the checklist. */
+  readOnly?: boolean;
 }) {
   const toast = useToast();
   const [flights, setFlights] = useState<Flight[] | null>(null);
@@ -116,7 +119,7 @@ export function PreflightPanel({
         </div>
       </Card>
 
-      {missing.length > 0 && (
+      {missing.length > 0 && !readOnly && (
         <Button size="lg" loading={busy} onClick={addAll}>
           <ListPlus className="size-5" />
           הוספת {missing.length} המשימות לצ'קליסט
@@ -143,7 +146,7 @@ export function PreflightPanel({
                     <span className="flex items-center gap-1 text-xs font-semibold text-primary">
                       <Check className="size-4" /> נוסף
                     </span>
-                  ) : (
+                  ) : readOnly ? null : (
                     <button
                       onClick={() => addOne(i.title)}
                       className="shrink-0 rounded-lg border border-border px-2 py-1 text-xs font-semibold"

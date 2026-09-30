@@ -3,6 +3,7 @@ import { ListPlus, Plus, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { ChecklistItem } from "@/lib/types";
 import { useTrip } from "./TripLayout";
+import { can } from "@/lib/permissions";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, Checkbox, EmptyState, Input, Segmented, Spinner } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
@@ -11,7 +12,8 @@ import { PreflightPanel } from "@/components/PreflightPanel";
 import { cn } from "@/lib/utils";
 
 export default function ChecklistTab() {
-  const { trip, participants } = useTrip();
+  const { trip, role, participants } = useTrip();
+  const canParticipate = can(role, "participate");
   const toast = useToast();
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,9 +89,11 @@ export default function ChecklistTab() {
       <ScreenTitle
         title="צ'קליסט"
         action={
-          <Button size="sm" variant="soft" loading={seeding} onClick={seed}>
-            <Sparkles className="size-4" /> רשימה מומלצת
-          </Button>
+          canParticipate && (
+            <Button size="sm" variant="soft" loading={seeding} onClick={seed}>
+              <Sparkles className="size-4" /> רשימה מומלצת
+            </Button>
+          )
         }
       />
 
@@ -97,7 +101,8 @@ export default function ChecklistTab() {
         className="mb-3"
         options={[
           { value: "shared", label: "משותף 👥" },
-          { value: "personal", label: "אישי 🧍" },
+          // Personal items are private to whoever adds them; viewers can't add any.
+          ...(canParticipate ? [{ value: "personal" as const, label: "אישי 🧍" }] : []),
           { value: "preflight", label: "לפני טיסה ✈️" },
         ]}
         value={tab}
@@ -105,7 +110,7 @@ export default function ChecklistTab() {
       />
 
       {tab === "preflight" && (
-        <PreflightPanel trip={trip} participants={participants} existing={items} onAdded={load} />
+        <PreflightPanel trip={trip} participants={participants} existing={items} onAdded={load} readOnly={!canParticipate} />
       )}
 
       {tab !== "preflight" && shown.length > 0 && (
@@ -120,7 +125,7 @@ export default function ChecklistTab() {
       )}
 
       {/* add row */}
-      <div className={cn("mb-4 flex-col gap-2", tab === "preflight" ? "hidden" : "flex")}>
+      <div className={cn("mb-4 flex-col gap-2", tab === "preflight" || !canParticipate ? "hidden" : "flex")}>
         <div className="flex gap-2">
           <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="הוספת פריט…" />
           <Button size="icon" onClick={add} aria-label="הוספה">
@@ -151,9 +156,9 @@ export default function ChecklistTab() {
         <EmptyState
           emoji="✅"
           title={tab === "shared" ? "הרשימה המשותפת ריקה" : "אין עדיין פריטים אישיים"}
-          description="הוסף פריטים ידנית, או צור רשימה מומלצת חכמה לפי המשתתפים והטיול."
+          description={canParticipate ? "הוסף פריטים ידנית, או צור רשימה מומלצת חכמה לפי המשתתפים והטיול." : undefined}
           action={
-            tab === "shared" ? (
+            tab === "shared" && canParticipate ? (
               <Button variant="outline" loading={seeding} onClick={seed}>
                 <ListPlus className="size-4" /> רשימה מומלצת
               </Button>
@@ -164,16 +169,18 @@ export default function ChecklistTab() {
         <div className="flex flex-col gap-2">
           {shown.map((item) => (
             <Card key={item.id} className={cn("flex items-center gap-3 p-3 transition", item.is_done && "opacity-60")}>
-              <Checkbox checked={item.is_done} onChange={() => toggle(item)} />
+              <Checkbox checked={item.is_done} onChange={() => canParticipate && toggle(item)} />
               <div className="min-w-0 flex-1">
                 <div className={cn("font-medium", item.is_done && "line-through")}>{item.title}</div>
                 {ownerName(item.participant_id) && (
                   <div className="text-xs text-muted-foreground">👤 {ownerName(item.participant_id)}</div>
                 )}
               </div>
-              <button onClick={() => remove(item.id)} className="text-destructive" aria-label="מחיקה">
-                <Trash2 className="size-4" />
-              </button>
+              {canParticipate && (
+                <button onClick={() => remove(item.id)} className="text-destructive" aria-label="מחיקה">
+                  <Trash2 className="size-4" />
+                </button>
+              )}
             </Card>
           ))}
         </div>

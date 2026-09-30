@@ -57,6 +57,42 @@ const PRICE_PER_MTOK_OUTPUT_USD = 5.0;
 // model call).
 const DAILY_CAP_USD = 2.0;
 
+// App-wide, per-day (migration 014): the per-user cap alone doesn't bound
+// total spend while signup is open. Shared with the other Edge Function —
+// both read the same agent_runs total.
+const APP_DAILY_CAP_USD = 5.0;
+
+// "Try it yourself" visitors (anonymous sessions, migration 016): a taste of
+// the AI, not a free tier — a few questions each, and a hard ceiling for all
+// of them together.
+const DEMO_DAILY_CAP_USD = 0.1;
+const DEMO_APP_DAILY_CAP_USD = 1.0;
+
+/** True once the caller, the demo pool (for anonymous callers) or the whole app has hit today's cap. */
+// deno-lint-ignore no-explicit-any
+async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<boolean> {
+  const [mine, app, demo] = await Promise.all([
+    supabase.rpc("my_agent_daily_cost_usd"),
+    supabase.rpc("app_agent_daily_cost_usd"),
+    isAnonymous ? supabase.rpc("anon_agent_daily_cost_usd") : Promise.resolve({ data: 0 }),
+  ]);
+  if ((app.data ?? 0) >= APP_DAILY_CAP_USD) return true;
+  if (isAnonymous) return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD;
+  return (mine.data ?? 0) >= DAILY_CAP_USD;
+}
+
+// Service-role client for agent_runs writes, which users can't do themselves (018).
+let adminClient: ReturnType<typeof createClient> | null = null;
+function adminDb(): ReturnType<typeof createClient> | null {
+  if (!adminClient) {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) return null;
+    adminClient = createClient(url, key, { auth: { persistSession: false } });
+  }
+  return adminClient;
+}
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -171,6 +207,11 @@ function mapUrlFor(location: unknown, destination: string): string | null {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
+  // Estimated usage row held while the model runs, so parallel questions count
+  // against the caps in flight (see generate/index.ts). logRun replaces it with
+  // the real row; finally deletes it if no model call happened.
+  let reservation: string | null = null;
+
   try {
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) return json({ error: "ANTHROPIC_API_KEY is not set" }, 500);
@@ -191,23 +232,23 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as Body;
 
-    // Ownership check, shared by both branches below. Comparing user_id
-    // explicitly is required, not decorative: the "shared trips readable"
-    // policy also applies to `authenticated`, so a plain select by id
-    // succeeds for anyone's shared trip — without this check any signed-in
-    // user could spend the project's API budget, or write itinerary/
-    // suggestion rows, on someone else's shared trip.
-    const [{ data: auth }, { data: trip }] = await Promise.all([
+    // Role check, shared by both branches below (migration 015). Viewers can
+    // read the trip but not use the agent; RLS would also refuse their writes,
+    // but checking here keeps them from spending the API budget at all.
+    const [{ data: auth }, { data: trip }, { data: role }] = await Promise.all([
       supabase.auth.getUser(),
       supabase
         .from("trips")
         .select("id, user_id, destination, trip_type, budget_level, start_date, end_date, notes")
         .eq("id", body.trip_id)
         .maybeSingle(),
+      supabase.rpc("trip_role", { _trip_id: body.trip_id }),
     ]);
-    if (!auth?.user || !trip || trip.user_id !== auth.user.id) {
+    if (!auth?.user || !trip || !["owner", "editor", "participant"].includes(role)) {
       return json({ error: "forbidden" }, 403);
     }
+    const canEditItinerary = role === "owner" || role === "editor";
+    const isAnonymous = auth.user.is_anonymous === true;
 
     const logRun = async (fields: {
       kind: string;
@@ -219,7 +260,9 @@ Deno.serve(async (req) => {
       errorMessage?: string;
     }) => {
       try {
-        await supabase.from("agent_runs").insert({
+        // Service role only (migration 018): users can't write usage rows, or a
+        // fake cost could fill the app-wide cap and switch AI off for everyone.
+        const row = {
           trip_id: body.trip_id,
           user_id: auth.user.id,
           kind: fields.kind,
@@ -229,7 +272,14 @@ Deno.serve(async (req) => {
           latency_ms: fields.latencyMs,
           status: fields.status,
           error_message: fields.errorMessage?.slice(0, 500) ?? null,
-        });
+        };
+        if (reservation && fields.kind === "ask") {
+          const id = reservation;
+          reservation = null;
+          await adminDb()?.from("agent_runs").update(row).eq("id", id);
+        } else {
+          await adminDb()?.from("agent_runs").insert(row);
+        }
       } catch {
         // Monitoring must never break the chat response.
       }
@@ -245,6 +295,7 @@ Deno.serve(async (req) => {
       const start = Date.now();
       try {
         if (action.tool === "add_to_itinerary") {
+          if (!canEditItinerary) return json({ error: "forbidden" }, 403);
           const dayDate = String(action.input.day_date ?? "");
           const title = String(action.input.title ?? "").trim().slice(0, 300);
           if (!/^\d{4}-\d{2}-\d{2}$/.test(dayDate) || !title) {
@@ -315,10 +366,16 @@ Deno.serve(async (req) => {
     const message = (body.message ?? "").trim();
     if (!message) return json({ error: "empty_message" }, 400);
 
-    const { data: spentToday } = await supabase.rpc("my_agent_daily_cost_usd");
-    if ((spentToday ?? 0) >= DAILY_CAP_USD) {
+    if (await overDailyCap(supabase, isAnonymous)) {
       return json({ error: "daily_cap_reached" }, 429);
     }
+    // Held estimate (about 4x the measured average question) until the real cost is logged.
+    const { data: held } = (await adminDb()
+      ?.from("agent_runs")
+      .insert({ trip_id: body.trip_id, user_id: auth.user.id, kind: "ask", cost_usd: 0.02, status: "pending" })
+      .select("id")
+      .single()) ?? { data: null };
+    if (held) reservation = (held as { id: string }).id;
 
     const [participants, itinerary, stays, flights, suggestions, checklist] = await Promise.all([
       supabase.from("participants").select("name, age, age_range, preferences").eq("trip_id", body.trip_id),
@@ -383,7 +440,9 @@ Deno.serve(async (req) => {
               cache_control: { type: "ephemeral" },
             },
           ],
-          tools: TOOLS,
+          // Participants can't write the itinerary, so the agent isn't offered
+          // a card they could never approve.
+          tools: canEditItinerary ? TOOLS : TOOLS.filter((t) => t.name !== "add_to_itinerary"),
           messages: convo,
         }),
       });
@@ -474,5 +533,7 @@ Deno.serve(async (req) => {
     return json({ ok: true, answer: finalAnswer, cards: [], pendingActions });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "unknown" }, 500);
+  } finally {
+    if (reservation) await adminDb()?.from("agent_runs").delete().eq("id", reservation);
   }
 });

@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { mapsUrl } from "./maps";
+import { fillMissingPhotos } from "./photos";
 
 /**
  * Creates a fully populated example trip so every screen can be reviewed with
@@ -279,6 +280,11 @@ export async function createDemoTrip(userId: string): Promise<string> {
     doc("פוליסת ביטוח נסיעות", "insurance", "https://example.com/insurance"),
     doc("דרכון — יעל", "passport", "https://example.com/passport", id["יעל כהן"] ?? null),
   ]);
+
+  // Real photos for the attractions, in the background — the user is already
+  // looking at the trip, and a lookup that finds nothing just leaves the
+  // gradient. Not awaited: each lookup is a network round trip.
+  void fillMissingPhotos(tripId, "רודוס, יוון");
 
   return tripId;
 }

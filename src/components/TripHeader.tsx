@@ -47,8 +47,8 @@ export function TripHeader({
 
 export function ScreenTitle({ title, action }: { title: string; action?: React.ReactNode }) {
   return (
-    <div className="mb-3 flex items-center justify-between">
-      <h2 className="text-xl font-extrabold tracking-tight">{title}</h2>
+    <div className="mb-3 flex items-center justify-between gap-2">
+      <h2 className="shrink-0 text-xl font-extrabold tracking-tight">{title}</h2>
       {action}
     </div>
   );

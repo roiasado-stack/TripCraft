@@ -13,6 +13,8 @@ import WizardPage from "@/routes/WizardPage";
 import SettingsPage from "@/routes/SettingsPage";
 import AdminMonitoringPage from "@/routes/AdminMonitoringPage";
 import SharePage from "@/routes/SharePage";
+import JoinPage from "@/routes/JoinPage";
+import { AccessibilityPage, CreditsPage, PrivacyPage, TermsPage } from "@/routes/LegalPages";
 import TripLayout from "@/routes/trip/TripLayout";
 import HomeTab from "@/routes/trip/HomeTab";
 import PeopleTab from "@/routes/trip/PeopleTab";
@@ -47,6 +49,11 @@ export default function App() {
               <Routes>
                 <Route path="/auth" element={<AuthPage />} />
                 <Route path="/share/:slug" element={<SharePage />} />
+                <Route path="/join/:token" element={<JoinPage />} />
+                <Route path="/terms" element={<TermsPage />} />
+                <Route path="/privacy" element={<PrivacyPage />} />
+                <Route path="/credits" element={<CreditsPage />} />
+                <Route path="/accessibility" element={<AccessibilityPage />} />
 
                 <Route
                   path="/"

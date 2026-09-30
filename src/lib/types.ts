@@ -32,8 +32,37 @@ export interface Trip {
   share_slug: string | null;
   is_template: boolean;
   photos_album_url: string | null;
+  image_url: string | null;
+  /** Public page offers "try it yourself" (migration 016). Owner-only toggle. */
+  is_showcase: boolean;
+  /** Set on demo copies: the showcase this trip was cloned from. */
+  demo_source_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Caller's relationship to a trip, from the trip_role() RPC (migration 015). */
+export type TripRole = "owner" | "editor" | "participant" | "viewer";
+export type MemberRole = Exclude<TripRole, "owner">;
+
+export interface TripMember {
+  id: string;
+  trip_id: string;
+  user_id: string;
+  role: MemberRole;
+  status: "pending" | "active" | "removed";
+  display_name: string | null;
+  created_at: string;
+}
+
+export interface TripInvite {
+  id: string;
+  trip_id: string;
+  role: MemberRole;
+  token: string;
+  requires_approval: boolean;
+  revoked_at: string | null;
+  created_at: string;
 }
 
 export interface TripUpdate {
@@ -43,7 +72,28 @@ export interface TripUpdate {
   body: string | null;
   kind: string; // info | warning | urgent
   is_pinned: boolean;
+  created_by?: string | null;
   created_at: string;
+}
+
+/**
+ * What get_shared_trip(slug) returns (migration 013) — exactly the fields
+ * /share/:slug renders. Anonymous visitors have no table access at all.
+ */
+export interface SharedTripPayload {
+  trip: Pick<
+    Trip,
+    "id" | "title" | "destination" | "start_date" | "end_date" | "cover_emoji" | "guide_name" | "guide_phone" | "photos_album_url"
+  > & { is_showcase?: boolean };
+  agency: { name: string | null; color: string | null } | null;
+  flights: Pick<Flight, "id" | "from_airport" | "to_airport" | "airline" | "flight_number" | "depart_at">[];
+  stays: Pick<Stay, "id" | "hotel_name" | "address" | "check_in" | "check_out" | "map_url">[];
+  itinerary: Pick<
+    ItineraryItem,
+    "id" | "day_date" | "start_time" | "title" | "description" | "category" | "location" | "map_url"
+  >[];
+  suggestions: Pick<Suggestion, "id" | "kind" | "title" | "description" | "location" | "map_url">[];
+  updates: Omit<TripUpdate, "trip_id">[];
 }
 
 export interface Participant {
@@ -118,6 +168,9 @@ export interface ItineraryItem {
   location: string | null;
   map_url: string | null;
   sort_order: number;
+  image_url: string | null;
+  lat: number | null;
+  lng: number | null;
   created_at: string;
 }
 
@@ -134,6 +187,11 @@ export interface Suggestion {
   liked: boolean;
   location: string | null;
   map_url: string | null;
+  image_url: string | null;
+  /** Google place ID for a fresh venue photo ('' = looked up, no match). Migration 017. */
+  google_place_id?: string | null;
+  lat: number | null;
+  lng: number | null;
   created_at: string;
 }
 
@@ -145,6 +203,9 @@ export interface DocumentRow {
   name: string;
   storage_path: string | null;
   external_url: string | null;
+  /** "private" = uploader only; "members" = everyone on the trip (migration 015). */
+  visibility: "private" | "members";
+  uploaded_by: string | null;
   created_at: string;
 }
 
@@ -156,6 +217,7 @@ export interface ChecklistItem {
   is_done: boolean;
   is_shared: boolean;
   sort_order: number;
+  created_by?: string | null;
   created_at: string;
 }
 
@@ -185,7 +247,7 @@ export interface AgentRun {
   id: string;
   trip_id: string | null;
   user_id: string;
-  kind: string; // ask | generate_suggestions | generate_itinerary | generate_checklist | generate_passports
+  kind: string; // ask | generate_suggestions | generate_itinerary | generate_checklist | generate_passports | generate_voucher
   input_tokens: number;
   output_tokens: number;
   cost_usd: number;

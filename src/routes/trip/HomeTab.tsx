@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import type { Flight, ItineraryItem, Stay } from "@/lib/types";
 import { useTrip } from "./TripLayout";
+import { can } from "@/lib/permissions";
 import { TripHeader } from "@/components/TripHeader";
 import { TripUpdates } from "@/components/TripUpdates";
 import { PhotoAlbumCard } from "@/components/PhotoAlbumCard";
@@ -21,7 +22,7 @@ import {
 } from "@/lib/trip-options";
 
 export default function HomeTab() {
-  const { trip, participants, openShare } = useTrip();
+  const { trip, role, participants, openShare } = useTrip();
   const [flights, setFlights] = useState<Flight[]>([]);
   const [stays, setStays] = useState<Stay[]>([]);
   const [today, setToday] = useState<ItineraryItem[]>([]);
@@ -81,6 +82,9 @@ export default function HomeTab() {
           const copy: Record<string, unknown> = { ...r, trip_id: newId };
           delete copy.id;
           delete copy.created_at;
+          // Authorship belongs to whoever makes the copy (the column defaults to
+          // auth.uid(); RLS rejects anyone else's id — migration 015).
+          delete copy.created_by;
           strip.forEach((k) => delete copy[k]);
           if (copy.participant_id) copy.participant_id = partMap.get(copy.participant_id as string) ?? null;
           return copy;
@@ -178,9 +182,9 @@ export default function HomeTab() {
 
       <GuideCard trip={trip} />
 
-      <TripUpdates tripId={trip.id} />
+      <TripUpdates tripId={trip.id} role={role} />
 
-      <PhotoAlbumCard trip={trip} />
+      <PhotoAlbumCard trip={trip} editable={can(role, "edit")} />
 
       <Link to="ask">
         <Card className="mt-4 flex items-center gap-3 p-4">

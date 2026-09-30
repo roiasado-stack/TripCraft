@@ -4,15 +4,20 @@ import { CalendarPlus, Compass, Heart, MessageCircle, Plus, Sparkles, Trash2 } f
 import { supabase } from "@/lib/supabase";
 import type { Suggestion } from "@/lib/types";
 import { useTrip } from "./TripLayout";
+import { can } from "@/lib/permissions";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
-import { Button, Card, Chip, EmptyState, Field, Input, Modal, Spinner, Textarea } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, Field, Input, Modal, Segmented, Spinner, Textarea } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
-import { generateContent, type TuneOption } from "@/lib/ai";
+import { useSuggestionPhoto } from "@/lib/photos";
+import { FillPhotos } from "@/components/FillPhotos";
+import { generateContent, searchCoordinates, searchPhoto, type TuneOption } from "@/lib/ai";
 import { cn } from "@/lib/utils";
 import { SUGGESTION_KINDS } from "@/lib/trip-options";
 import { destinationPicks, pickToRow } from "@/lib/destinations";
 import { DirectionsLink, LinkChip, MapLink } from "@/components/MapLink";
 import { chabadSearchUrl, kosherSearchUrl, resolveMapUrl, vegetarianSearchUrl } from "@/lib/maps";
+import { CardCoverImage } from "@/components/MediaCard";
+import { TripMap, type TripMapItem } from "@/components/TripMap";
 
 const TUNE: { value: TuneOption; label: string }[] = [
   { value: "more_kids", label: "יותר ידידותי לילדים" },
@@ -22,7 +27,9 @@ const TUNE: { value: TuneOption; label: string }[] = [
 ];
 
 export default function SuggestionsTab() {
-  const { trip, participants } = useTrip();
+  const { trip, role, participants } = useTrip();
+  const canParticipate = can(role, "participate");
+  const canEdit = can(role, "edit");
   const navigate = useNavigate();
   const toast = useToast();
   const [items, setItems] = useState<Suggestion[]>([]);
@@ -34,6 +41,7 @@ export default function SuggestionsTab() {
   const [tune, setTune] = useState<TuneOption | null>(null);
   const [manual, setManual] = useState<{ kind: string; title: string; description: string } | null>(null);
   const [picking, setPicking] = useState(false);
+  const [view, setView] = useState<"list" | "map">("list");
 
   /** Curated + generic highlights for the destination, matched to the group. */
   const addDestinationPicks = async () => {
@@ -46,13 +54,20 @@ export default function SuggestionsTab() {
       const picks = destinationPicks(trip.destination, { style: trip.trip_type, ages, prefs });
 
       const existing = new Set(items.map((i) => i.title));
-      const rows = picks
+      const baseRows = picks
         .filter((p) => !existing.has(p.title))
         .map((p) => pickToRow(p, trip.id, trip.destination));
-      if (!rows.length) {
+      if (!baseRows.length) {
         toast.toast("כל ההמלצות המובילות כבר קיימות");
         return;
       }
+      const photoResults = await Promise.allSettled(
+        baseRows.map((r) => searchPhoto(trip.id, `${r.title} ${trip.destination}`)),
+      );
+      const rows = baseRows.map((r, idx) => {
+        const photo = photoResults[idx];
+        return { ...r, image_url: photo.status === "fulfilled" ? photo.value : null };
+      });
       const { error } = await supabase.from("suggestions").insert(rows);
       if (error) {
         toast.error("ההוספה נכשלה. ודא שהרצת את מיגרציה 002.");
@@ -81,6 +96,15 @@ export default function SuggestionsTab() {
   const filtered = useMemo(
     () => items.filter((i) => (filter === "all" || i.kind === filter) && (!onlyLiked || i.liked)),
     [items, filter, onlyLiked],
+  );
+
+  // Numbered in the same order `filtered` renders in — see CLAUDE.md.
+  const mapItems: TripMapItem[] = useMemo(
+    () =>
+      filtered
+        .filter((s): s is Suggestion & { lat: number; lng: number } => s.lat != null && s.lng != null)
+        .map((s, idx) => ({ id: s.id, lat: s.lat, lng: s.lng, title: s.title, subtitle: s.description ?? undefined, number: idx + 1 })),
+    [filtered],
   );
 
   const toggleLike = async (s: Suggestion) => {
@@ -123,11 +147,16 @@ export default function SuggestionsTab() {
       toast.error("צריך שם");
       return;
     }
+    const query = `${manual.title.trim()} ${trip.destination}`;
+    const [image_url, coords] = await Promise.all([searchPhoto(trip.id, query), searchCoordinates(trip.id, query)]);
     await supabase.from("suggestions").insert({
       trip_id: trip.id,
       kind: manual.kind,
       title: manual.title.trim(),
       description: manual.description || null,
+      image_url,
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
     });
     setManual(null);
     toast.success("נוסף");
@@ -140,22 +169,37 @@ export default function SuggestionsTab() {
       <ScreenTitle
         title="מומלצים"
         action={
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" onClick={() => setManual({ kind: "attraction", title: "", description: "" })}>
+          canParticipate && (
+          // Four buttons don't fit beside the title on a 390px phone; in RTL the
+          // row then spills off the left edge and the browser zooms the whole
+          // page out. Labels hide below 420px (icons + aria-labels stay) and the
+          // row may wrap as a last resort.
+          <div className="flex flex-wrap justify-end gap-1.5">
+            <Button size="sm" variant="outline" onClick={() => setManual({ kind: "attraction", title: "", description: "" })} aria-label="הוספת המלצה">
               <Plus className="size-4" />
             </Button>
-            <Button size="sm" variant="outline" loading={picking} onClick={addDestinationPicks}>
-              <Compass className="size-4" /> מובילים
+            <Button size="sm" variant="outline" loading={picking} onClick={addDestinationPicks} aria-label="המקומות המובילים ביעד">
+              <Compass className="size-4" /> <span className="max-[420px]:hidden">מובילים</span>
             </Button>
-            <Button size="sm" variant="outline" onClick={() => navigate("../ask")}>
-              <MessageCircle className="size-4" /> שאל
+            <Button size="sm" variant="outline" onClick={() => navigate("../ask")} aria-label="שאל את הסוכן">
+              <MessageCircle className="size-4" /> <span className="max-[420px]:hidden">שאל</span>
             </Button>
             <Button size="sm" variant="soft" onClick={() => setShowGen(true)}>
               <Sparkles className="size-4" /> AI
             </Button>
           </div>
+          )
         }
       />
+
+      {canEdit && (
+        <FillPhotos
+          tripId={trip.id}
+          destination={trip.destination}
+          missing={items.filter((i) => i.kind === "attraction" && !i.image_url).length}
+          onDone={load}
+        />
+      )}
 
       {/* Dietary needs: live searches, because kosher venues change often. */}
       {(needsKosher || needsVeg) && (
@@ -196,6 +240,18 @@ export default function SuggestionsTab() {
         </button>
       </div>
 
+      {!loading && filtered.length > 0 && (
+        <Segmented
+          className="mb-3"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "list", label: "רשימה", emoji: "📋" },
+            { value: "map", label: "מפה", emoji: "🗺️" },
+          ]}
+        />
+      )}
+
       {loading ? (
         <div className="flex justify-center py-10">
           <Spinner />
@@ -206,51 +262,72 @@ export default function SuggestionsTab() {
           title={items.length === 0 ? "אין עדיין המלצות" : "אין תוצאות לסינון"}
           description={items.length === 0 ? "תן ל-AI להציע אטרקציות ומסעדות מותאמות למשתתפים ולהעדפות שלכם." : undefined}
           action={
-            items.length === 0 ? (
+            items.length === 0 && canParticipate ? (
               <Button onClick={() => setShowGen(true)}>
                 <Sparkles className="size-4" /> יצירת המלצות
               </Button>
             ) : undefined
           }
         />
+      ) : view === "map" ? (
+        mapItems.length === 0 ? (
+          <EmptyState emoji="🗺️" title="אין עדיין מיקומים על המפה" description="הוסיפו פריטים עם מיקום כדי לראות אותם על המפה." />
+        ) : (
+          <TripMap items={mapItems} />
+        )
       ) : (
         <div className="flex flex-col gap-3">
           {filtered.map((s) => {
             const kind = SUGGESTION_KINDS.find((k) => k.value === s.kind);
             return (
-              <Card key={s.id} className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary-soft text-xl">{kind?.emoji ?? "📍"}</div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-bold">{s.title}</div>
-                    {s.description && <p className="mt-0.5 text-sm text-muted-foreground">{s.description}</p>}
-                    {s.tags?.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {s.tags.map((t) => (
-                          <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                            {t}
-                          </span>
-                        ))}
-                      </div>
+              <Card key={s.id} className="overflow-hidden p-0">
+                <SuggestionCover
+                  s={s}
+                  tripId={trip.id}
+                  destination={trip.destination}
+                  canResolve={canEdit}
+                  icon={<span className="text-4xl">{kind?.emoji ?? "📍"}</span>}
+                  cornerSlot={
+                    <span className="inline-flex items-center gap-1 rounded-full bg-card/90 px-2.5 py-1 text-xs font-semibold text-foreground shadow-soft backdrop-blur">
+                      {kind?.emoji ?? "📍"} {kind?.label}
+                    </span>
+                  }
+                />
+                <div className="p-4">
+                  <div className="font-bold">{s.title}</div>
+                  {s.description && <p className="mt-0.5 text-sm text-muted-foreground">{s.description}</p>}
+                  {s.tags?.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {s.tags.map((t) => (
+                        <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {(s.map_url || s.location) && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <MapLink url={resolveMapUrl(s.map_url, s.location ?? s.title, trip.destination)} />
+                      <DirectionsLink place={s.location ?? s.title} near={trip.destination} />
+                    </div>
+                  )}
+                  {canParticipate && (
+                  <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
+                    <button onClick={() => toggleLike(s)} className={cn("flex items-center gap-1 text-sm font-semibold", s.liked ? "text-accent" : "text-muted-foreground")}>
+                      <Heart className={cn("size-4", s.liked && "fill-current")} /> אהבתי
+                    </button>
+                    {canEdit && (
+                      <>
+                        <button onClick={() => addToItinerary(s)} className="flex items-center gap-1 text-sm font-semibold text-primary">
+                          <CalendarPlus className="size-4" /> למסלול
+                        </button>
+                        <button onClick={() => remove(s.id)} className="ms-auto text-destructive" aria-label="מחיקה">
+                          <Trash2 className="size-4" />
+                        </button>
+                      </>
                     )}
                   </div>
-                </div>
-                {(s.map_url || s.location) && (
-                  <div className="mt-2 flex flex-wrap gap-1.5 pr-14">
-                    <MapLink url={resolveMapUrl(s.map_url, s.location ?? s.title, trip.destination)} />
-                    <DirectionsLink place={s.location ?? s.title} near={trip.destination} />
-                  </div>
-                )}
-                <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-                  <button onClick={() => toggleLike(s)} className={cn("flex items-center gap-1 text-sm font-semibold", s.liked ? "text-accent" : "text-muted-foreground")}>
-                    <Heart className={cn("size-4", s.liked && "fill-current")} /> אהבתי
-                  </button>
-                  <button onClick={() => addToItinerary(s)} className="flex items-center gap-1 text-sm font-semibold text-primary">
-                    <CalendarPlus className="size-4" /> למסלול
-                  </button>
-                  <button onClick={() => remove(s.id)} className="mr-auto text-destructive" aria-label="מחיקה">
-                    <Trash2 className="size-4" />
-                  </button>
+                  )}
                 </div>
               </Card>
             );
@@ -321,5 +398,46 @@ export default function SuggestionsTab() {
         )}
       </Modal>
     </div>
+  );
+}
+
+/** Cover photo for one suggestion: Wikipedia, then Google, then ambience (see useSuggestionPhoto). */
+function SuggestionCover({
+  s,
+  tripId,
+  destination,
+  canResolve,
+  icon,
+  cornerSlot,
+}: {
+  s: Suggestion;
+  tripId: string;
+  destination: string;
+  canResolve: boolean;
+  icon: React.ReactNode;
+  cornerSlot: React.ReactNode;
+}) {
+  const photo = useSuggestionPhoto({
+    tripId,
+    destination,
+    id: s.id,
+    kind: s.kind,
+    title: s.title,
+    imageUrl: s.image_url,
+    placeId: s.google_place_id,
+    lat: s.lat,
+    lng: s.lng,
+    canResolve,
+  });
+  return (
+    <CardCoverImage
+      imageUrl={photo.url}
+      illustrative={photo.illustrative}
+      googlePhoto={photo.google}
+      alt={s.title}
+      gradient="sea"
+      icon={icon}
+      cornerSlot={cornerSlot}
+    />
   );
 }

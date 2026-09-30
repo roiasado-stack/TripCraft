@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, Info, Megaphone, Pin, Plus, Siren, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import type { TripUpdate } from "@/lib/types";
+import type { TripRole, TripUpdate } from "@/lib/types";
+import { useAuth } from "@/hooks/use-auth";
+import { can } from "@/lib/permissions";
 import { Button, Card, Chip, Field, Input, Modal, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -20,10 +22,26 @@ function kindMeta(kind: string) {
  * Announcements for a trip — schedule changes, gate updates, "meet at 8".
  * Read-only viewers (shared link) see them too, which is the point for agents.
  */
-export function TripUpdates({ tripId, editable = true }: { tripId: string; editable?: boolean }) {
+export function TripUpdates({
+  tripId,
+  role,
+  editable = true,
+  preloaded,
+}: {
+  tripId: string;
+  /** Caller's role: participants post and manage their own; editors manage all. */
+  role?: TripRole;
+  editable?: boolean;
+  /** Already-fetched updates (the share page gets them from get_shared_trip) — skips the query. */
+  preloaded?: Omit<TripUpdate, "trip_id">[];
+}) {
   const toast = useToast();
-  const [updates, setUpdates] = useState<TripUpdate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const canPost = editable && (role === undefined || can(role, "participate"));
+  const canManage = (u: Omit<TripUpdate, "trip_id">) =>
+    editable && (role === undefined || can(role, "edit") || (can(role, "participate") && u.created_by === user?.id));
+  const [updates, setUpdates] = useState<Omit<TripUpdate, "trip_id">[]>(preloaded ?? []);
+  const [loading, setLoading] = useState(!preloaded);
   const [draft, setDraft] = useState<{ title: string; body: string; kind: string; is_pinned: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -39,6 +57,7 @@ export function TripUpdates({ tripId, editable = true }: { tripId: string; edita
   };
 
   useEffect(() => {
+    if (preloaded) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
@@ -71,13 +90,13 @@ export function TripUpdates({ tripId, editable = true }: { tripId: string; edita
     await supabase.from("trip_updates").delete().eq("id", id);
   };
 
-  const togglePin = async (u: TripUpdate) => {
+  const togglePin = async (u: Omit<TripUpdate, "trip_id">) => {
     await supabase.from("trip_updates").update({ is_pinned: !u.is_pinned }).eq("id", u.id);
     load();
   };
 
   if (loading) return null;
-  if (!editable && updates.length === 0) return null;
+  if (!canPost && updates.length === 0) return null;
 
   return (
     <section className="mt-4">
@@ -86,7 +105,7 @@ export function TripUpdates({ tripId, editable = true }: { tripId: string; edita
           <Megaphone className="size-4 text-accent" />
           עדכונים חשובים
         </h3>
-        {editable && (
+        {canPost && (
           <Button
             size="sm"
             variant="outline"
@@ -119,7 +138,7 @@ export function TripUpdates({ tripId, editable = true }: { tripId: string; edita
                   </div>
                   {u.body && <p className="mt-0.5 whitespace-pre-wrap text-sm text-muted-foreground">{u.body}</p>}
                 </div>
-                {editable && (
+                {canManage(u) && (
                   <div className="flex shrink-0 flex-col gap-1.5">
                     <button onClick={() => togglePin(u)} className="text-muted-foreground" aria-label="נעיצה">
                       <Pin className={cn("size-4", u.is_pinned && "fill-current text-accent")} />

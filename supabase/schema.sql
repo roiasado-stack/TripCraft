@@ -1,7 +1,15 @@
 -- ============================================================================
--- TripCraft — full database schema
--- Paste this whole file into the Supabase SQL Editor and run it once.
--- Safe to run on a fresh project. Creates tables, RLS, roles, storage, security.
+-- TripCraft — base database schema
+-- For a NEW project only: run this file once, then every
+-- supabase/migrations/0NN_*.sql in order (002 onward). The migrations are part
+-- of the schema, not optional patches: 002 adds tables this file doesn't
+-- create, 013 adds the public share RPC, 015 replaces the owner-only policies
+-- below with role-based ones, and 016–019 build on that.
+--
+-- Never re-run this file on an existing database. Its original "owner all"
+-- policies would be added back next to 015's, and Postgres ORs policies
+-- together, so the stricter rules (private documents, demo limits) would stop
+-- applying. Change an existing database with a new migration instead.
 -- ============================================================================
 
 -- Roles ----------------------------------------------------------------------
@@ -20,13 +28,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO authenticated;
-GRANT SELECT ON public.profiles TO anon; -- agency branding on shared pages
 GRANT ALL ON public.profiles TO service_role;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "own profile" ON public.profiles;
 CREATE POLICY "own profile" ON public.profiles FOR ALL TO authenticated USING (id = auth.uid()) WITH CHECK (id = auth.uid());
+-- No anon access: shared pages get agency branding through get_shared_trip() (migration 013).
 DROP POLICY IF EXISTS "public agency read" ON public.profiles;
-CREATE POLICY "public agency read" ON public.profiles FOR SELECT TO anon USING (true);
 
 -- User roles (never stored on the profile) -----------------------------------
 CREATE TABLE IF NOT EXISTS public.user_roles (
@@ -37,6 +44,7 @@ CREATE TABLE IF NOT EXISTS public.user_roles (
   UNIQUE (user_id, role)
 );
 GRANT SELECT ON public.user_roles TO authenticated;
+REVOKE ALL ON public.user_roles FROM anon;
 GRANT ALL ON public.user_roles TO service_role;
 ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "read own roles" ON public.user_roles;
@@ -89,13 +97,13 @@ CREATE TABLE IF NOT EXISTS public.trips (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.trips TO authenticated;
-GRANT SELECT ON public.trips TO anon;
 GRANT ALL ON public.trips TO service_role;
 ALTER TABLE public.trips ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "own trips" ON public.trips;
 CREATE POLICY "own trips" ON public.trips FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+-- No table-level shared read: it let anyone list every shared trip without the
+-- slug. /share/:slug reads through get_shared_trip(slug) instead (migration 013).
 DROP POLICY IF EXISTS "shared trips readable" ON public.trips;
-CREATE POLICY "shared trips readable" ON public.trips FOR SELECT TO anon, authenticated USING (is_shared = true);
 DROP TRIGGER IF EXISTS trips_updated ON public.trips;
 CREATE TRIGGER trips_updated BEFORE UPDATE ON public.trips FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
@@ -182,6 +190,18 @@ CREATE TABLE IF NOT EXISTS public.checklist_items (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Post-migration additions kept in sync so a fresh paste matches a DB that
+-- has run every migration (see migration 010) -------------------------------
+ALTER TABLE public.trips ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.suggestions ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE public.itinerary_items ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+-- Map coordinates for suggestions/itinerary items (see migration 011) -------
+ALTER TABLE public.suggestions ADD COLUMN IF NOT EXISTS lat NUMERIC;
+ALTER TABLE public.suggestions ADD COLUMN IF NOT EXISTS lng NUMERIC;
+ALTER TABLE public.itinerary_items ADD COLUMN IF NOT EXISTS lat NUMERIC;
+ALTER TABLE public.itinerary_items ADD COLUMN IF NOT EXISTS lng NUMERIC;
+
 -- RLS + grants for all child tables ------------------------------------------
 DO $$
 DECLARE t TEXT;
@@ -195,11 +215,11 @@ BEGIN
     EXECUTE format('CREATE POLICY "owner all" ON public.%I FOR ALL TO authenticated USING (public.owns_trip(trip_id)) WITH CHECK (public.owns_trip(trip_id))', t);
     EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON public.%I (trip_id)', t || '_trip_idx', t);
   END LOOP;
+  -- No anon grants on child tables — see get_shared_trip() in migration 013.
   FOREACH t IN ARRAY ARRAY['participants','flights','stays','transfers','itinerary_items','suggestions','checklist_items']
   LOOP
-    EXECUTE format('GRANT SELECT ON public.%I TO anon', t);
+    EXECUTE format('REVOKE ALL ON public.%I FROM anon', t);
     EXECUTE format('DROP POLICY IF EXISTS "shared read" ON public.%I', t);
-    EXECUTE format('CREATE POLICY "shared read" ON public.%I FOR SELECT TO anon, authenticated USING (public.trip_is_shared(trip_id))', t);
   END LOOP;
 END $$;
 
@@ -238,8 +258,9 @@ CREATE INDEX IF NOT EXISTS trip_chat_messages_trip_idx
 CREATE TABLE IF NOT EXISTS public.agent_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   -- Nullable: passport-scan calls (generate kind="passports") happen during
-  -- participant import and aren't tied to a trip — everything else always has one.
-  trip_id UUID REFERENCES public.trips(id) ON DELETE CASCADE,
+  -- participant import and aren't tied to a trip. SET NULL, not CASCADE: the
+  -- daily AI caps sum these rows, so they must outlive a deleted trip (016).
+  trip_id UUID REFERENCES public.trips(id) ON DELETE SET NULL,
   user_id UUID NOT NULL,
   kind TEXT NOT NULL,                                -- ask | generate_suggestions | generate_itinerary | generate_checklist | generate_passports
   input_tokens INT NOT NULL DEFAULT 0,
@@ -250,16 +271,21 @@ CREATE TABLE IF NOT EXISTS public.agent_runs (
   error_message TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-GRANT SELECT, INSERT ON public.agent_runs TO authenticated;
+-- Only the Edge Functions (service role) write usage rows (migration 018): a
+-- user-written row with a made-up cost could fill the app-wide AI cap.
+GRANT SELECT ON public.agent_runs TO authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.agent_runs FROM authenticated;
 GRANT ALL ON public.agent_runs TO service_role;
 REVOKE ALL ON public.agent_runs FROM anon;
 ALTER TABLE public.agent_runs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "own insert" ON public.agent_runs;
-CREATE POLICY "own insert" ON public.agent_runs FOR INSERT TO authenticated
-WITH CHECK (user_id = auth.uid());
 DROP POLICY IF EXISTS "admin read" ON public.agent_runs;
 CREATE POLICY "admin read" ON public.agent_runs FOR SELECT TO authenticated
 USING (public.has_role(auth.uid(), 'admin'));
+-- Users insert their own rows; a negative cost would lift the daily cap (013).
+ALTER TABLE public.agent_runs DROP CONSTRAINT IF EXISTS agent_runs_nonnegative;
+ALTER TABLE public.agent_runs ADD CONSTRAINT agent_runs_nonnegative
+  CHECK (cost_usd >= 0 AND input_tokens >= 0 AND output_tokens >= 0 AND latency_ms >= 0) NOT VALID;
 CREATE INDEX IF NOT EXISTS agent_runs_created_idx ON public.agent_runs (created_at);
 CREATE INDEX IF NOT EXISTS agent_runs_user_created_idx ON public.agent_runs (user_id, created_at);
 
@@ -269,7 +295,7 @@ CREATE INDEX IF NOT EXISTS agent_runs_user_created_idx ON public.agent_runs (use
 -- above blocks that SELECT directly.
 CREATE OR REPLACE FUNCTION public.my_agent_daily_cost_usd()
 RETURNS NUMERIC LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT COALESCE(SUM(cost_usd), 0) FROM public.agent_runs
+  SELECT COALESCE(SUM(GREATEST(cost_usd, 0)), 0) FROM public.agent_runs
   WHERE user_id = auth.uid() AND created_at >= date_trunc('day', now())
 $$;
 
@@ -291,6 +317,18 @@ ALTER TABLE public.knowledge_chunks ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON public.knowledge_chunks TO service_role;
 REVOKE ALL ON public.knowledge_chunks FROM anon, authenticated;
 CREATE INDEX IF NOT EXISTS knowledge_chunks_destination_idx ON public.knowledge_chunks (destination);
+
+-- Photo cache for the generate function's photo lookups (migration 012; Wikipedia, keys `wiki:<title>`).
+-- Service-role only: users must never be able to plant an image other trips show.
+CREATE TABLE IF NOT EXISTS public.photo_cache (
+  query_key TEXT PRIMARY KEY,
+  url TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE public.photo_cache ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.photo_cache TO service_role;
+REVOKE ALL ON public.photo_cache FROM anon, authenticated;
+
 CREATE OR REPLACE FUNCTION public.match_knowledge_chunks(
   query_embedding VECTOR(1024),
   filter_destination TEXT,
@@ -383,9 +421,12 @@ REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authentic
 REVOKE EXECUTE ON FUNCTION public.update_updated_at_column() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.owns_trip(uuid) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.trip_is_shared(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.trip_is_shared(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.trip_is_shared(uuid) TO authenticated;
 REVOKE EXECUTE ON FUNCTION public.my_agent_daily_cost_usd() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.owns_trip(uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.trip_is_shared(uuid) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.my_agent_daily_cost_usd() TO authenticated;
+
+-- get_shared_trip(slug) and delete_my_account() live in migration 013: they
+-- read columns/tables added by migration 002, which this file doesn't create.

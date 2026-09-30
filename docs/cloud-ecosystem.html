@@ -1,0 +1,271 @@
+<title>אקוסיסטם ענן — TripCraft</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=Heebo:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #f6fbfa;
+    --surface: #ffffff;
+    --surface-2: #eef8f6;
+    --ink: #0f2e2c;
+    --ink-soft: #4b6663;
+    --line: #d7e9e6;
+    --line-soft: #e7f2f0;
+    --primary: #0e9c96;
+    --primary-deep: #0b7671;
+    --primary-tint: #d7f2ef;
+    --coral: #ee6d4e;
+    --coral-tint: #fce6dd;
+    --sun: #f2ab2e;
+    --sun-tint: #fdf0d9;
+    --shadow: 0 1px 2px rgba(15,46,44,.04), 0 8px 24px -12px rgba(15,46,44,.16);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --ground: #0b1d1c;
+      --surface: #102624;
+      --surface-2: #143330;
+      --ink: #eaf6f4;
+      --ink-soft: #a9c6c2;
+      --line: #1c403c;
+      --line-soft: #17332f;
+      --primary: #35c6bd;
+      --primary-deep: #7fdbd3;
+      --primary-tint: #143a37;
+      --coral: #ff9575;
+      --coral-tint: #3a231b;
+      --sun: #f5c15c;
+      --sun-tint: #3a2e14;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0b1d1c;
+    --surface: #102624;
+    --surface-2: #143330;
+    --ink: #eaf6f4;
+    --ink-soft: #a9c6c2;
+    --line: #1c403c;
+    --line-soft: #17332f;
+    --primary: #35c6bd;
+    --primary-deep: #7fdbd3;
+    --primary-tint: #143a37;
+    --coral: #ff9575;
+    --coral-tint: #3a231b;
+    --sun: #f5c15c;
+    --sun-tint: #3a2e14;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--ground); }
+
+  .page {
+    direction: rtl;
+    font-family: "Heebo", "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+    max-width: 800px;
+    margin-inline: auto;
+    padding: 28px 20px 80px;
+    line-height: 1.65;
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+  h1, h2, h3 { font-family: "Rubik", "Heebo", sans-serif; color: var(--ink); text-wrap: balance; }
+
+  header.top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 22px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--line);
+  }
+  .mark {
+    width: 46px; height: 46px; border-radius: 14px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+    display: grid; place-items: center;
+    color: #fff; font-family: "Rubik", sans-serif; font-weight: 800; font-size: 20px;
+    box-shadow: var(--shadow);
+    flex-shrink: 0;
+  }
+  header.top h1 { font-size: 22px; font-weight: 800; margin: 0 0 2px; }
+  header.top p { margin: 0; color: var(--ink-soft); font-size: 14.5px; }
+
+  section { margin-bottom: 40px; }
+  .eyebrow {
+    font-family: "Rubik", sans-serif;
+    font-size: 12px; font-weight: 700; letter-spacing: .04em;
+    color: var(--primary-deep);
+    text-transform: uppercase;
+    margin: 0 0 8px;
+  }
+  section > h2 { font-size: 19px; font-weight: 700; margin: 0 0 12px; }
+  section > p.lead { color: var(--ink-soft); font-size: 15px; margin: 0 0 18px; max-width: 62ch; }
+
+  .stack { display: flex; flex-direction: column; gap: 0; }
+  .layer {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  .layer + .layer { margin-top: 12px; }
+  .layer .tag {
+    font-family: "Rubik", sans-serif; font-weight: 700; font-size: 13.5px;
+    color: var(--primary-deep);
+    margin-bottom: 6px;
+  }
+  .layer .items { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font-size: 13px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--line-soft);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .chip.mono { font-size: 12.5px; }
+  .layer .note { font-size: 13px; color: var(--ink-soft); margin-top: 8px; }
+  .layer .chip.hi { background: var(--primary-tint); border-color: transparent; color: var(--primary-deep); }
+
+  .callout {
+    margin-top: 16px;
+    border-inline-start: 3px solid var(--sun);
+    background: var(--sun-tint);
+    border-radius: 0 12px 12px 0;
+    padding: 12px 14px;
+    font-size: 13.5px;
+    color: var(--ink);
+  }
+  :root[data-theme="dark"] .callout, :root:not([data-theme="light"]) .callout {
+    @media (prefers-color-scheme: dark) { color: var(--ink); }
+  }
+  .callout strong { font-family: "Rubik", sans-serif; }
+
+  table.rails { width: 100%; border-collapse: collapse; font-size: 13.2px; }
+  table.rails th, table.rails td { text-align: right; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  table.rails th { font-family: "Rubik", sans-serif; font-weight: 700; color: var(--ink-soft); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; }
+  table.rails td:first-child { font-weight: 600; white-space: nowrap; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+  .table-wrap table { margin: 0; }
+  .table-wrap th:first-child, .table-wrap td:first-child { padding-inline-start: 16px; }
+  .table-wrap th:last-child, .table-wrap td:last-child { padding-inline-end: 16px; }
+
+  .reasons { display: flex; flex-direction: column; gap: 12px; }
+  .reason {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+  }
+  .reason .h { font-family: "Rubik", sans-serif; font-weight: 700; font-size: 14px; margin-bottom: 4px; color: var(--primary-deep); }
+  .reason .b { font-size: 13.8px; color: var(--ink); }
+
+  footer.foot {
+    margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--line);
+    font-size: 12.5px; color: var(--ink-soft); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+</style>
+
+<div class="page">
+
+  <header class="top">
+    <div class="mark">TC</div>
+    <div>
+      <h1>אקוסיסטם ענן — TripCraft מול חלופות ארגוניות</h1>
+      <p>מודול 11 בסילבוס: השוואה בין הפתרון הנוכחי לבין מה שהיה נבנה בסביבה ארגונית, והנימוק לבחירה שהתקבלה. מסמך החלטה, לא תשתית שנפרסה.</p>
+    </div>
+  </header>
+
+  <section>
+    <p class="eyebrow">מה בנוי בפועל היום</p>
+    <h2>אקוסיסטם אחד, שירותים מנוהלים בלבד</h2>
+    <p class="lead">כל שכבה היא שירות מנוהל קיים — אין שרת שמנוהל ידנית, ואין תשתית שהוקמה רק כדי להדגים יכולת.</p>
+    <div class="stack">
+      <div class="layer">
+        <div class="tag">Frontend Hosting</div>
+        <div class="items"><span class="chip hi mono">Vercel</span><span class="chip">Build סטטי מ-Vite, SPA rewrite לכל הנתיבים</span></div>
+      </div>
+      <div class="layer">
+        <div class="tag">Backend — Supabase</div>
+        <div class="items">
+          <span class="chip hi mono">Postgres + RLS</span>
+          <span class="chip mono">Auth</span>
+          <span class="chip mono">Storage</span>
+          <span class="chip hi mono">pgvector</span>
+        </div>
+        <div class="note">מסד נתונים, הרשאות, אימות, אחסון ומאגר וקטורים — באותו מופע Postgres אחד, לא ארבעה שירותים נפרדים.</div>
+      </div>
+      <div class="layer">
+        <div class="tag">Compute — Edge Functions (Deno)</div>
+        <div class="items"><span class="chip mono">generate · Claude Sonnet 5</span><span class="chip mono">ask · Claude Haiku 4.5</span></div>
+        <div class="note">קריאה ישירה ל-Anthropic API מהפונקציה בצד השרת — לא דרך שכבת מודלים של ספק ענן.</div>
+      </div>
+      <div class="layer">
+        <div class="tag">Embeddings</div>
+        <div class="items"><span class="chip mono">Voyage AI — voyage-4-lite</span></div>
+      </div>
+      <div class="layer">
+        <div class="tag">אוטומציה — No-Code</div>
+        <div class="items"><span class="chip hi mono">n8n</span><span class="chip">תרחיש על טריגר זמן, מול Supabase API ו-SMTP</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">מה זה היה נראה בקנה מידה ארגוני</p>
+    <h2>אותה ארכיטקטורה, שכבה שכבה, אצל שלושת הענקיות</h2>
+    <p class="lead">לא הושוו כאן מחירים — אין עדיין נתוני שימוש אמיתיים שמצדיקים חישוב עלות. ההשוואה היא על יכולת ותפקיד, לא על ₪.</p>
+    <div class="table-wrap">
+      <table class="rails">
+        <thead><tr><th>שכבה</th><th>TripCraft היום</th><th>AWS</th><th>Azure</th><th>GCP</th></tr></thead>
+        <tbody>
+          <tr><td>מסד נתונים + הרשאות</td><td>Postgres מנוהל, RLS מובנה בשורה</td><td>RDS for PostgreSQL + מדיניות IAM נפרדת</td><td>Azure Database for PostgreSQL + RLS ידני</td><td>Cloud SQL for PostgreSQL + IAM</td></tr>
+          <tr><td>אימות משתמשים</td><td>Supabase Auth — מייל/סיסמה + Google</td><td>Amazon Cognito</td><td>Microsoft Entra ID B2C</td><td>Identity Platform</td></tr>
+          <tr><td>אחסון קבצים</td><td>דלי פרטי, signed URLs</td><td>S3 + presigned URLs</td><td>Blob Storage + SAS tokens</td><td>Cloud Storage + signed URLs</td></tr>
+          <tr><td>קוד בצד שרת</td><td>Edge Functions (Deno)</td><td>Lambda</td><td>Azure Functions</td><td>Cloud Functions</td></tr>
+          <tr><td>מודל שפה</td><td>קריאה ישירה ל-Anthropic API</td><td>Bedrock (כולל מודלי Anthropic)</td><td>Azure OpenAI Service</td><td>Vertex AI Model Garden</td></tr>
+          <tr><td>מקור ידע / RAG</td><td>pgvector באותו Postgres</td><td>OpenSearch / Bedrock Knowledge Bases</td><td>Azure AI Search</td><td>Vertex AI Search</td></tr>
+          <tr><td>אוטומציה No-Code</td><td>n8n</td><td>Step Functions + EventBridge</td><td>Logic Apps</td><td>Cloud Workflows</td></tr>
+          <tr><td>אחסון סטטי + CDN</td><td>Vercel</td><td>Amplify / S3 + CloudFront</td><td>Static Web Apps</td><td>Firebase Hosting</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">הנימוק</p>
+    <h2>למה נבחרה הדרך הזו, ולא אחת מהחלופות</h2>
+    <div class="reasons">
+      <div class="reason">
+        <div class="h">מופע Postgres אחד במקום ארבעה שירותים</div>
+        <div class="b">RLS, Auth, Storage ו-pgvector כולם באותו Supabase — אין מאגר וקטורים נפרד לתחזק, לאבטח ולסנכרן מול מסד הנתונים הראשי.</div>
+      </div>
+      <div class="reason">
+        <div class="h">קריאה ישירה ל-Anthropic, לא דרך שכבת מודלים של ספק ענן</div>
+        <div class="b">שומר על גמישות מעבר בין ספקי ענן בלי תלות במודל של Bedrock/Azure OpenAI/Vertex — מפתח ה-API הוא הדבר היחיד שקושר לספק.</div>
+      </div>
+      <div class="reason">
+        <div class="h">n8n ולא Step Functions/Logic Apps</div>
+        <div class="b">הסילבוס (מודול 09) דורש היכרות מעשית עם כלי No-Code. תרחיש שנכתב כ-Lambda/Cloud Function לא מדגים את המודול, גם אם הוא עובד באותה מידה.</div>
+      </div>
+      <div class="reason">
+        <div class="h">שירותים מנוהלים בלבד, אין שרת שמנוהל ידנית</div>
+        <div class="b">לא Kubernetes, לא VM שצריך לעדכן — כל שכבה סקיילית אוטומטית וללא תחזוקת תשתית, מתאים לפרויקט של מפתח יחיד.</div>
+      </div>
+    </div>
+    <div class="callout">
+      <strong>מה במפורש לא נעשה כאן:</strong> לא הוקמה תשתית ענן ארגונית כדי לסמן וי מול הסילבוס — מודול 11 מבקש השוואה ותכנון, לא הטמעה. אם TripCraft יגיע לקנה מידה שמצדיק זאת (הרבה משתמשים בו-זמנית, דרישת SLA, ריבוי אזורים), זו הטבלה שממנה מתחילים.
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>TripCraft · מסמך החלטה — מודול 11, אקוסיסטם ענן</span>
+    <span>נכתב 2026-09-21</span>
+  </footer>
+
+</div>
