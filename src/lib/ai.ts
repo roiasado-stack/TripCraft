@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { AgentCard, Participant, PendingAction, Trip } from "./types";
+import type { AgentCard, KosherLookup, Participant, PendingAction, Trip } from "./types";
 
 export type TuneOption = "more_kids" | "calmer" | "cheaper" | "more_active";
 
@@ -112,7 +112,7 @@ export async function searchPhoto(tripId: string, query: string): Promise<string
 
 /**
  * Looks up approximate coordinates for `query` via the `generate` Edge
- * Function's `geocode` kind (a Nominatim search, no LLM call). Mirrors
+ * Function's `geocode` kind (Nominatim, then a capped Google fallback). Mirrors
  * searchPhoto's exact contract: never throws, never surfaces an error toast
  * — a missing geocode isn't a failure, it's just `null`, which simply means
  * that item won't get a pin on the map.
@@ -216,6 +216,28 @@ export async function fetchPlacePhoto(tripId: string, placeId: string): Promise<
     if (error) return null;
     const res = data as { url?: string | null; author?: PlacePhoto["author"]; maps_uri?: string | null };
     return res?.url ? { url: res.url, author: res.author ?? null, mapsUri: res.maps_uri ?? null } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Kosher places near the destination and Shabbat / yom tov times for the
+ * trip's dates (the `ask` function's `kosher` request — no model call).
+ * `shabbatOnly` skips the place search, so it never spends Google quota.
+ * Null on any failure; callers then fall back to the live search links.
+ */
+export async function lookupKosher(
+  tripId: string,
+  opts: { city?: string; shabbatOnly?: boolean } = {},
+): Promise<KosherLookup | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke("ask", {
+      body: { trip_id: tripId, kosher: { city: opts.city ?? "", shabbat_only: opts.shabbatOnly === true } },
+    });
+    if (error) return null;
+    const res = data as (KosherLookup & { ok?: boolean }) | null;
+    return res?.ok ? res : null;
   } catch {
     return null;
   }

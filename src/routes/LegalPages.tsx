@@ -108,6 +108,11 @@ export function TermsPage() {
         כשרות של מסעדות, זמני שבת, דרישות ויזה וכניסה למדינות, והמלצות בריאות ובטיחות. לפני כל החלטה יש לבדוק את
         המידע מול המקור הרשמי (חברת התעופה, המלון, השגרירות, גוף הכשרות וכו'). השימוש בתוכן הוא באחריותכם בלבד.
       </P>
+      <P>
+        מידע כשרות מוצג בשלוש רמות: "מאומת" (מאגר שנבדק מול מקור מוסמך, עם תאריך בדיקה, ופג אחרי שישה חודשים),
+        "נמצא במפה — לא מאומת" (מקומות שמסומנים ב-OpenStreetMap או ב-Google, שאינם אישור כשרות), ו"אין מידע". זמני
+        שבת וחג הם חישוב אוטומטי. בכל מקרה יש לוודא תעודת השגחה במקום ולבדוק זמנים מול בית חב״ד או רב מקומי.
+      </P>
 
       <H>3. חשבון משתמש</H>
       <UL>
@@ -234,10 +239,15 @@ export function PrivacyPage() {
         <li><strong>Vercel:</strong> אירוח האפליקציה.</li>
         <li><strong>Anthropic (Claude):</strong> עיבוד AI של בקשות, צ'אט וסריקות. לפי התנאים המסחריים שלה, היא לא משתמשת בתוכן שנשלח דרך ה-API שלה כדי לאמן מודלים.</li>
         <li><strong>Voyage AI:</strong> עיבוד טקסט של חלק מהשאלות בצ'אט, לצורך חיפוש במאגר הידע (למשל כשרות).</li>
-        <li><strong>Google:</strong> התחברות עם Google, אם בחרתם בה, וטעינת גופנים (Google Fonts).</li>
-        <li><strong>ויקיפדיה ו-OpenStreetMap:</strong> שמות מקומות נשלחים מהשרת שלנו כדי למצוא תמונה וקואורדינטות. אריחי המפה נטענים ישירות מ-OpenStreetMap, ולכן כתובת ה-IP שלכם נחשפת אליה.</li>
+        <li><strong>Google:</strong> התחברות עם Google, אם בחרתם בה, וטעינת גופנים (Google Fonts). בנוסף, השרת שלנו פונה ל-Google Places: בחיפוש מקומות כשרים נשלחות רק קואורדינטות היעד ומילת החיפוש, ולאיתור תמונה של מקום, או קואורדינטות כשהשירות החינמי לא מצא אותן, נשלח שם המקום. התוצאות לא נשמרות אצלנו, מלבד מזהה המקום.</li>
+        <li><strong>ויקיפדיה ו-OpenStreetMap:</strong> שמות מקומות נשלחים מהשרת שלנו כדי למצוא תמונה וקואורדינטות. בחיפוש מקומות כשרים ובתי כנסת נשלחות ל-OpenStreetMap (Overpass) רק קואורדינטות היעד. אריחי המפה נטענים ישירות מ-OpenStreetMap, ולכן כתובת ה-IP שלכם נחשפת אליה.</li>
+        <li><strong>Hebcal:</strong> לחישוב זמני שבת וחג נשלחות מהשרת שלנו קואורדינטות היעד ותאריכי הטיול.</li>
         <li><strong>שירות מייל:</strong> לשליחת הודעות שירות.</li>
       </UL>
+      <P>
+        לספקי המפות והזמנים (Google Places, OpenStreetMap, Hebcal) לא נשלחים שם, כתובת מייל, מזהה משתמש, מזהה טיול או
+        המיקום הנוכחי שלכם.
+      </P>
       <P>
         חלק מהספקים שומרים ומעבדים מידע מחוץ לישראל. ההעברה נעשית לספקים שמחויבים לשמור על המידע ולהשתמש בו רק לצורך
         מתן השירות. נמסור מידע לרשויות רק אם נחויב לכך על פי דין.
@@ -337,7 +347,17 @@ export function CreditsPage() {
       <P>
         נתוני המפה © תורמי{" "}
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">OpenStreetMap</a>,
-        ברישיון ODbL. איתור המיקומים נעשה באמצעות Nominatim.
+        ברישיון ODbL. איתור המיקומים נעשה באמצעות Nominatim. מקומות כשרים ובתי כנסת "שנמצאו במפה" מגיעים מ-OpenStreetMap
+        (דרך Overpass API) ומ-Google Maps (Google Places), ומוצגים כלא מאומתים.
+      </P>
+
+      <H>זמני שבת וחג</H>
+      <P>
+        זמני הדלקת נרות, הבדלה וחגים מחושבים על ידי{" "}
+        <a href="https://www.hebcal.com" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">Hebcal.com</a>,
+        ברישיון{" "}
+        <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">CC BY 4.0</a>.
+        הזמנים מוצגים כפי שהתקבלו, ללא שינוי.
       </P>
 
       <H>גופנים</H>
@@ -358,7 +378,7 @@ export function CreditsPage() {
 
       <H>סימני מסחר</H>
       <P>
-        Google, Google Maps, WhatsApp, Wikipedia, OpenStreetMap ו-Claude הם סימני מסחר של בעליהם. השימוש בשמות נועד רק
+        Google, Google Maps, WhatsApp, Wikipedia, OpenStreetMap, Hebcal ו-Claude הם סימני מסחר של בעליהם. השימוש בשמות נועד רק
         לתאר את השירות ואינו מעיד על שותפות או חסות.
       </P>
     </LegalLayout>

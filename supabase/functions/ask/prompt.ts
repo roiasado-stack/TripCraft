@@ -35,26 +35,44 @@ export type KnowledgeDestination = "cyprus" | "rome" | "batumi";
  * יוון"), not a fixed enum — so matching the 3 destinations the knowledge
  * base actually covers has to be a keyword match, not an exact one. A trip
  * to anywhere else correctly returns null, and find_kosher's caller must
- * treat that as "not covered" without calling the embeddings API at all.
+ * treat that as "not covered by the curated layer" without calling the
+ * embeddings API at all.
+ *
+ * City names only, never a country: the Rome data says nothing about Milan,
+ * and "Georgia" is also a US state, while the data is Batumi only. Cyprus is
+ * the exception — its items cover Larnaca, Limassol and Paphos, and say which.
+ * Whole words only ("roma" must not match "Romania"), allowing the Hebrew
+ * prefixes ב/ל/מ/ו ("טיול ברומא").
  */
 const DESTINATION_KEYWORDS: Record<KnowledgeDestination, string[]> = {
   cyprus: ["קפריסין", "cyprus", "לרנקה", "larnaca", "לימסול", "limassol", "איה נאפה", "ayia napa", "פאפוס", "paphos"],
-  rome: ["רומא", "rome", "roma", "איטליה", "italy"],
-  batumi: ["באטומי", "batumi", "גאורגיה", "georgia"],
+  rome: ["רומא", "rome", "roma"],
+  batumi: ["באטומי", "batumi"],
 };
 
+const HEBREW_PREFIXES = ["", "ב", "ל", "מ", "ו", "וב", "ול", "ומ", "ה"];
+
+function normalizeWords(s: string): string {
+  return ` ${(s ?? "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+}
+
 export function matchKnowledgeDestination(tripDestination: string): KnowledgeDestination | null {
-  const d = (tripDestination ?? "").toLowerCase();
+  const hay = normalizeWords(tripDestination);
   for (const slug of Object.keys(DESTINATION_KEYWORDS) as KnowledgeDestination[]) {
-    if (DESTINATION_KEYWORDS[slug].some((k) => d.includes(k.toLowerCase()))) return slug;
+    const hit = DESTINATION_KEYWORDS[slug].some((k) => {
+      const word = normalizeWords(k).trim();
+      const prefixes = /[֐-׿]/.test(word) ? HEBREW_PREFIXES : [""];
+      return prefixes.some((p) => hay.includes(` ${p}${word} `));
+    });
+    if (hit) return slug;
   }
   return null;
 }
 
 /**
  * Tool definitions for the agentic loop in ask/index.ts. `find_kosher` is
- * read-only and executes inline in the loop (currently a stub — pgvector
- * lands Day 9-11). The other two are writes: the loop never touches the
+ * read-only and executes inline in the loop (curated knowledge + live map
+ * search + Hebcal, see ask/kosher.ts). The other two are writes: the loop never touches the
  * database for them — it only records the proposed call and returns it to
  * the client, which shows an approval card and performs the actual write
  * itself only once the user confirms (see ask/index.ts's confirm_action
@@ -98,11 +116,15 @@ export const TOOLS = [
   {
     name: "find_kosher",
     description:
-      "מחפש מידע מאומת על כשרות, זמני שבת, בתי חב״ד או נקודות עניין דתיות ביעד הטיול, ממקור ידע ייעודי. אין לו גישה כללית לאינטרנט — אם המקור לא מכסה את היעד, הוא מחזיר זאת במפורש.",
+      "מחפש מידע על כשרות, זמני שבת וחג, בתי חב״ד ובתי כנסת ליד יעד הטיול. מחזיר שלוש רמות אמינות: מאגר מאומת (עם מקור ותאריך), מקומות שמסומנים כשרים במפה (OpenStreetMap / Google — לא מאומתים), או \"אין מידע\". זמני שבת וחג הם חישוב אוטומטי של Hebcal לתאריכי הטיול. אין לו גישה כללית לאינטרנט.",
     input_schema: {
       type: "object",
       properties: {
         query: { type: "string", description: "מה מחפשים, בעברית" },
+        city: {
+          type: "string",
+          description: "עיר ספציפית לחיפוש, אם השאלה על עיר אחרת מהיעד הראשי או שהיעד הוא מדינה שלמה. אופציונלי.",
+        },
       },
       required: ["query"],
     },
@@ -180,7 +202,12 @@ export const INSTRUCTIONS = `אתה סוכן נסיעות ישראלי שמלו�
 - ענה בטקסט חופשי רגיל בעברית — אל תחזיר JSON ואל תעטוף את התשובה במבנה כלשהו. בלי Markdown: בלי כוכביות, כותרות או טבלאות. הטקסט שאתה כותב הוא התשובה שהמשתמש רואה.
 
 כלים העומדים לרשותך:
-- find_kosher — לכל שאלה על כשרות, צמחונות, שבת (זמני כניסה/יציאה), בית חב״ד או נקודת עניין דתית ביעד. תמיד קרא לכלי הזה לשאלות כאלה במקום לענות מהזיכרון שלך. אם הכלי מחזיר שאין כיסוי ליעד — אמור זאת במפורש למשתמש, אל תנחש ואל תמציא שם מקום.
+- find_kosher — לכל שאלה על כשרות, שבת או חג (זמני כניסה/יציאה), בית חב״ד או בית כנסת ביעד. תמיד קרא לכלי הזה לשאלות כאלה במקום לענות מהזיכרון שלך. אם הכלי מחזיר שאין מידע — אמור זאת במפורש למשתמש, אל תנחש ואל תמציא שם מקום. אם הוא מבקש עיר ספציפית — שאל את המשתמש באיזו עיר.
+  שלוש רמות אמינות, ואסור להעלות רמה:
+  * "מאומת" — רק פריט שהכלי סימן tier=verified. ציין את המקור ואת תאריך הבדיקה.
+  * "נמצא במפה — לא מאומת, יש לוודא השגחה" — כל מקום מ-OpenStreetMap או Google, וכל פריט ישן שהכלי סימן tier=unverified. כתוב את הניסוח הזה ליד המקום. לעולם אל תכתוב שמקום כזה "כשר" או "מסעדה כשרה".
+  * "אין מידע" — כשאין תוצאות. הצע את קישורי החיפוש ובית חב״ד שהכלי החזיר.
+  אל תקרא למקום "כשר" בשום מקרה בלי מקור מהכלי. זמני שבת וחג מהכלי (shabbat_times) הם חישוב אוטומטי: כשנשאלת עליהם, מסור את השעות עצמן בדיוק כפי שהן (אל תסתפק בקישור), וציין שיש לבדוק מול בית חב״ד או רב מקומי.
 - add_to_itinerary — כשאתה ממליץ על משהו קונקרטי שמתאים להוספה למסלול (עם תאריך מתאריכי הטיול).
 - add_suggestion — כשאתה ממליץ על מקום או פעילות שמתאימים להוספה לרשימת ההמלצות, בלי תאריך מסוים.
 כשאתה קורא ל-add_to_itinerary או add_suggestion: הפעולה לא נכתבת מיד, המשתמש עדיין צריך לאשר אותה בכרטיס שיוצג לו. אל תגיד "הוספתי" — תגיד שהכנת הצעה, או פשוט תן את התשובה שלך והכרטיס יופיע לצידה.`;

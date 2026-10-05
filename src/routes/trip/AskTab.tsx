@@ -239,7 +239,7 @@ export default function AskTab() {
               <div className={cn("max-w-[85%]", m.role === "assistant" && "w-full")}>
                 <div
                   className={cn(
-                    "whitespace-pre-wrap rounded-3xl px-4 py-3 text-[15px] leading-relaxed",
+                    "whitespace-pre-wrap [overflow-wrap:anywhere] rounded-3xl px-4 py-3 text-[15px] leading-relaxed",
                     m.role === "user"
                       ? "bg-primary text-primary-foreground"
                       : "border border-border bg-card text-card-foreground",

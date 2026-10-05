@@ -286,3 +286,68 @@ export interface TripChatMessage {
   pending_actions: PendingAction[];
   created_at: string;
 }
+
+/* ----------------------------- Kosher layer ------------------------------ */
+// Shapes returned by the `ask` Edge Function's `kosher` request
+// (supabase/functions/ask/kosher.ts). Three trust tiers: only "verified"
+// may ever be presented as kosher.
+
+export type KosherTier = "verified" | "unverified" | "none";
+
+export interface KosherPlace {
+  tier: "verified" | "unverified";
+  name: string;
+  kind: "restaurant" | "shop" | "synagogue" | "other";
+  address: string | null;
+  lat: number;
+  lng: number;
+  distance_km: number;
+  source: "osm" | "google";
+  source_label: string;
+  source_url: string;
+  checked_on: string | null;
+  maps_url: string;
+  osm_diet: "yes" | "only" | null;
+}
+
+export interface CuratedKosherItem {
+  tier: "verified" | "unverified";
+  title: string;
+  content: string;
+  category: string;
+  source_url: string;
+  source_verified_on: string;
+  /** Ready-made Hebrew tier line, e.g. "מאומת · מקור: … · נבדק 09/2026". */
+  label: string;
+}
+
+export interface ShabbatDay {
+  date: string;
+  /** Local "HH:MM" at the destination. */
+  candles: string | null;
+  havdalah: string | null;
+  /** Hebrew yom tov name, if one falls on this date. */
+  holiday: string | null;
+  /** Shabbat or yom tov — restricted until havdalah. */
+  restricted: boolean;
+}
+
+export interface ShabbatInfo {
+  tzid: string | null;
+  days: ShabbatDay[];
+  source_label: string;
+  source_url: string;
+}
+
+export interface KosherLookup {
+  place: string;
+  point: { lat: number; lng: number; label: string } | null;
+  too_wide: boolean;
+  curated: CuratedKosherItem[];
+  places: KosherPlace[];
+  synagogues: KosherPlace[];
+  shabbat: ShabbatInfo | null;
+  google: "used" | "no_key" | "cap" | "demo" | "failed" | "skipped";
+  osm_failed: boolean;
+  search_links: { kosher: string; chabad: string };
+}
