@@ -15,7 +15,8 @@ import { cn } from "@/lib/utils";
 import { SUGGESTION_KINDS } from "@/lib/trip-options";
 import { destinationPicks, pickToRow } from "@/lib/destinations";
 import { DirectionsLink, LinkChip, MapLink } from "@/components/MapLink";
-import { chabadSearchUrl, kosherSearchUrl, resolveMapUrl, vegetarianSearchUrl } from "@/lib/maps";
+import { resolveMapUrl, vegetarianSearchUrl } from "@/lib/maps";
+import { KosherPanel } from "@/components/KosherPanel";
 import { CardCoverImage } from "@/components/MediaCard";
 import { TripMap, type TripMapItem } from "@/components/TripMap";
 
@@ -201,21 +202,17 @@ export default function SuggestionsTab() {
         />
       )}
 
-      {/* Dietary needs: live searches, because kosher venues change often. */}
-      {(needsKosher || needsVeg) && (
+      {/* Kosher: tiered results (verified / on the map / no info) plus live search links. */}
+      {needsKosher && <KosherPanel trip={trip} />}
+
+      {/* Vegetarian: a live search, because venues change often. */}
+      {needsVeg && (
         <Card className="mb-3 p-3">
-          <div className="mb-1.5 text-sm font-bold">
-            {needsKosher ? "🍽️ אוכל כשר ב" : "🥗 אוכל צמחוני ב"}
-            {trip.destination}
-          </div>
+          <div className="mb-1.5 text-sm font-bold">🥗 אוכל צמחוני ב{trip.destination}</div>
           <div className="flex flex-wrap gap-1.5">
-            {needsKosher && <LinkChip url={kosherSearchUrl(trip.destination)} label="מסעדות כשרות" />}
-            {needsKosher && <LinkChip url={chabadSearchUrl(trip.destination)} label="בית חב״ד" />}
-            {needsVeg && <LinkChip url={vegetarianSearchUrl(trip.destination)} label="צמחוני / טבעוני" />}
+            <LinkChip url={vegetarianSearchUrl(trip.destination)} label="צמחוני / טבעוני" />
           </div>
-          <p className="mt-1.5 text-[11px] text-muted-foreground">
-            חיפוש חי — תמיד מעודכן. כדאי לאמת כשרות מול בית חב״ד המקומי לפני הנסיעה.
-          </p>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">חיפוש חי — תמיד מעודכן.</p>
         </Card>
       )}
 
@@ -301,6 +298,8 @@ export default function SuggestionsTab() {
                       {s.tags.map((t) => (
                         <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                           {t}
+                          {/* A saved suggestion is never a kosher source — say so next to the claim. */}
+                          {/כשר|kosher/i.test(t) && " · לא מאומת"}
                         </span>
                       ))}
                     </div>

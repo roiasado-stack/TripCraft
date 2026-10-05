@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileUp, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { FileUp, Flame, Pencil, Plus, Sparkles, Trash2, TriangleAlert } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { ItineraryItem } from "@/lib/types";
+import type { ItineraryItem, ShabbatDay, ShabbatInfo } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { can } from "@/lib/permissions";
 import { TripHeader, ScreenTitle } from "@/components/TripHeader";
@@ -13,7 +13,7 @@ import { mapsUrl, resolveMapUrl } from "@/lib/maps";
 import { useToast } from "@/hooks/use-toast";
 import { ambientPhoto } from "@/lib/photos";
 import { FillPhotos } from "@/components/FillPhotos";
-import { generateContent, searchCoordinates, searchPhoto } from "@/lib/ai";
+import { generateContent, lookupKosher, searchCoordinates, searchPhoto } from "@/lib/ai";
 import { daysBetween, formatDayHeb, ITINERARY_CATEGORIES, itineraryCategory } from "@/lib/trip-options";
 import { TripMap, type TripMapItem } from "@/components/TripMap";
 
@@ -24,6 +24,26 @@ import { TripMap, type TripMapItem } from "@/components/TripMap";
  */
 function scopeFor(category: string, destination: string): string | null {
   return category === "flight" ? null : destination;
+}
+
+/**
+ * Whether an item falls inside Shabbat / yom tov: on a restricted day, any time
+ * before havdalah (or all day, when it runs into a second day); on an erev,
+ * from candle lighting. An item with no time on a restricted day counts — the
+ * warning is a nudge to check, not a ruling.
+ */
+function shabbatConflict(day: ShabbatDay | undefined, startTime: string | null): boolean {
+  if (!day) return false;
+  const t = startTime?.slice(0, 5) ?? null;
+  if (day.restricted) return !(day.havdalah && t && t >= day.havdalah);
+  return !!(day.candles && t && t >= day.candles);
+}
+
+/** The yom tov that starts this evening, if tomorrow is one (for erev labels). */
+function nextDayHoliday(byDate: Map<string, ShabbatDay>, date: string): string | null {
+  const next = new Date(`${date}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return byDate.get(next.toISOString().slice(0, 10))?.holiday ?? null;
 }
 
 type Draft = {
@@ -53,6 +73,23 @@ export default function ItineraryTab() {
   const [editing, setEditing] = useState<Draft | null>(null);
   const [importing, setImporting] = useState(false);
   const [view, setView] = useState<"list" | "map">("list");
+  const [shabbat, setShabbat] = useState<ShabbatInfo | null>(null);
+
+  // Shabbat / yom tov times (Hebcal, via the ask function — no model, no
+  // Google) for trips where someone keeps kosher.
+  const keepsKosher = participants.some((p) => p.preferences?.includes("kosher"));
+  useEffect(() => {
+    if (!keepsKosher || !trip.start_date || !trip.end_date) {
+      setShabbat(null);
+      return;
+    }
+    let live = true;
+    lookupKosher(trip.id, { shabbatOnly: true }).then((r) => live && setShabbat(r?.shabbat ?? null));
+    return () => {
+      live = false;
+    };
+  }, [keepsKosher, trip.id, trip.start_date, trip.end_date]);
+  const shabbatByDate = useMemo(() => new Map((shabbat?.days ?? []).map((d) => [d.date, d])), [shabbat]);
 
   const load = async () => {
     const { data } = await supabase
@@ -243,6 +280,25 @@ export default function ItineraryTab() {
                 </span>
                 <h3 className="font-bold">{formatDayHeb(day)}</h3>
               </div>
+              {shabbatByDate.get(day) && (
+                <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-muted px-3 py-1.5 text-xs font-semibold">
+                  <Flame className="size-3.5 text-accent" />
+                  {shabbatByDate.get(day)!.holiday && <span>{shabbatByDate.get(day)!.holiday}</span>}
+                  {!shabbatByDate.get(day)!.restricted && nextDayHoliday(shabbatByDate, day) && (
+                    <span>ערב {nextDayHoliday(shabbatByDate, day)}</span>
+                  )}
+                  {shabbatByDate.get(day)!.candles && (
+                    <span>
+                      {/* On Shabbat / yom tov itself, the next night's candles are lit after dark from an existing flame. */}
+                      {shabbatByDate.get(day)!.restricted
+                        ? `הדלקת נרות לא לפני ${shabbatByDate.get(day)!.candles}, מאש קיימת`
+                        : `הדלקת נרות ${shabbatByDate.get(day)!.candles}`}
+                    </span>
+                  )}
+                  {shabbatByDate.get(day)!.havdalah && <span>הבדלה {shabbatByDate.get(day)!.havdalah}</span>}
+                  {!shabbatByDate.get(day)!.candles && !shabbatByDate.get(day)!.havdalah && <span>שבת / חג</span>}
+                </div>
+              )}
               <div className="flex flex-col gap-2">
                 {(grouped[day] ?? []).map((it) => {
                   const cat = itineraryCategory(it.category);
@@ -263,6 +319,15 @@ export default function ItineraryTab() {
                           <span className="truncate font-semibold">{it.title}</span>
                         </div>
                         {it.location && <div className="text-xs text-muted-foreground">📍 {it.location}</div>}
+                        {shabbatConflict(shabbatByDate.get(day), it.start_time) && (
+                          <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sun px-2 py-0.5 text-[11px] font-semibold text-sun-foreground">
+                            <TriangleAlert className="size-3" />
+                            {(shabbatByDate.get(day)!.restricted ? shabbatByDate.get(day)!.holiday : nextDayHoliday(shabbatByDate, day))
+                              ? "בחג"
+                              : "בשבת"}
+                            {shabbatByDate.get(day)!.havdalah ? ` — לפני ההבדלה (${shabbatByDate.get(day)!.havdalah})` : ""}
+                          </div>
+                        )}
                         {it.description && <p className="mt-0.5 text-sm text-muted-foreground">{it.description}</p>}
                         {it.location && (
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -296,6 +361,17 @@ export default function ItineraryTab() {
             </div>
           ))}
         </div>
+      )}
+
+      {shabbat && shabbat.days.length > 0 && view === "list" && (
+        <p className="mt-4 text-[11px] text-muted-foreground">
+          זמני שבת וחג לפי{" "}
+          <a href={shabbat.source_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+            Hebcal.com
+          </a>{" "}
+          (CC BY 4.0), לפי מיקום היעד{shabbat.tzid ? ` ובשעון המקומי (${shabbat.tzid})` : ""}. חישוב אוטומטי, יש לבדוק מול
+          בית חב״ד או רב מקומי.
+        </p>
       )}
 
       <ImportItinerary

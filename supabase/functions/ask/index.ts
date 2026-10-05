@@ -22,14 +22,36 @@
  * only ever writes to itinerary_items or suggestions — never documents,
  * never user_roles.
  *
+ * find_kosher is also live worldwide (./kosher.ts): curated items first, then
+ * places tagged kosher on OpenStreetMap and found by Google Places near the
+ * destination, plus Hebcal Shabbat/yom tov times — each result carrying its
+ * trust tier. A request with `kosher` set runs the same lookup without the
+ * model, for the Suggestions and Itinerary screens.
+ *
  * Deploy:
  *   supabase functions deploy ask
  *   supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
  *   supabase secrets set VOYAGE_API_KEY=pa-...
+ *   supabase secrets set GOOGLE_PLACES_API_KEY=...   (optional: without it, OSM only)
  */
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { ANTHROPIC_URL, buildSnapshot, INSTRUCTIONS, matchKnowledgeDestination, MODEL, TOOLS, type Participant } from "./prompt.ts";
+import {
+  type CuratedItem,
+  geocodeDestination,
+  googleGeocode,
+  isTooWide,
+  type KosherPlace,
+  mergePlaces,
+  searchGoogleKosher,
+  searchOsmKosher,
+  searchRadiusM,
+  shabbatTimes,
+  type ShabbatInfo,
+  TIER_LABEL,
+  toCuratedItem,
+} from "./kosher.ts";
 
 const VOYAGE_URL = "https://api.voyageai.com/v1/embeddings";
 const VOYAGE_MODEL = "voyage-4-lite";
@@ -67,6 +89,33 @@ const APP_DAILY_CAP_USD = 5.0;
 // of them together.
 const DEMO_DAILY_CAP_USD = 0.1;
 const DEMO_APP_DAILY_CAP_USD = 1.0;
+
+// Google Places kosher search, approved budget $20/month (approvals #18). A
+// Text Search Pro call is about $0.032, so 600 calls ≈ $19 even if the monthly
+// free tier didn't exist. Counted as cost-0 agent_runs rows (kind below) so
+// they don't eat the AI caps; the count itself is the cap. The per-user limit
+// keeps one person from using up the month.
+const GOOGLE_KOSHER_KIND = "google_kosher_search";
+const GOOGLE_KOSHER_MONTHLY_CALLS = 600;
+const GOOGLE_KOSHER_PER_USER_PER_DAY = 20;
+
+/** Reserves one Google call against the caps; false = don't call Google. */
+async function reserveGoogleCall(userId: string, tripId: string): Promise<boolean> {
+  const db = adminDb();
+  if (!db) return false;
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+  const [month, mine] = await Promise.all([
+    db.from("agent_runs").select("id", { count: "exact", head: true }).eq("kind", GOOGLE_KOSHER_KIND).gte("created_at", monthStart),
+    db.from("agent_runs").select("id", { count: "exact", head: true }).eq("kind", GOOGLE_KOSHER_KIND).eq("user_id", userId).gte("created_at", dayStart),
+  ]);
+  // A failed count is treated as "over": the cap must fail closed.
+  if (month.error || mine.error) return false;
+  if ((month.count ?? 0) >= GOOGLE_KOSHER_MONTHLY_CALLS || (mine.count ?? 0) >= GOOGLE_KOSHER_PER_USER_PER_DAY) return false;
+  const { error } = await db.from("agent_runs").insert({ trip_id: tripId, user_id: userId, kind: GOOGLE_KOSHER_KIND, cost_usd: 0, status: "ok" });
+  return !error;
+}
 
 /** True once the caller, the demo pool (for anonymous callers) or the whole app has hit today's cap. */
 // deno-lint-ignore no-explicit-any
@@ -107,6 +156,8 @@ type Body = {
   message?: string;
   history?: Turn[];
   confirm_action?: PendingAction;
+  /** Kosher places and Shabbat times for the screens (no model call). */
+  kosher?: { city?: string; shabbat_only?: boolean };
 };
 
 function json(payload: unknown, status = 200): Response {
@@ -115,11 +166,6 @@ function json(payload: unknown, status = 200): Response {
     headers: { ...cors, "Content-Type": "application/json" },
   });
 }
-
-const NOT_COVERED = {
-  available: false,
-  message: "אין מקור ידע מאומת ליעד הזה במערכת (המאגר מכסה כרגע רק קפריסין, רומא ובאטומי). אל תנחש — אמור זאת למשתמש במפורש.",
-};
 
 /** Embeds one query string with Voyage AI. input_type "query" (vs
  *  "document", used when seeding — see evals/seed-knowledge.ts) applies
@@ -136,65 +182,275 @@ async function embedQuery(voyageKey: string, text: string): Promise<{ embedding:
   return { embedding: payload.data[0].embedding, tokens: Number(payload.usage?.total_tokens ?? 0) };
 }
 
-type KnowledgeMatch = {
+type KnowledgeRow = {
   title: string;
   content: string;
   category: string;
   source_url: string;
   source_verified_on: string;
-  similarity: number;
 };
 
 /**
- * Semantic search over the 3-destination knowledge base. Two gates before a
- * result counts as "found," both required by the brief: the destination
- * itself must be covered (checked before this even runs — see the call
- * site), and matches below min_similarity are filtered server-side inside
- * match_knowledge_chunks — cosine similarity always returns *something*, so
- * without that floor an uncovered topic within a covered destination would
- * still surface an irrelevant chunk instead of an honest "not found."
+ * The curated layer for one of the 3 covered cities. With a question and a
+ * Voyage key: semantic search, where match_knowledge_chunks drops matches
+ * under its similarity floor (cosine similarity always returns *something*,
+ * so without it an uncovered topic would surface an irrelevant chunk). With
+ * no question (the Suggestions screen) or no key: that city's kosher and
+ * Chabad items, read with the service role (the table has no user grants).
  */
-async function handleFindKosher(
-  supabase: ReturnType<typeof createClient>,
+async function curatedLayer(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
   voyageKey: string | undefined,
-  tripDestination: string,
-  input: Record<string, unknown>,
-): Promise<{ result: Record<string, unknown>; tokens: number }> {
-  const destinationSlug = matchKnowledgeDestination(tripDestination);
-  if (!destinationSlug) return { result: NOT_COVERED, tokens: 0 };
-  if (!voyageKey) return { result: NOT_COVERED, tokens: 0 };
-
-  const query = String(input.query ?? "").trim();
-  if (!query) return { result: NOT_COVERED, tokens: 0 };
-
+  slug: string,
+  query: string,
+): Promise<{ items: CuratedItem[]; tokens: number }> {
   try {
-    const { embedding, tokens } = await embedQuery(voyageKey, query);
-    const { data, error } = await supabase.rpc("match_knowledge_chunks", {
-      query_embedding: embedding,
-      filter_destination: destinationSlug,
-      match_count: 4,
-    });
-    if (error) throw error;
-
-    const matches = (data ?? []) as KnowledgeMatch[];
-    if (!matches.length) return { result: NOT_COVERED, tokens };
-
-    return {
-      result: {
-        available: true,
-        results: matches.map((m) => ({
-          title: m.title,
-          content: m.content,
-          source_url: m.source_url,
-          source_verified_on: m.source_verified_on,
-        })),
-        instruction: "צטט את המקור (source_url) ואת תאריך האימות (source_verified_on) בתשובה למשתמש.",
-      },
-      tokens,
-    };
-  } catch {
-    return { result: NOT_COVERED, tokens: 0 };
+    if (voyageKey && query) {
+      const { embedding, tokens } = await embedQuery(voyageKey, query);
+      const { data, error } = await supabase.rpc("match_knowledge_chunks", {
+        query_embedding: embedding,
+        filter_destination: slug,
+        match_count: 4,
+      });
+      if (error) throw error;
+      return { items: ((data ?? []) as KnowledgeRow[]).map(toCuratedItem), tokens };
+    }
+    const { data } = (await adminDb()
+      ?.from("knowledge_chunks")
+      .select("title, content, category, source_url, source_verified_on")
+      .eq("destination", slug)
+      .in("category", ["kosher", "chabad"])
+      .order("category")) ?? { data: [] };
+    return { items: ((data ?? []) as KnowledgeRow[]).map(toCuratedItem), tokens: 0 };
+  } catch (e) {
+    console.error("curated kosher lookup failed", e);
+    return { items: [], tokens: 0 };
   }
+}
+
+type GoogleStatus = "used" | "no_key" | "cap" | "demo" | "failed" | "skipped";
+
+type KosherLookup = {
+  /** Where we searched: the trip destination, or the city the agent asked about. */
+  place: string;
+  point: { lat: number; lng: number; label: string } | null;
+  /** Geocoded to a whole country/large region — no live search around it. */
+  too_wide: boolean;
+  curated: CuratedItem[];
+  places: KosherPlace[];
+  synagogues: KosherPlace[];
+  shabbat: ShabbatInfo | null;
+  google: GoogleStatus;
+  osm_failed: boolean;
+  search_links: { kosher: string; chabad: string };
+  voyage_tokens: number;
+  translate_cost_usd: number;
+  /** Where the coordinates came from, for the agent_runs diag line. */
+  geo: string;
+};
+
+/**
+ * One kosher lookup, shared by the agent's find_kosher tool and the
+ * no-model `kosher` request. Every source fails soft: a down service only
+ * shrinks the answer, it never fails the request.
+ */
+async function kosherLookup(opts: {
+  // deno-lint-ignore no-explicit-any
+  supabase: any;
+  apiKey: string;
+  voyageKey: string | undefined;
+  trip: { id: string; destination: string; start_date: string | null; end_date: string | null };
+  userId: string;
+  isAnonymous: boolean;
+  city: string;
+  query: string;
+  wantPlaces: boolean;
+  wantShabbat: boolean;
+}): Promise<KosherLookup> {
+  const place = (opts.city || opts.trip.destination || "").trim().slice(0, 200);
+  const db = adminDb();
+  const result: KosherLookup = {
+    place,
+    point: null,
+    too_wide: false,
+    curated: [],
+    places: [],
+    synagogues: [],
+    shabbat: null,
+    google: "skipped",
+    osm_failed: false,
+    search_links: {
+      kosher: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`kosher restaurant ${place}`)}`,
+      chabad: `https://www.chabad.org/centers/default_cdo/jewish/directory.htm?searchQuery=${encodeURIComponent(place)}`,
+    },
+    voyage_tokens: 0,
+    translate_cost_usd: 0,
+    geo: "none",
+  };
+  const googleKey = Deno.env.get("GOOGLE_PLACES_API_KEY");
+
+  // Hebrew destination Nominatim can't read → one short model call, at most
+  // once per destination (geocodeDestination caches hits and misses).
+  const translate = async (q: string): Promise<string> => {
+    if (await overDailyCap(opts.supabase, opts.isAnonymous)) return q;
+    try {
+      const res = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": opts.apiKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 40,
+          messages: [{
+            role: "user",
+            content: `Translate this Hebrew travel destination to its English place name, as you would type it into a map search (e.g. "Milan, Italy"). Reply with the name only: "${q}"`,
+          }],
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) return q;
+      const payload = await res.json();
+      const usage = payload?.usage ?? {};
+      result.translate_cost_usd +=
+        (Number(usage.input_tokens ?? 0) / 1_000_000) * PRICE_PER_MTOK_INPUT_USD +
+        (Number(usage.output_tokens ?? 0) / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+      const text = (payload?.content ?? []).filter((b: { type: string }) => b.type === "text").map((b: { text: string }) => b.text).join(" ");
+      return text.split("\n")[0].replace(/["׳״]/g, "").trim().slice(0, 100) || q;
+    } catch {
+      return q;
+    }
+  };
+
+  // Google as the geocoder of last resort — budget-counted, never for demo visitors.
+  const geocodeFallback = googleKey && !opts.isAnonymous
+    ? async (q: string) => ((await reserveGoogleCall(opts.userId, opts.trip.id)) ? googleGeocode(googleKey, q) : null)
+    : undefined;
+
+  const slug = matchKnowledgeDestination(place);
+  const [curated, geocoded] = await Promise.all([
+    slug && opts.wantPlaces ? curatedLayer(opts.supabase, opts.voyageKey, slug, opts.query) : Promise.resolve({ items: [], tokens: 0 }),
+    geocodeDestination(db, place, translate, geocodeFallback),
+  ]);
+  result.curated = curated.items;
+  result.voyage_tokens = curated.tokens;
+  result.geo = geocoded.error ? `${geocoded.via} (${geocoded.error})` : geocoded.via;
+  const point = geocoded.point;
+  if (!point) return result;
+  result.point = { lat: point.lat, lng: point.lng, label: point.label };
+
+  if (opts.wantShabbat && opts.trip.start_date && opts.trip.end_date) {
+    result.shabbat = await shabbatTimes(db, point.lat, point.lng, opts.trip.start_date, opts.trip.end_date);
+  }
+  if (!opts.wantPlaces) return result;
+  if (isTooWide(point)) {
+    result.too_wide = true;
+    return result;
+  }
+
+  const radius = searchRadiusM(point);
+  const googleSearch = async (): Promise<KosherPlace[]> => {
+    if (!googleKey) {
+      result.google = "no_key";
+      return [];
+    }
+    // Demo visitors never spend Google quota (same rule as generate's place photos).
+    if (opts.isAnonymous) {
+      result.google = "demo";
+      return [];
+    }
+    if (!(await reserveGoogleCall(opts.userId, opts.trip.id))) {
+      result.google = "cap";
+      return [];
+    }
+    try {
+      const found = await searchGoogleKosher(googleKey, point.lat, point.lng, radius);
+      result.google = "used";
+      return found;
+    } catch (e) {
+      console.error("google kosher search failed", e);
+      result.google = "failed";
+      return [];
+    }
+  };
+  const [osm, google] = await Promise.all([
+    searchOsmKosher(db, point.lat, point.lng, radius).catch(() => {
+      result.osm_failed = true;
+      return [] as KosherPlace[];
+    }),
+    googleSearch(),
+  ]);
+  result.synagogues = mergePlaces(osm.filter((p) => p.kind === "synagogue"), []).slice(0, 5);
+  result.places = mergePlaces(osm.filter((p) => p.kind !== "synagogue"), google);
+  return result;
+}
+
+/** The find_kosher tool result: tiers spelled out so the model can't blur them. */
+function kosherToolResult(k: KosherLookup): Record<string, unknown> {
+  // The curated "shabbat" items are only links saying "no fixed time — check
+  // Chabad". Next to real Hebcal times the model followed them and withheld
+  // the times, so they're dropped whenever times were calculated.
+  const curated = k.shabbat?.days.length ? k.curated.filter((c) => c.category !== "shabbat") : k.curated;
+  const verified = curated.filter((c) => c.tier === "verified");
+  const staleCurated = curated.filter((c) => c.tier === "unverified");
+  const shabbat = k.shabbat?.days.length
+    ? {
+        source: k.shabbat.source_label,
+        time_zone: k.shabbat.tzid,
+        // On a restricted day (second night of yom tov, or yom tov after
+        // Shabbat) the listed time is the earliest lighting, after nightfall and
+        // from an existing flame — not the time Shabbat/yom tov begins.
+        days: k.shabbat.days.map((d) => ({
+          date: d.date,
+          candle_lighting: d.candles && d.restricted
+            ? `לא לפני ${d.candles} — אחרי צאת השבת/החג, מאש קיימת (זו לא שעת כניסה)`
+            : d.candles,
+          havdalah: d.havdalah,
+          yom_tov: d.holiday,
+        })),
+        how_to_read:
+          "שעת כניסת שבת/חג היא candle_lighting ביום שלפני היום המוגבל (ערב שבת או ערב חג). אם היום הראשון של הטיול כבר שבת או חג, הכניסה הייתה ביום שלפני הטיול — אמור זאת.",
+      }
+    : null;
+  const hasAnything = verified.length || staleCurated.length || k.places.length || k.synagogues.length;
+
+  return {
+    searched_near: k.point?.label ?? k.place,
+    coverage: verified.length ? "verified" : k.places.length || staleCurated.length ? "map_only" : "none",
+    verified_items: verified.map((c) => ({
+      tier: c.tier, label: c.label, title: c.title, content: c.content,
+      source_url: c.source_url, source_verified_on: c.source_verified_on,
+    })),
+    unverified_items: [
+      ...staleCurated.map((c) => ({ tier: c.tier, label: c.label, title: c.title, content: c.content, source_url: c.source_url })),
+      ...k.places.map((p) => ({
+        tier: p.tier,
+        label: TIER_LABEL.unverified,
+        name: p.name,
+        type: p.kind,
+        address: p.address,
+        distance_km_from_center: p.distance_km,
+        source: p.source_label,
+        map_tag: p.osm_diet === "only" ? "kosher only" : p.osm_diet === "yes" ? "has kosher options" : null,
+        map_checked_on: p.checked_on,
+      })),
+    ],
+    synagogues: k.synagogues.map((s) => ({ name: s.name, address: s.address, source: s.source_label })),
+    shabbat_times: shabbat,
+    ...(k.too_wide
+      ? { needs_city: `"${k.place}" הוא מדינה או אזור גדול מדי לחיפוש. שאל את המשתמש באיזו עיר, וקרא שוב לכלי עם city.` }
+      : {}),
+    ...(!k.point && !curated.length ? { needs_city: `לא הצלחתי לאתר את "${k.place}" במפה. שאל את המשתמש באיזו עיר מדובר.` } : {}),
+    // A source that was down is "couldn't check", not "nothing there".
+    ...(k.osm_failed
+      ? { lookup_error: "חיפוש המפה לא היה זמין כרגע. אמור שלא ניתן היה לבדוק עכשיו (לא שאין מקומות), והפנה לחיפוש החי ולבית חב״ד." }
+      : {}),
+    ...(!hasAnything && !k.osm_failed && k.point && !k.too_wide
+      ? { no_info: `${TIER_LABEL.none}: לא נמצאו מקומות כשרים מסומנים ליד ${k.place}. אל תמציא שמות — הפנה לחיפוש החי ולבית חב״ד.` }
+      : {}),
+    search_links: k.search_links,
+    instruction:
+      "נסח לפי רמת האמינות (tier/label) של כל פריט, בלי להעלות רמה. verified: ציין מקור ותאריך בדיקה. unverified: כתוב ליד כל מקום \"נמצא במפה — לא מאומת, יש לוודא השגחה\", ולעולם אל תכתוב שהוא כשר. אם יש shabbat_times ונשאלת על שבת או חג — מסור את השעות עצמן לפי התאריכים (הדלקת נרות והבדלה), וציין שהן חישוב אוטומטי של Hebcal שיש לבדוק מול בית חב״ד או רב מקומי. אם אין מידע — אמור \"אין מידע\" והצע את search_links.",
+  };
 }
 
 function mapUrlFor(location: unknown, destination: string): string | null {
@@ -215,8 +471,8 @@ Deno.serve(async (req) => {
   try {
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) return json({ error: "ANTHROPIC_API_KEY is not set" }, 500);
-    // Missing is tolerated (find_kosher just returns "not covered" — see
-    // handleFindKosher) rather than failing the whole request: kashrut
+    // Missing is tolerated (find_kosher just skips the curated semantic search
+    // — see curatedLayer) rather than failing the whole request: kashrut
     // lookup is one tool among several, not core to the agent working at all.
     const voyageKey = Deno.env.get("VOYAGE_API_KEY");
 
@@ -232,9 +488,10 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as Body;
 
-    // Role check, shared by both branches below (migration 015). Viewers can
+    // Role check, shared by the branches below (migration 015). Viewers can
     // read the trip but not use the agent; RLS would also refuse their writes,
-    // but checking here keeps them from spending the API budget at all.
+    // but checking here keeps them from spending the API budget at all. The
+    // kosher lookup is read-only trip information, so viewers get it too.
     const [{ data: auth }, { data: trip }, { data: role }] = await Promise.all([
       supabase.auth.getUser(),
       supabase
@@ -244,7 +501,8 @@ Deno.serve(async (req) => {
         .maybeSingle(),
       supabase.rpc("trip_role", { _trip_id: body.trip_id }),
     ]);
-    if (!auth?.user || !trip || !["owner", "editor", "participant"].includes(role)) {
+    const allowedRoles = body.kosher ? ["owner", "editor", "participant", "viewer"] : ["owner", "editor", "participant"];
+    if (!auth?.user || !trip || !allowedRoles.includes(role)) {
       return json({ error: "forbidden" }, 403);
     }
     const canEditItinerary = role === "owner" || role === "editor";
@@ -284,6 +542,40 @@ Deno.serve(async (req) => {
         // Monitoring must never break the chat response.
       }
     };
+
+    // --- Branch 0: kosher places / Shabbat times for the screens, no model ----
+    // Google is only searched when places are asked for (a button press on the
+    // Suggestions screen), never for the Itinerary's Shabbat line.
+    if (body.kosher) {
+      const k = await kosherLookup({
+        supabase,
+        apiKey,
+        voyageKey,
+        trip,
+        userId: auth.user.id,
+        isAnonymous,
+        city: typeof body.kosher.city === "string" ? body.kosher.city : "",
+        query: "",
+        wantPlaces: !body.kosher.shabbat_only,
+        wantShabbat: true,
+      });
+      if (k.translate_cost_usd > 0) {
+        await logRun({ kind: "kosher_geocode_translate", inputTokens: 0, outputTokens: 0, costUsd: k.translate_cost_usd, latencyMs: 0, status: "ok" });
+      }
+      return json({
+        ok: true,
+        place: k.place,
+        point: k.point,
+        too_wide: k.too_wide,
+        curated: k.curated,
+        places: k.places,
+        synagogues: k.synagogues,
+        shabbat: k.shabbat,
+        google: k.google,
+        osm_failed: k.osm_failed,
+        search_links: k.search_links,
+      });
+    }
 
     // --- Branch 1: confirm and execute a previously proposed tool call ------
     // A second, separate request from the client, made only after the user
@@ -477,16 +769,28 @@ Deno.serve(async (req) => {
         const input = (block.input ?? {}) as Record<string, unknown>;
         if (block.name === "find_kosher") {
           const toolStart = Date.now();
-          const { result, tokens } = await handleFindKosher(supabase, voyageKey, trip.destination, input);
+          const k = await kosherLookup({
+            supabase,
+            apiKey,
+            voyageKey,
+            trip,
+            userId: auth.user.id,
+            isAnonymous,
+            city: typeof input.city === "string" ? input.city : "",
+            query: String(input.query ?? "").trim().slice(0, 500),
+            wantPlaces: true,
+            wantShabbat: true,
+          });
           await logRun({
             kind: "tool_find_kosher",
-            inputTokens: tokens,
+            inputTokens: k.voyage_tokens,
             outputTokens: 0,
-            costUsd: (tokens / 1_000_000) * VOYAGE_PRICE_PER_MTOK_USD,
+            costUsd: (k.voyage_tokens / 1_000_000) * VOYAGE_PRICE_PER_MTOK_USD + k.translate_cost_usd,
             latencyMs: Date.now() - toolStart,
             status: "ok",
+            errorMessage: `diag: geo=${k.geo} shabbat=${k.shabbat?.days.length ?? "none"} google=${k.google} osm=${k.osm_failed ? "failed" : k.places.length} curated=${k.curated.length}`,
           });
-          toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
+          toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(kosherToolResult(k)) });
         } else if (block.name === "add_to_itinerary" || block.name === "add_suggestion") {
           pendingActions.push({ tool: block.name, id: block.id, input });
           await logRun({

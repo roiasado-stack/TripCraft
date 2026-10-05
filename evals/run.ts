@@ -180,9 +180,21 @@ function buildSystemPrompt(): string {
  * match_knowledge_chunks call instead.
  */
 function handleFindKosher(): Record<string, unknown> {
+  // Same shape as ask/index.ts's kosherToolResult when nothing is found.
+  // (The live function may also find OSM/Google places on Rhodes; the eval
+  // pins the "אין מידע" path so its answers stay comparable run to run.)
   return {
-    available: false,
-    message: "אין עדיין מקור ידע מאומת לכשרות/שבת עבור היעד הזה במערכת. אל תנחש — אמור זאת למשתמש במפורש.",
+    searched_near: "רודוס, יוון",
+    coverage: "none",
+    verified_items: [],
+    unverified_items: [],
+    synagogues: [],
+    shabbat_times: null,
+    no_info: "אין מידע: לא נמצאו מקומות כשרים מסומנים ליד רודוס, יוון. אל תמציא שמות — הפנה לחיפוש החי ולבית חב״ד.",
+    search_links: {
+      kosher: "https://www.google.com/maps/search/?api=1&query=kosher%20restaurant%20Rhodes",
+      chabad: "https://www.chabad.org/centers/default_cdo/jewish/directory.htm?searchQuery=Rhodes",
+    },
   };
 }
 
