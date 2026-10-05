@@ -28,3 +28,6 @@ supabase/.temp/
 # tsc -b incremental build cache — regenerated every build, not source.
 tsconfig.tsbuildinfo
 .tmp/
+
+# Business office of the agent team — strategy, costs, drafts. Private; repo is public.
+business/

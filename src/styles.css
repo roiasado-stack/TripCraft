@@ -186,6 +186,17 @@
   padding-top: calc(env(safe-area-inset-top, 0px));
 }
 
+/* iOS zooms into any focused field under 16px. Pinch-zoom has to stay on
+ * (accessibility statement), so instead of maximum-scale=1 the fields get
+ * 16px on touch screens. Unlayered, so it beats the text-[15px] utilities. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* thin, unobtrusive scrollbars */
 * {
   scrollbar-width: thin;

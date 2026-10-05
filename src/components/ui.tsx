@@ -245,7 +245,7 @@ export function Segmented<T extends string>({
             value === o.value ? "bg-card text-foreground shadow-soft" : "text-muted-foreground",
           )}
         >
-          {o.emoji && <span className="ml-1">{o.emoji}</span>}
+          {o.emoji && <span className="me-1">{o.emoji}</span>}
           {o.label}
         </button>
       ))}

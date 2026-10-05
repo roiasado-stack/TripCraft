@@ -14,8 +14,9 @@ const STALE_THRESHOLD_MONTHS = 6;
 
 // Visible warning on this screen when today's total spend crosses this —
 // separate from DAILY_CAP_USD in the Edge Functions, which blocks a single
-// user's calls. This one is app-wide, for Roi to notice before it matters.
-const ALERT_THRESHOLD_USD = 5;
+// user's calls. This one is app-wide, for Roi to notice before it matters:
+// 80% of APP_DAILY_CAP_USD ($15), where every AI call stops for the day.
+const ALERT_THRESHOLD_USD = 12;
 
 const KIND_LABEL: Record<string, string> = {
   ask: "שאל את הסוכן",

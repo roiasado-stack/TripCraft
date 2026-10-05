@@ -1,4 +1,5 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
+import { configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
@@ -9,6 +10,10 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  test: {
+    // Agent worktrees live under .claude/; their half-written tests are not ours.
+    exclude: [...configDefaults.exclude, ".claude/**"],
   },
   server: {
     port: 5173,

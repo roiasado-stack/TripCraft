@@ -7,10 +7,11 @@ import { Button, Card, FullSpinner, Input, Label } from "@/components/ui";
 import { Mail } from "lucide-react";
 import { LegalLinks } from "@/routes/LegalPages";
 
-type Mode = "signin" | "signup";
+type Mode = "signin" | "signup" | "reset";
 
 export default function AuthPage() {
-  const { session, isAnonymous, loading, signInWithPassword, signUpWithPassword, signInWithGoogle } = useAuth();
+  const { session, isAnonymous, loading, signInWithPassword, signUpWithPassword, signInWithGoogle, requestPasswordReset } =
+    useAuth();
   // Where to land after signing in, e.g. back on /join/:token from an invite.
   const [params] = useSearchParams();
   const next = safeReturnPath(params.get("next"));
@@ -20,7 +21,8 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
+  // Which email we just sent: sign-up confirmation or password reset.
+  const [sent, setSent] = useState<"confirm" | "reset" | null>(null);
 
   if (loading) return <FullSpinner label="רגע, טוענים…" />;
   // A demo (anonymous) session may open this page to sign up for real.
@@ -34,6 +36,13 @@ export default function AuthPage() {
       if (mode === "signin") {
         const { error } = await signInWithPassword(email.trim(), password);
         if (error) toast.error(error);
+      } else if (mode === "reset") {
+        const { error } = await requestPasswordReset(email.trim());
+        if (error) toast.error(error);
+        else {
+          setSent("reset");
+          toast.success("שלחנו לך מייל עם קישור לאיפוס הסיסמה 📩");
+        }
       } else {
         if (!fullName.trim()) {
           toast.error("איך קוראים לך?");
@@ -47,7 +56,7 @@ export default function AuthPage() {
         );
         if (error) toast.error(error);
         else if (needsConfirmation) {
-          setSent(true);
+          setSent("confirm");
           toast.success("שלחנו לך מייל לאישור החשבון 📩");
         } else {
           toast.success("ברוך הבא ל-TripCraft! 🎉");
@@ -92,10 +101,11 @@ export default function AuthPage() {
               <Mail className="size-12 text-primary" />
               <h2 className="text-lg font-bold">בדוק את המייל שלך</h2>
               <p className="text-sm text-muted-foreground">
-                שלחנו קישור אישור ל-<span className="font-semibold">{email}</span>. אחרי האישור אפשר
-                להתחבר.
+                {sent === "reset" ? "שלחנו קישור לאיפוס הסיסמה ל-" : "שלחנו קישור אישור ל-"}
+                <span className="font-semibold">{email}</span>.{" "}
+                {sent === "reset" ? "הקישור יוביל אותך לבחירת סיסמה חדשה." : "אחרי האישור אפשר להתחבר."}
               </p>
-              <Button variant="ghost" onClick={() => { setSent(false); setMode("signin"); }}>
+              <Button variant="ghost" onClick={() => { setSent(null); setMode("signin"); }}>
                 חזרה להתחברות
               </Button>
             </div>
@@ -145,33 +155,57 @@ export default function AuthPage() {
                     required
                   />
                 </div>
-                <div>
-                  <Label>סיסמה</Label>
-                  <Input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="לפחות 6 תווים"
-                    autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                    required
-                    minLength={6}
-                  />
-                </div>
+                {mode === "reset" ? (
+                  <p className="text-sm text-muted-foreground">
+                    נשלח לך קישור לבחירת סיסמה חדשה.
+                  </p>
+                ) : (
+                  <div>
+                    <Label>סיסמה</Label>
+                    <Input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="לפחות 6 תווים"
+                      autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                      required
+                      minLength={6}
+                    />
+                    {mode === "signin" && (
+                      <button
+                        type="button"
+                        onClick={() => setMode("reset")}
+                        className="mt-2 text-sm font-semibold text-primary underline-offset-2 hover:underline"
+                      >
+                        שכחתי סיסמה
+                      </button>
+                    )}
+                  </div>
+                )}
                 <Button type="submit" size="lg" loading={busy} className="mt-1 w-full">
-                  {mode === "signin" ? "כניסה" : "יצירת חשבון"}
+                  {mode === "signin" ? "כניסה" : mode === "reset" ? "שליחת קישור לאיפוס" : "יצירת חשבון"}
                 </Button>
+                {mode === "reset" && (
+                  <Button type="button" variant="ghost" onClick={() => setMode("signin")} className="w-full">
+                    חזרה להתחברות
+                  </Button>
+                )}
               </form>
 
-              <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-                <div className="h-px flex-1 bg-border" />
-                <span>או</span>
-                <div className="h-px flex-1 bg-border" />
-              </div>
+              {mode !== "reset" && (
+                <>
+                  <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="h-px flex-1 bg-border" />
+                    <span>או</span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
 
-              <Button variant="outline" size="lg" onClick={google} disabled={busy} className="w-full">
-                <GoogleIcon />
-                המשך עם Google
-              </Button>
+                  <Button variant="outline" size="lg" onClick={google} disabled={busy} className="w-full">
+                    <GoogleIcon />
+                    המשך עם Google
+                  </Button>
+                </>
+              )}
             </>
           )}
         </Card>

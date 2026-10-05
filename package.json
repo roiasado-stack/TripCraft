@@ -8,6 +8,11 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
+    "lint": "eslint src",
+    "rules": "node scripts/check-rules.mjs",
+    "test": "vitest run",
+    "test:db": "node scripts/test-db.mjs",
+    "check": "npm run typecheck && npm run lint && npm run rules && npm run test && npm run build",
     "evals": "node --env-file=.env evals/run.ts"
   },
   "dependencies": {
@@ -29,8 +34,12 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.6.3",
-    "vite": "^5.4.10"
+    "typescript-eslint": "^8.71.0",
+    "vite": "^5.4.10",
+    "vitest": "^3.2.7"
   }
 }

@@ -22,6 +22,9 @@ type AuthState = {
   ) => Promise<{ error: string | null; needsConfirmation: boolean }>;
   /** `returnTo` is an in-app path (e.g. /join/:token) to land on after Google. */
   signInWithGoogle: (returnTo?: string) => Promise<{ error: string | null }>;
+  /** Emails a recovery link that lands on /reset-password with a session. */
+  requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
   refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -45,6 +48,7 @@ function heError(message?: string): string {
   if (m.includes("unable to validate email")) return "כתובת המייל אינה תקינה.";
   if (m.includes("provider is not enabled") || m.includes("not enabled"))
     return "ההתחברות דרך Google אינה מופעלת עדיין. נסה מייל וסיסמה.";
+  if (m.includes("different from the old")) return "הסיסמה החדשה חייבת להיות שונה מהקודמת.";
   if (m.includes("rate limit")) return "יותר מדי ניסיונות. נסה שוב עוד רגע.";
   return message || "אירעה שגיאה. נסה שוב.";
 }
@@ -125,6 +129,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         provider: "google",
         options: { redirectTo: `${window.location.origin}${safeReturnPath(returnTo)}` },
       });
+      return { error: error ? heError(error.message) : null };
+    },
+    requestPasswordReset: async (email) => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      return { error: error ? heError(error.message) : null };
+    },
+    updatePassword: async (password) => {
+      const { error } = await supabase.auth.updateUser({ password });
       return { error: error ? heError(error.message) : null };
     },
     refreshProfile: async () => {
