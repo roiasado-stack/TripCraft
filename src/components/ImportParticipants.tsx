@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, FileUp, IdCard, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { aiErrorMessage, mapInvokeError } from "@/lib/ai";
 import { useToast } from "@/hooks/use-toast";
 import { Button, Modal, Textarea } from "@/components/ui";
 import { parseParticipants, type ParsedParticipant } from "@/lib/import-participants";
@@ -93,12 +94,7 @@ export function ImportParticipants({
         body: { kind: "passports", images },
       });
       if (error) {
-        const msg = (error.message || "").toLowerCase();
-        toast.error(
-          msg.includes("not found") || msg.includes("404") || msg.includes("failed to fetch")
-            ? "סריקת דרכונים דורשת הפעלת ה-AI. ראה README."
-            : "סריקת הדרכונים נכשלה.",
-        );
+        toast.error(aiErrorMessage(await mapInvokeError(error), "סריקת הדרכונים נכשלה. נסו שוב."));
         return;
       }
       const items = (data as { items?: ParsedParticipant[] })?.items ?? [];

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { AlertTriangle, FileUp, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { aiErrorMessage, mapInvokeError } from "@/lib/ai";
 import { useToast } from "@/hooks/use-toast";
 import { Button, Chip, Field, Input, Modal, Segmented } from "@/components/ui";
 
@@ -439,12 +440,7 @@ export function ImportVoucher({
         body: { kind: "voucher", images, hint: hint === "other" ? undefined : hint },
       });
       if (error) {
-        const msg = (error.message || "").toLowerCase();
-        toast.error(
-          msg.includes("not found") || msg.includes("404") || msg.includes("failed to fetch")
-            ? "סריקת שוברים דורשת הפעלת ה-AI. ראה README."
-            : "סריקת השובר נכשלה.",
-        );
+        toast.error(aiErrorMessage(await mapInvokeError(error), "סריקת השובר נכשלה. נסו שוב."));
         return;
       }
       const res = data as { ok?: boolean; doc_type?: string; data?: Record<string, unknown> | null; segments?: unknown };

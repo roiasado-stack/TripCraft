@@ -82,7 +82,7 @@ const DAILY_CAP_USD = 2.0;
 // App-wide, per-day (migration 014): the per-user cap alone doesn't bound
 // total spend while signup is open. Shared with the other Edge Function —
 // both read the same agent_runs total.
-const APP_DAILY_CAP_USD = 5.0;
+const APP_DAILY_CAP_USD = 15.0;
 
 // "Try it yourself" visitors (anonymous sessions, migration 016): a taste of
 // the AI, not a free tier — a few questions each, and a hard ceiling for all

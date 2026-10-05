@@ -8,6 +8,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { SetupNeeded } from "@/components/SetupNeeded";
 import AuthPage from "@/routes/AuthPage";
+import ResetPasswordPage from "@/routes/ResetPasswordPage";
 import TripsListPage from "@/routes/TripsListPage";
 import WizardPage from "@/routes/WizardPage";
 import SettingsPage from "@/routes/SettingsPage";
@@ -48,6 +49,7 @@ export default function App() {
               <BrowserRouter>
               <Routes>
                 <Route path="/auth" element={<AuthPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/share/:slug" element={<SharePage />} />
                 <Route path="/join/:token" element={<JoinPage />} />
                 <Route path="/terms" element={<TermsPage />} />

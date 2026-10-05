@@ -13,7 +13,7 @@ import { mapsUrl, resolveMapUrl } from "@/lib/maps";
 import { useToast } from "@/hooks/use-toast";
 import { ambientPhoto } from "@/lib/photos";
 import { FillPhotos } from "@/components/FillPhotos";
-import { generateContent, lookupKosher, searchCoordinates, searchPhoto } from "@/lib/ai";
+import { aiErrorMessage, generateContent, lookupKosher, searchCoordinates, searchPhoto } from "@/lib/ai";
 import { daysBetween, formatDayHeb, ITINERARY_CATEGORIES, itineraryCategory } from "@/lib/trip-options";
 import { TripMap, type TripMapItem } from "@/components/TripMap";
 
@@ -194,10 +194,8 @@ export default function ItineraryTab() {
     if (res.ok) {
       toast.success(`נוצר מסלול מוצע (${res.inserted} פריטים) ✨`);
       load();
-    } else if (res.error === "not_deployed") {
-      toast.error("יצירת ה-AI עדיין לא הופעלה. ראה README (Edge Function).");
     } else {
-      toast.error("יצירת ה-AI נכשלה. נסה שוב.");
+      toast.error(aiErrorMessage(res.error, "יצירת המסלול נכשלה. נסו שוב."));
     }
   };
 

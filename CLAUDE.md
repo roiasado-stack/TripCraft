@@ -7,7 +7,12 @@ Supabase for auth/DB/storage. Setup steps live in README.md — don't duplicate 
 
 ```
 npm run dev        # Vite on :5173 (preview via .claude/launch.json, name "tripcraft")
-npm run typecheck  # tsc -b --noEmit — the only check that exists; run it after edits
+npm run check      # the gate: typecheck · lint · rules · test · build — run it after edits
+npm run test:db    # RLS / who-sees-what tests against the LOCAL Docker DB (after any supabase/ change)
+npm run typecheck  # tsc -b --noEmit
+npm run lint       # ESLint, bug rules only (hooks, unreachable code…) — no style rules
+npm run rules      # scripts/check-rules.mjs: this file's rules (RTL, hex, imports, migrations)
+npm run test       # Vitest unit tests, *.test.ts next to the code in src/lib
 npm run build      # tsc -b && vite build
 ```
 
@@ -17,7 +22,23 @@ in order with `docker exec -i supabase_db_tripcraft psql -U postgres -d postgres
 migration runner is off in `supabase/config.toml` on purpose). `.claude/launch.json` → "tripcraft-local"
 runs Vite on :5174 against it via `.env.localstack`. Test accounts belong there, never in production.
 
-There are no tests, no linter, and no formatter. Don't add them unless asked.
+## Tests and gates
+
+- `supabase/tests/*.sql` run inside a rolled-back transaction after `_helpers.sql` (fixture: one trip,
+  one user per role, a demo user). They are the executable version of "Who sees a trip" below. A new
+  table, policy, RPC or role behaviour gets cases there in the same change; a security bug gets a case
+  that fails before the fix.
+- Unit tests only for pure logic in `src/lib` (parsers, permissions, URL builders). No component tests,
+  no mocking Supabase — RLS is tested against the real database instead.
+- ESLint is limited to bug-catching rules on purpose; there is no formatter. A justified exception to
+  a repo rule goes in `ALLOW` in `scripts/check-rules.mjs` with its reason — never loosen the rule.
+
+## Engineering workflow
+
+Non-trivial work goes through the `/ship` skill (`.claude/skills/ship`): route → plan Roi approves →
+build each phase → review + runtime verify + gates → final review → PR with evidence → retro. Its
+agents are in `.claude/agents/eng-*.md` (implementer, reviewer, security, verifier). The other agents
+there are the business team; they never touch code.
 
 ## Language and layout
 

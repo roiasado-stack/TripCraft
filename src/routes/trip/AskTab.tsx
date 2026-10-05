@@ -7,7 +7,7 @@ import { TripHeader, ScreenTitle } from "@/components/TripHeader";
 import { Button, Card, Chip, EmptyState, Spinner, Textarea } from "@/components/ui";
 import { can } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
-import { askAgent, confirmAgentAction, type AskTurn } from "@/lib/ai";
+import { aiErrorMessage, askAgent, confirmAgentAction, type AskTurn } from "@/lib/ai";
 import { MapLink } from "@/components/MapLink";
 import { suggestionKindLabel } from "@/lib/trip-options";
 import { resolveMapUrl } from "@/lib/maps";
@@ -83,14 +83,7 @@ export default function AskTab() {
     inFlight.current = false;
 
     if (!res.ok) {
-      const message =
-        res.error === "not_deployed"
-          // No Latin term mid-sentence: a Hebrew prefix glued to one ("ה-Edge
-          // Function") strands the hyphen and the full stop when the line wraps.
-          ? "הסוכן עדיין לא הופעל בפרויקט הזה. צריך לפרוס את הפונקציה בצד השרת — ראה README."
-          : res.error === "forbidden"
-            ? "אין לך הרשאה לשאול על הטיול הזה."
-            : "הסוכן לא הצליח לענות.";
+      const message = aiErrorMessage(res.error, "הסוכן לא הצליח לענות. נסו שוב.");
       setFailed({ question, message });
       toast.error(message);
       return;

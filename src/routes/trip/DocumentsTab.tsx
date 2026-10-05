@@ -87,7 +87,7 @@ export default function DocumentsTab() {
         toast.error("הקובץ גדול מדי (מקסימום 20MB)");
       } else {
         console.error(err);
-        toast.error("ההעלאה נכשלה. ודא שהסכימה/הדלי הוגדרו (README).");
+        toast.error("ההעלאה נכשלה. נסו שוב.");
       }
     } finally {
       setUploading(false);

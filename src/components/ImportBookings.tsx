@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { AlertTriangle, Clock, FilePlus, Loader2, Sparkles, Trash2, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { mapInvokeError } from "@/lib/ai";
+import { aiErrorMessage, mapInvokeError } from "@/lib/ai";
 import { useToast } from "@/hooks/use-toast";
 import { Badge, Button, Card, Field, Input, Modal } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -383,10 +383,9 @@ export function ImportBookings({
 
     const recognized = results.filter((r) => r.recognized).length;
     const errors = results.map((r) => r.error).filter(Boolean);
-    if (errors.includes("not_deployed")) {
-      toast.error("סריקת שוברים דורשת הפעלת ה-AI. ראה README.");
-    } else if (errors.includes("daily_cap_reached")) {
-      toast.error("הגעת למכסת ה-AI היומית — נסה שוב מחר.");
+    const aiError = errors.find((e) => aiErrorMessage(e, "") !== "");
+    if (aiError) {
+      toast.error(aiErrorMessage(aiError, ""));
     } else if (recognized === 0) {
       toast.error("לא זוהו הזמנות בקבצים שנבחרו — נסה קבצים ברורים יותר.");
     } else if (recognized < batch.length) {

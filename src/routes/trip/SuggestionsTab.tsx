@@ -10,7 +10,7 @@ import { Button, Card, Chip, EmptyState, Field, Input, Modal, Segmented, Spinner
 import { useToast } from "@/hooks/use-toast";
 import { useSuggestionPhoto } from "@/lib/photos";
 import { FillPhotos } from "@/components/FillPhotos";
-import { generateContent, searchCoordinates, searchPhoto, type TuneOption } from "@/lib/ai";
+import { aiErrorMessage, generateContent, searchCoordinates, searchPhoto, type TuneOption } from "@/lib/ai";
 import { cn } from "@/lib/utils";
 import { SUGGESTION_KINDS } from "@/lib/trip-options";
 import { destinationPicks, pickToRow } from "@/lib/destinations";
@@ -136,10 +136,8 @@ export default function SuggestionsTab() {
     if (res.ok) {
       toast.success(`נוספו ${res.inserted} המלצות ✨`);
       load();
-    } else if (res.error === "not_deployed") {
-      toast.error("יצירת ה-AI עדיין לא הופעלה. ראה README (Edge Function).");
     } else {
-      toast.error("יצירת ה-AI נכשלה. נסה שוב.");
+      toast.error(aiErrorMessage(res.error, "יצירת ההמלצות נכשלה. נסו שוב."));
     }
   };
 
@@ -229,7 +227,7 @@ export default function SuggestionsTab() {
         <button
           onClick={() => setOnlyLiked((v) => !v)}
           className={cn(
-            "mr-auto flex items-center gap-1 rounded-full border px-3 py-2 text-sm font-semibold",
+            "ms-auto flex items-center gap-1 rounded-full border px-3 py-2 text-sm font-semibold",
             onlyLiked ? "border-accent bg-accent-soft text-accent" : "border-border",
           )}
         >

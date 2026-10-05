@@ -43,6 +43,28 @@ export async function mapInvokeError(error: unknown): Promise<string> {
   return e?.message || "unknown";
 }
 
+/**
+ * The Hebrew message a user sees for one of mapInvokeError's codes. AI is an
+ * extra, so every outage message says the rest of the trip still works;
+ * `fallback` covers the action-specific failures (nothing recognized etc.).
+ */
+export function aiErrorMessage(error: string | undefined, fallback: string): string {
+  switch (error) {
+    case "daily_cap_reached":
+      return "מכסת ה-AI להיום נוצלה. אפשר לנסות שוב מחר — כל שאר הטיול עובד כרגיל.";
+    case "not_deployed":
+    case "llm_failed":
+      return "ה-AI לא זמין כרגע. כל שאר הטיול עובד כרגיל — נסו שוב מאוחר יותר.";
+    case "demo_not_allowed":
+      return "האפשרות הזו לא זמינה במצב הדגמה. הירשמו כדי להשתמש בה.";
+    case "forbidden":
+    case "unauthorized":
+      return "אין לך הרשאה לעשות את זה בטיול הזה.";
+    default:
+      return fallback;
+  }
+}
+
 export type AiResult = {
   ok: boolean;
   error?: string;
