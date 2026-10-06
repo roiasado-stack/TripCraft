@@ -2,22 +2,24 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 // Dev-only switch between today's palette and the candidate Apple-style ones
-// (`.palette-neutral`, plus `.palette-premium` for "חדש+", in styles.css), so
+// (`.palette-neutral`, plus `.palette-premium` for "חדש+", and the logo-derived
+// `.palette-brand`, in styles.css), so
 // Roi can compare them on his phone on any screen. Rendered only in
 // `--mode localstack`; remembered per device.
 const KEY = "tc-palette-preview";
-type Palette = "current" | "neutral" | "premium";
+type Palette = "current" | "neutral" | "premium" | "brand";
 
 const OPTIONS: { value: Palette; label: string }[] = [
   { value: "current", label: "נוכחי" },
   { value: "neutral", label: "חדש" },
   { value: "premium", label: "חדש+" },
+  { value: "brand", label: "מותג" },
 ];
 
 function readStored(): Palette {
   try {
     const v = localStorage.getItem(KEY);
-    return v === "neutral" || v === "premium" ? v : "current";
+    return v === "neutral" || v === "premium" || v === "brand" ? v : "current";
   } catch {
     return "current";
   }
@@ -28,8 +30,9 @@ export function DevPaletteToggle() {
 
   useEffect(() => {
     const root = document.documentElement.classList;
-    root.toggle("palette-neutral", palette !== "current");
+    root.toggle("palette-neutral", palette === "neutral" || palette === "premium");
     root.toggle("palette-premium", palette === "premium");
+    root.toggle("palette-brand", palette === "brand");
     try {
       localStorage.setItem(KEY, palette);
     } catch {

@@ -258,6 +258,93 @@
   letter-spacing: -0.025em;
 }
 
+/*
+ * "מותג" — derived from the logo (public/favicon.svg): its sky blue as the
+ * single tint, its sun amber for "now" highlights, its deep night blue for
+ * dark mode instead of black, and the logo's own gradient on the hero. Dev
+ * compare only, on its own (not combined with .palette-neutral).
+ */
+:root.palette-brand {
+  --background: oklch(0.972 0.008 245);
+  --foreground: oklch(0.22 0.03 258);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.03 258);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.03 258);
+
+  --primary: oklch(0.49 0.16 256);
+  --primary-foreground: oklch(1 0 0);
+  --primary-soft: oklch(0.95 0.03 245);
+
+  --secondary: oklch(0.945 0.012 245);
+  --secondary-foreground: oklch(0.22 0.03 258);
+
+  --muted: oklch(0.945 0.012 245);
+  --muted-foreground: oklch(0.5 0.03 258);
+
+  --accent: oklch(0.56 0.16 48);
+  --accent-foreground: oklch(1 0 0);
+  --accent-soft: oklch(0.96 0.045 80);
+
+  --sun: oklch(0.84 0.16 82);
+  --sun-foreground: oklch(0.3 0.07 60);
+
+  --border: oklch(0.9 0.015 245);
+  --input: oklch(0.88 0.015 245);
+  --ring: oklch(0.49 0.16 256);
+  --separator: oklch(0.22 0.03 258 / 0.12);
+  --tile: oklch(0.945 0.03 245);
+  --tile-foreground: oklch(0.49 0.16 256);
+  --tile-accent: oklch(0.96 0.05 80);
+  --tile-accent-foreground: oklch(0.56 0.16 48);
+
+  --sidebar: oklch(0.972 0.008 245);
+  --sidebar-foreground: oklch(0.22 0.03 258);
+
+  --gradient-sea: linear-gradient(140deg, oklch(0.36 0.15 262), oklch(0.55 0.17 245));
+  --shadow-soft: 0 1px 2px oklch(0.3 0.05 255 / 0.05), 0 8px 24px -14px oklch(0.3 0.08 255 / 0.18);
+  --shadow-pop: 0 12px 32px -14px oklch(0.3 0.1 255 / 0.3);
+}
+
+.dark.palette-brand {
+  --background: oklch(0.17 0.035 258);
+  --foreground: oklch(0.97 0.005 250);
+  --card: oklch(0.225 0.035 258);
+  --card-foreground: oklch(0.97 0.005 250);
+  --popover: oklch(0.26 0.035 258);
+  --popover-foreground: oklch(0.97 0.005 250);
+
+  --primary: oklch(0.78 0.12 232);
+  --primary-foreground: oklch(0.2 0.05 258);
+  --primary-soft: oklch(0.3 0.06 252);
+
+  --secondary: oklch(0.28 0.035 258);
+  --secondary-foreground: oklch(0.97 0.005 250);
+
+  --muted: oklch(0.28 0.035 258);
+  --muted-foreground: oklch(0.76 0.025 250);
+
+  --accent: oklch(0.8 0.15 72);
+  --accent-foreground: oklch(0.22 0.05 60);
+  --accent-soft: oklch(0.32 0.06 70);
+
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.78 0.12 232);
+  --separator: oklch(1 0 0 / 0.1);
+  --tile: oklch(0.3 0.06 252);
+  --tile-foreground: oklch(0.78 0.12 232);
+  --tile-accent: oklch(0.32 0.06 70);
+  --tile-accent-foreground: oklch(0.8 0.15 72);
+
+  --sidebar: oklch(0.17 0.035 258);
+  --sidebar-foreground: oklch(0.97 0.005 250);
+
+  --gradient-sea: linear-gradient(140deg, oklch(0.3 0.12 262), oklch(0.47 0.15 245));
+  --shadow-soft: none;
+  --shadow-pop: 0 12px 32px -14px oklch(0 0 0 / 0.6);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
