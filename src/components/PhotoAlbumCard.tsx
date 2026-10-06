@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Camera, ExternalLink, Pencil } from "lucide-react";
+import { Camera, Pencil } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import type { Trip } from "@/lib/types";
 import { isSafeHttpUrl } from "@/lib/maps";
-import { Button, Card, Field, Input, Modal } from "@/components/ui";
+import { Button, Field, Input, Modal } from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 /**
  * A single shared album link for the whole group (Google Photos, iCloud, etc.).
@@ -14,9 +15,11 @@ import { Button, Card, Field, Input, Modal } from "@/components/ui";
 export function PhotoAlbumCard({
   trip,
   editable = true,
+  className = "mt-4",
 }: {
   trip: Pick<Trip, "id" | "photos_album_url">;
   editable?: boolean;
+  className?: string;
 }) {
   const toast = useToast();
   const [url, setUrl] = useState(trip.photos_album_url ?? "");
@@ -54,52 +57,41 @@ export function PhotoAlbumCard({
 
   return (
     <>
-      <Card className="mt-4 flex items-center gap-3 p-4">
-        <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-sunset text-white">
+      <div className={cn("flex items-center gap-2 rounded-2xl bg-card py-3 ps-4 pe-2 text-card-foreground", className)}>
+        <div className="grid size-10 shrink-0 place-items-center rounded-full bg-gradient-sunset text-white">
           <Camera className="size-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-bold">אלבום התמונות המשותף</div>
+          <div className="type-headline [overflow-wrap:anywhere]">אלבום התמונות המשותף</div>
           {safeUrl ? (
             <a
               href={safeUrl}
               target="_blank"
               rel="noopener noreferrer"
               dir="ltr"
-              className="block truncate text-xs text-primary underline underline-offset-2"
+              className="type-footnote block truncate text-primary"
             >
               {safeUrl}
             </a>
           ) : (
-            <div className="text-xs text-muted-foreground">
+            <div className="type-footnote text-muted-foreground">
               צרו אלבום משותף ב-Google Photos והדביקו כאן את הקישור
             </div>
           )}
         </div>
-        {safeUrl && (
-          <a
-            href={safeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="grid size-9 shrink-0 place-items-center rounded-xl border border-border text-primary"
-            aria-label="פתיחת האלבום"
-          >
-            <ExternalLink className="size-4" />
-          </a>
-        )}
         {editable && (
           <button
             onClick={() => {
               setDraft(url);
               setOpen(true);
             }}
-            className="shrink-0 text-muted-foreground"
+            className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
             aria-label="עריכת הקישור"
           >
             <Pencil className="size-4" />
           </button>
         )}
-      </Card>
+      </div>
 
       <Modal
         open={open}

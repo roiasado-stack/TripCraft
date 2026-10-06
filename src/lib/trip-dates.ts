@@ -57,7 +57,9 @@ export function countdownLabel(days: number): string {
 export function dateRangeHeb(start: string | null | undefined, end: string | null | undefined, today: Date): string {
   const s = parseLocalDate(start);
   if (!s) return "";
-  const e = parseLocalDate(end) ?? s;
+  // An end before the start is a typo in the data — show the start alone.
+  const parsedEnd = parseLocalDate(end);
+  const e = parsedEnd && parsedEnd >= s ? parsedEnd : s;
   const year = today.getFullYear();
   const withYear = s.getFullYear() !== year || e.getFullYear() !== year;
   const fmt = new Intl.DateTimeFormat("he-IL", {
@@ -66,4 +68,19 @@ export function dateRangeHeb(start: string | null | undefined, end: string | nul
     ...(withYear ? { year: "numeric" } : {}),
   });
   return e.getTime() === s.getTime() ? fmt.format(s) : fmt.formatRange(s, e);
+}
+
+/** Inclusive length in days ("2026-11-15" → "2026-11-20" is 6); null without both dates. */
+export function tripLength(start: string | null | undefined, end: string | null | undefined): number | null {
+  const s = parseLocalDate(start);
+  const e = parseLocalDate(end);
+  if (!s || !e) return null;
+  const n = Math.round((e.getTime() - s.getTime()) / 86400000) + 1;
+  return n > 0 ? n : null;
+}
+
+/** The traveller's own calendar day as "YYYY-MM-DD" (not UTC's, which is off near midnight). */
+export function localDateString(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }

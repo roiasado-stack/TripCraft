@@ -1,9 +1,16 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, Share2 } from "lucide-react";
 import type { Trip } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Flag } from "@/components/Flag";
 
+/**
+ * The trip's navigation bar, pinned to the top of every trip tab. Clear while
+ * the page is at the top; once content scrolls under it, it turns into a
+ * translucent material with a hairline (the iOS scroll-edge behaviour).
+ * Rendered inside each tab's `px-4` wrapper, so it bleeds out with -mx-4.
+ */
 export function TripHeader({
   trip,
   subtitle,
@@ -13,29 +20,40 @@ export function TripHeader({
   subtitle?: string;
   onShare?: () => void;
 }) {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 4);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
-    <header className="mb-4 flex items-center gap-3 pt-5">
+    <header
+      className={cn(
+        "sticky top-0 z-20 -mx-4 mb-3 flex items-center gap-2 border-b px-2 pb-2 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] transition-colors duration-200",
+        scrolled ? "material border-separator" : "border-transparent",
+      )}
+    >
       <Link
         to="/"
-        className="grid size-10 shrink-0 place-items-center rounded-2xl border border-border bg-card"
+        className="grid size-11 shrink-0 place-items-center rounded-full text-primary transition-colors active:bg-muted/70"
         aria-label="חזרה לטיולים"
       >
-        <ChevronRight className="size-5" />
+        <ChevronRight className="size-6" />
       </Link>
-      <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-sea text-2xl">
-        <Flag destination={trip.destination} fallback={trip.cover_emoji} className="w-7" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <h1 className="truncate text-lg font-extrabold leading-tight">{trip.title}</h1>
-        <p className="truncate text-xs text-muted-foreground">{subtitle ?? trip.destination}</p>
+      <Flag destination={trip.destination} fallback={trip.cover_emoji} className="w-[30px] text-[22px]" />
+      <div className="min-w-0 flex-1 ps-1">
+        <h1 className="type-headline line-clamp-2 [overflow-wrap:anywhere] [unicode-bidi:plaintext]">{trip.title}</h1>
+        <p className="type-footnote truncate text-muted-foreground">{subtitle ?? trip.destination}</p>
       </div>
       {onShare && (
         <button
           onClick={onShare}
-          aria-label="שיתוף"
+          aria-label={trip.is_shared ? "שיתוף (משותף כעת)" : "שיתוף"}
           className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-2xl border transition",
-            trip.is_shared ? "border-primary bg-primary-soft text-primary" : "border-border bg-card",
+            "grid size-11 shrink-0 place-items-center rounded-full transition-colors active:bg-muted/70",
+            trip.is_shared ? "bg-primary-soft text-primary" : "text-primary",
           )}
         >
           <Share2 className="size-5" />

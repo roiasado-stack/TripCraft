@@ -62,7 +62,7 @@ export function TripCard({
         >
           <Flag destination={trip.destination} fallback={trip.cover_emoji} className="w-[44px] text-[30px]" />
           <div className="min-w-0 flex-1">
-            <div className="type-headline line-clamp-2 [overflow-wrap:anywhere]">{trip.title}</div>
+            <div className="type-headline line-clamp-2 [overflow-wrap:anywhere] [unicode-bidi:plaintext]">{trip.title}</div>
             <div className="type-footnote truncate text-muted-foreground">{trip.destination}</div>
             {(meta || status) && (
               <div className="type-footnote mt-0.5 flex flex-wrap gap-x-1.5">

@@ -89,7 +89,8 @@ export default function TripLayout() {
   return (
     <div className="mx-auto min-h-screen max-w-lg pb-24">
       {isAnonymous && (
-        <div className="sticky top-0 z-30 bg-sun px-4 py-2 text-center text-xs font-semibold text-sun-foreground">
+        // Scrolls away with the page: the trip header pins to the top instead.
+        <div className="bg-sun px-4 py-2 text-center text-xs font-semibold text-sun-foreground">
           מצב דמו: זה עותק אישי שלכם, ואפשר לשנות בו הכול. הוא יימחק אוטומטית אחרי 7 ימים.
         </div>
       )}
@@ -104,8 +105,8 @@ export default function TripLayout() {
         onChange={(patch) => setTrip((t) => (t ? { ...t, ...patch } : t))}
       />
 
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
-        <div className="mx-auto flex max-w-lg items-stretch justify-around px-1 pt-1.5">
+      <nav className="material safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-separator">
+        <div className="mx-auto flex max-w-lg items-stretch justify-around px-1 pt-1">
           {TABS.map((t) => {
             const Icon = t.icon;
             return (
@@ -113,22 +114,18 @@ export default function TripLayout() {
                 key={t.to}
                 to={t.to}
                 end={t.end}
-                className="flex flex-1 flex-col items-center gap-0.5 rounded-2xl py-1.5"
+                className="flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 py-1"
               >
                 {({ isActive }) => (
-                  <>
-                    <span
-                      className={cn(
-                        "grid place-items-center rounded-xl px-4 py-1 transition",
-                        isActive ? "bg-primary-soft text-primary" : "text-muted-foreground",
-                      )}
-                    >
-                      <Icon className="size-[22px]" strokeWidth={isActive ? 2.5 : 2} />
-                    </span>
-                    <span className={cn("text-[11px] font-semibold", isActive ? "text-primary" : "text-muted-foreground")}>
-                      {t.label}
-                    </span>
-                  </>
+                  <span
+                    className={cn(
+                      "flex flex-col items-center gap-0.5 transition-colors",
+                      isActive ? "text-primary" : "text-muted-foreground",
+                    )}
+                  >
+                    <Icon className="size-6" strokeWidth={isActive ? 2.25 : 1.75} />
+                    <span className={cn("text-[11px]", isActive ? "font-semibold" : "font-medium")}>{t.label}</span>
+                  </span>
                 )}
               </NavLink>
             );

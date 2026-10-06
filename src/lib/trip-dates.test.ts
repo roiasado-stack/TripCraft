@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { countdownLabel, dateRangeHeb, dayCount, daysFrom, parseLocalDate, tripPhase } from "./trip-dates";
+import {
+  countdownLabel,
+  dateRangeHeb,
+  dayCount,
+  daysFrom,
+  localDateString,
+  parseLocalDate,
+  tripLength,
+  tripPhase,
+} from "./trip-dates";
 
 // Local noon, so the tests don't depend on the machine's time zone.
 const today = new Date(2026, 9, 6, 12, 0);
@@ -62,7 +71,24 @@ describe("dateRangeHeb", () => {
     expect(dateRangeHeb("2027-07-01", "2027-07-09", today)).toBe("1–9 ביולי 2027");
   });
 
+  it("ignores an end date before the start", () => {
+    expect(dateRangeHeb("2026-10-10", "2026-10-05", today)).toBe("10 באוק׳");
+  });
+
   it("is empty without a start date", () => {
     expect(dateRangeHeb(null, "2026-11-20", today)).toBe("");
+  });
+});
+
+describe("tripLength / localDateString", () => {
+  it("counts both ends of the trip", () => {
+    expect(tripLength("2026-11-15", "2026-11-20")).toBe(6);
+    expect(tripLength("2026-11-15", "2026-11-15")).toBe(1);
+    expect(tripLength("2026-11-15", null)).toBeNull();
+    expect(tripLength("2026-11-20", "2026-11-15")).toBeNull();
+  });
+
+  it("formats the local calendar day, even just after midnight", () => {
+    expect(localDateString(new Date(2026, 9, 7, 0, 30))).toBe("2026-10-07");
   });
 });
