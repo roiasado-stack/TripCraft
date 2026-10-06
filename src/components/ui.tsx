@@ -5,7 +5,8 @@ import {
   type ReactNode,
   type TextareaHTMLAttributes,
 } from "react";
-import { Loader2, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ChevronLeft, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* ---------------------------------- Button --------------------------------- */
@@ -65,6 +66,74 @@ export function Card({ className, children, ...props }: React.HTMLAttributes<HTM
     >
       {children}
     </div>
+  );
+}
+
+/* ------------------------------- Grouped list ------------------------------ */
+/**
+ * iOS-style inset grouped list: one quiet surface, rows split by hairlines,
+ * an optional small header above. Use instead of a stack of separate Cards.
+ */
+export function GroupedList({
+  title,
+  action,
+  className,
+  children,
+}: {
+  title?: React.ReactNode;
+  action?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={className}>
+      {(title || action) && (
+        <div className="mb-1.5 flex min-h-8 items-end justify-between gap-2 px-4">
+          {title && <h2 className="type-footnote font-semibold text-muted-foreground">{title}</h2>}
+          {action}
+        </div>
+      )}
+      <div className="divide-y divide-separator overflow-hidden rounded-2xl bg-card text-card-foreground">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/** One row of a GroupedList. With `to` it's a link with press feedback and a chevron. */
+export function ListRow({
+  to,
+  leading,
+  title,
+  subtitle,
+  trailing,
+  className,
+}: {
+  to?: string;
+  leading?: React.ReactNode;
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  trailing?: React.ReactNode;
+  className?: string;
+}) {
+  const body = (
+    <>
+      {leading && <div className="shrink-0">{leading}</div>}
+      <div className="min-w-0 flex-1">
+        <div className="type-headline line-clamp-2 [overflow-wrap:anywhere]">{title}</div>
+        {subtitle && <div className="type-footnote mt-0.5 text-muted-foreground">{subtitle}</div>}
+      </div>
+      {trailing && <div className="shrink-0 text-muted-foreground">{trailing}</div>}
+      {to && <ChevronLeft className="size-5 shrink-0 text-muted-foreground/60" aria-hidden />}
+    </>
+  );
+  const cls = cn("flex min-h-14 items-center gap-3 px-4 py-3", className);
+  return to ? (
+    <Link to={to} className={cn(cls, "pressable active:bg-muted/60")}>
+      {body}
+    </Link>
+  ) : (
+    <div className={cls}>{body}</div>
   );
 }
 

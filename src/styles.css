@@ -42,6 +42,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-separator: var(--separator);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
 }
@@ -79,6 +80,8 @@
   --border: oklch(0.9 0.025 200);
   --input: oklch(0.9 0.025 200);
   --ring: oklch(0.66 0.126 197);
+  /* hairline between rows of a grouped list */
+  --separator: oklch(0.26 0.045 235 / 0.12);
 
   --sidebar: oklch(0.985 0.014 190);
   --sidebar-foreground: oklch(0.26 0.045 235);
@@ -121,6 +124,7 @@
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
   --ring: oklch(0.76 0.13 196);
+  --separator: oklch(1 0 0 / 0.1);
 
   --sidebar: oklch(0.22 0.04 240);
   --sidebar-foreground: oklch(0.96 0.012 200);
@@ -176,6 +180,79 @@
 
 @utility shadow-pop {
   box-shadow: var(--shadow-pop);
+}
+
+/*
+ * Premium foundation (docs/plans/2026-10-06-premium-pilot.md) — Apple-style
+ * type scale, translucent material and press feedback. Additive: screens opt
+ * in one at a time. Tracking is per size (tighter as text grows), sizes are in
+ * rem so they follow the user's text-size setting.
+ */
+@utility type-large-title {
+  font-family: var(--font-display);
+  font-size: 2.125rem;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+@utility type-title {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+}
+
+@utility type-headline {
+  font-size: 1.0625rem;
+  line-height: 1.35;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+@utility type-body {
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+@utility type-footnote {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  font-weight: 400;
+  letter-spacing: 0.005em;
+}
+
+/* Translucent chrome that content scrolls under; solid when the user asks for
+ * less transparency. Never stack one material on another. */
+@utility material {
+  background-color: color-mix(in oklch, var(--card) 72%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Instant press feedback (on touch-down, not release). Off under reduced motion. */
+@utility pressable {
+  transition: transform 100ms ease-out;
+
+  &:active {
+    transform: scale(0.97);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+
+    &:active {
+      transform: none;
+    }
+  }
 }
 
 @utility safe-bottom {
