@@ -124,7 +124,7 @@ export function ListRow({
       {leading && <div className="shrink-0">{leading}</div>}
       <div className="min-w-0 flex-1">
         <div className="type-headline line-clamp-2 [overflow-wrap:anywhere] [unicode-bidi:plaintext]">{title}</div>
-        {subtitle && <div className="type-footnote mt-0.5 text-muted-foreground">{subtitle}</div>}
+        {subtitle && <div className="type-footnote mt-0.5 line-clamp-2 text-muted-foreground">{subtitle}</div>}
       </div>
       {trailing && <div className="shrink-0 text-muted-foreground">{trailing}</div>}
       {to && <ChevronLeft className="size-5 shrink-0 text-muted-foreground/60" aria-hidden />}

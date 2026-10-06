@@ -101,9 +101,9 @@ export default function SharePage() {
           <Flag destination={trip.destination} fallback={trip.cover_emoji} className="w-12" />
         </div>
         <h1 className="mt-2 text-2xl font-extrabold">{trip.title}</h1>
-        <p className="text-white/85">{trip.destination}</p>
+        <p className="font-medium text-white">{trip.destination}</p>
         {trip.start_date && (
-          <p className="mt-2 text-sm text-white/85">
+          <p className="mt-2 text-sm font-medium text-white">
             {formatHeb(trip.start_date)} – {formatHeb(trip.end_date)} {duration ? `· ${duration} ימים` : ""}
           </p>
         )}

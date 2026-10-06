@@ -152,7 +152,7 @@ export default function HomeTab() {
     detail = !trip.end_date
       ? ""
       : toEnd === 0
-        ? "היום היום האחרון"
+        ? "זה היום האחרון"
         : toEnd === 1
           ? "מחר היום האחרון"
           : `עוד ${dayCount(toEnd ?? 0)}`;
@@ -180,9 +180,9 @@ export default function HomeTab() {
       <section className="relative overflow-hidden rounded-3xl bg-gradient-sea px-5 py-6 text-white">
         <div className="pointer-events-none absolute -top-10 -left-10 size-40 rounded-full bg-white/10 blur-2xl" />
         <div className="relative">
-          <p className="type-footnote font-semibold text-white/80 [overflow-wrap:anywhere]">{trip.destination}</p>
-          <h2 className="type-large-title mt-1">{headline}</h2>
-          {detail && <p className="type-body mt-1 text-white/85">{detail}</p>}
+          {/* The destination is already in the header right above — no need to repeat it. */}
+          <h2 className="type-large-title">{headline}</h2>
+          {detail && <p className="type-body mt-1 font-medium text-white">{detail}</p>}
         </div>
       </section>
 

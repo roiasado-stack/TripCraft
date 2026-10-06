@@ -139,7 +139,7 @@ export function TripUpdates({
               const meta = kindMeta(u.kind);
               const Icon = meta.icon;
               return (
-                <div key={u.id} className="flex items-start gap-3 py-3 ps-4 pe-2">
+                <div key={u.id} className="flex items-start gap-3 py-3 ps-4 pe-4">
                   <div className={cn("grid size-9 shrink-0 place-items-center rounded-full", meta.cls)}>
                     <Icon className="size-4" />
                   </div>
@@ -154,25 +154,26 @@ export function TripUpdates({
                         {u.body}
                       </p>
                     )}
+                    {/* Under the text, not beside it: a side column starves the text on narrow screens. */}
+                    {canManage(u) && (
+                      <div className="-ms-2 mt-1 flex gap-1">
+                        <button
+                          onClick={() => togglePin(u)}
+                          className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                          aria-label={u.is_pinned ? "ביטול נעיצה" : "נעיצה"}
+                        >
+                          <Pin className={cn("size-4", u.is_pinned && "fill-current text-accent")} />
+                        </button>
+                        <button
+                          onClick={() => remove(u.id)}
+                          className="grid size-9 place-items-center rounded-full text-destructive transition-colors active:bg-destructive/10"
+                          aria-label="מחיקה"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  {canManage(u) && (
-                    <div className="flex shrink-0 flex-col">
-                      <button
-                        onClick={() => togglePin(u)}
-                        className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
-                        aria-label={u.is_pinned ? "ביטול נעיצה" : "נעיצה"}
-                      >
-                        <Pin className={cn("size-4", u.is_pinned && "fill-current text-accent")} />
-                      </button>
-                      <button
-                        onClick={() => remove(u.id)}
-                        className="grid size-9 place-items-center rounded-full text-destructive transition-colors active:bg-destructive/10"
-                        aria-label="מחיקה"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    </div>
-                  )}
                 </div>
               );
             })}
