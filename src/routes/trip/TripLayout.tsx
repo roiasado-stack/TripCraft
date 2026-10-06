@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import type { Participant, Trip, TripRole } from "@/lib/types";
 import { Button, FullSpinner } from "@/components/ui";
 import { ShareSheet } from "@/components/ShareSheet";
+import { BreakUiToggle } from "@/components/BreakUiToggle";
 import { cn } from "@/lib/utils";
 
 export type TripContext = {
@@ -93,6 +94,7 @@ export default function TripLayout() {
         </div>
       )}
       <Outlet context={ctx} />
+      {import.meta.env.MODE === "localstack" && <BreakUiToggle />}
 
       <ShareSheet
         trip={trip}

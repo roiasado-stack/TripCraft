@@ -131,7 +131,8 @@ export default function HomeTab() {
   const ongoing = until !== null && until <= 0 && endUntil !== null && endUntil >= 0;
   const duration = tripDuration(trip.start_date, trip.end_date);
 
-  const nextFlight = flights.find((f) => !f.depart_at || new Date(f.depart_at) >= new Date()) ?? flights[0];
+  // Only a flight still ahead counts — after the trip there is no "next" one.
+  const nextFlight = flights.find((f) => !f.depart_at || new Date(f.depart_at) >= new Date());
 
   return (
     <div className="px-4">
@@ -159,6 +160,11 @@ export default function HomeTab() {
                 עד היציאה · {formatHeb(trip.start_date)}
                 {duration ? ` · ${duration} ימים` : ""}
               </p>
+            </>
+          ) : until === null ? (
+            <>
+              <div className="mt-1 text-3xl font-extrabold">התאריכים עוד פתוחים 🗓️</div>
+              <p className="mt-1 text-white/85">בינתיים אפשר לבנות מסלול ולאסוף המלצות</p>
             </>
           ) : (
             <>

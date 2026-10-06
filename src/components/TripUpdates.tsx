@@ -14,6 +14,8 @@ const KINDS = [
   { value: "urgent", label: "דחוף", icon: Siren, cls: "bg-accent-soft text-accent" },
 ] as const;
 
+const RECENT_UPDATES = 3;
+
 function kindMeta(kind: string) {
   return KINDS.find((k) => k.value === kind) ?? KINDS[0];
 }
@@ -44,6 +46,13 @@ export function TripUpdates({
   const [loading, setLoading] = useState(!preloaded);
   const [draft, setDraft] = useState<{ title: string; body: string; kind: string; is_pinned: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  // Pinned updates always show; of the rest (newest first), only the latest few
+  // until expanded — a group trip piles up dozens and buries the whole screen.
+  const recentIds = new Set(updates.filter((u) => !u.is_pinned).slice(0, RECENT_UPDATES).map((u) => u.id));
+  const visible = showAll ? updates : updates.filter((u) => u.is_pinned || recentIds.has(u.id));
+  const hiddenCount = updates.length - visible.length;
 
   const load = async () => {
     const { data } = await supabase
@@ -123,7 +132,7 @@ export function TripUpdates({
         </Card>
       ) : (
         <div className="flex flex-col gap-2">
-          {updates.map((u) => {
+          {visible.map((u) => {
             const meta = kindMeta(u.kind);
             const Icon = meta.icon;
             return (
@@ -134,7 +143,7 @@ export function TripUpdates({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     {u.is_pinned && <Pin className="size-3 shrink-0 text-accent" />}
-                    <span className="font-semibold">{u.title}</span>
+                    <span className="min-w-0 font-semibold [overflow-wrap:anywhere]">{u.title}</span>
                   </div>
                   {u.body && <p className="mt-0.5 whitespace-pre-wrap text-sm text-muted-foreground">{u.body}</p>}
                 </div>
@@ -151,6 +160,11 @@ export function TripUpdates({
               </Card>
             );
           })}
+          {hiddenCount > 0 && (
+            <Button variant="ghost" size="sm" onClick={() => setShowAll(true)}>
+              הצגת כל {updates.length} העדכונים
+            </Button>
+          )}
         </div>
       )}
 
