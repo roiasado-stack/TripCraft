@@ -6,6 +6,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { Button, Card, FullSpinner, Input, Label } from "@/components/ui";
 import { Mail } from "lucide-react";
 import { LegalLinks } from "@/routes/LegalPages";
+import { DevSignIn } from "@/components/DevSignIn";
 
 type Mode = "signin" | "signup" | "reset";
 
@@ -204,6 +205,7 @@ export default function AuthPage() {
                     <GoogleIcon />
                     המשך עם Google
                   </Button>
+                  {import.meta.env.MODE === "localstack" && <DevSignIn />}
                 </>
               )}
             </>
