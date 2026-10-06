@@ -303,7 +303,7 @@ function IconTile({ icon, tone = "primary" }: { icon: React.ReactNode; tone?: "p
     <span
       className={cn(
         "grid size-8 place-items-center rounded-[9px]",
-        tone === "accent" ? "bg-accent text-accent-foreground" : "bg-primary text-primary-foreground",
+        tone === "accent" ? "bg-tile-accent text-tile-accent-foreground" : "bg-tile text-tile-foreground",
       )}
     >
       {icon}

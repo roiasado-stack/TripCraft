@@ -1,47 +1,53 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
-// Dev-only switch between today's palette and the candidate Apple-style one
-// (`.palette-neutral` in styles.css), so Roi can compare them on his phone on
-// any screen. Rendered only in `--mode localstack`; remembered per device.
+// Dev-only switch between today's palette and the candidate Apple-style ones
+// (`.palette-neutral`, plus `.palette-premium` for "חדש+", in styles.css), so
+// Roi can compare them on his phone on any screen. Rendered only in
+// `--mode localstack`; remembered per device.
 const KEY = "tc-palette-preview";
+type Palette = "current" | "neutral" | "premium";
 
-function readStored(): boolean {
+const OPTIONS: { value: Palette; label: string }[] = [
+  { value: "current", label: "נוכחי" },
+  { value: "neutral", label: "חדש" },
+  { value: "premium", label: "חדש+" },
+];
+
+function readStored(): Palette {
   try {
-    return localStorage.getItem(KEY) === "neutral";
+    const v = localStorage.getItem(KEY);
+    return v === "neutral" || v === "premium" ? v : "current";
   } catch {
-    return false;
+    return "current";
   }
 }
 
 export function DevPaletteToggle() {
-  const [neutral, setNeutral] = useState(readStored);
+  const [palette, setPalette] = useState<Palette>(readStored);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("palette-neutral", neutral);
+    const root = document.documentElement.classList;
+    root.toggle("palette-neutral", palette !== "current");
+    root.toggle("palette-premium", palette === "premium");
     try {
-      localStorage.setItem(KEY, neutral ? "neutral" : "current");
+      localStorage.setItem(KEY, palette);
     } catch {
       // private mode / blocked storage — the switch still works for this visit
     }
-  }, [neutral]);
+  }, [palette]);
 
   return (
-    <div
-      dir="ltr"
-      className="fixed bottom-36 left-1/2 z-30 flex -translate-x-1/2 gap-0.5 rounded-full bg-muted p-0.5 font-[system-ui] text-[11px] shadow-soft"
-    >
-      {[
-        { on: false, label: "צבעים: נוכחי" },
-        { on: true, label: "צבעים: חדש" },
-      ].map((o) => (
+    <div className="fixed bottom-36 left-1/2 z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-muted p-0.5 text-[11px] shadow-soft">
+      <span className="px-2 text-muted-foreground">צבעים:</span>
+      {OPTIONS.map((o) => (
         <button
-          key={o.label}
+          key={o.value}
           type="button"
-          onClick={() => setNeutral(o.on)}
+          onClick={() => setPalette(o.value)}
           className={cn(
             "whitespace-nowrap rounded-full px-3 py-1",
-            neutral === o.on ? "bg-card font-semibold text-foreground" : "text-muted-foreground",
+            palette === o.value ? "bg-card font-semibold text-foreground" : "text-muted-foreground",
           )}
         >
           {o.label}
