@@ -92,3 +92,17 @@ INSERT INTO trip_updates (trip_id, title, body, kind, is_pinned, created_at)
   SELECT 'b4ea0000-0000-4000-8000-000000000005', 'עדכון יומי #' || g, 'השכמה ב-06:30, ארוחת בוקר ב-07:00, יציאה מהמלון ב-07:45.',
          (ARRAY['info', 'warning', 'urgent'])[1 + g % 3], g % 40 = 0, now() - (g || ' hours')::interval
   FROM generate_series(1, 150) g;
+
+-- Suggestions on the Demo trip, with real Wikipedia page images (the same source
+-- `generate` uses), a logo-instead-of-photo miss, and items with no image.
+INSERT INTO suggestions (trip_id, kind, title, description, image_url, location) VALUES
+  ('b4ea0000-0000-4000-8000-000000000001', 'attraction', 'הקולוסיאום', 'האמפיתיאטרון הגדול של רומא העתיקה. כדאי להזמין כרטיס עם כניסה לפורום.',
+   'https://upload.wikimedia.org/wikipedia/commons/thumb/d/de/Colosseo_2020.jpg/960px-Colosseo_2020.jpg', 'Piazza del Colosseo'),
+  ('b4ea0000-0000-4000-8000-000000000001', 'attraction', 'מזרקת טרווי', 'מגיעים מוקדם בבוקר לפני ההמונים, וזורקים מטבע.',
+   'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Trevi_Fountain_-_Roma.jpg/960px-Trevi_Fountain_-_Roma.jpg', 'Piazza di Trevi'),
+  ('b4ea0000-0000-4000-8000-000000000001', 'attraction', 'הפנתיאון', NULL,
+   'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Pantheon_%28Rome%29_-_Right_side_and_front.jpg/960px-Pantheon_%28Rome%29_-_Right_side_and_front.jpg', 'Piazza della Rotonda'),
+  ('b4ea0000-0000-4000-8000-000000000001', 'attraction', 'גלריה בורגזה', 'חובה להזמין מראש — נכנסים בחלונות של שעתיים.',
+   'https://upload.wikimedia.org/wikipedia/commons/thumb/8/84/Galleria_Borghese_-_logo_%28Italy%2C_2022-%29.svg/960px-Galleria_Borghese_-_logo_%28Italy%2C_2022-%29.svg.png', 'Piazzale Scipione Borghese'),
+  ('b4ea0000-0000-4000-8000-000000000001', 'restaurant', 'Da Enzo al 29', 'טרטוריה רומאית קלאסית בטרסטוורה. תור ארוך בערב.', NULL, 'Trastevere'),
+  ('b4ea0000-0000-4000-8000-000000000001', 'tip', 'מים מהברזיות', 'הברזיות העגולות (nasoni) ברחבי העיר — מים קרים וטובים לשתייה.', NULL, NULL);
