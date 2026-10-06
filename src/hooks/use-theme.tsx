@@ -24,7 +24,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.classList.toggle("dark", theme === "dark");
     localStorage.setItem("tripcraft-theme", theme);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", theme === "dark" ? "#16233a" : "#12b3b0");
+    if (meta) meta.setAttribute("content", theme === "dark" ? "#060f1e" : "#f1f6fb");
   }, [theme]);
 
   return (

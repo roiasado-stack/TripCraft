@@ -23,8 +23,9 @@ function walk(dir, exts, out = []) {
 // Known, deliberate exceptions -------------------------------------------------
 const ALLOW = {
   // Third-party brand colours (WhatsApp, Google logo), the browser theme-color
-  // meta tag, and the default value of the user-picked agency colour.
-  hex: new Set(["#25D366", "#4285F4", "#34A853", "#FBBC05", "#EA4335", "#16233a", "#12b3b0"]),
+  // meta tag (it needs hex: #060f1e / #f1f6fb are the dark / light --background),
+  // and the default value of the user-picked agency colour (#12b3b0).
+  hex: new Set(["#25D366", "#4285F4", "#34A853", "#FBBC05", "#EA4335", "#060f1e", "#f1f6fb", "#12b3b0"]),
   // Its check is a SELECT of today's total (a number), not a zero-rows query.
   migrationCheck: new Set(["014_app_daily_cap.sql"]),
 };

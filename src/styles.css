@@ -3,8 +3,10 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * TripCraft design system — summery, vibrant, RTL-first.
- * Sea turquoise + warm coral + sun yellow.
+ * TripCraft design system — calm, Apple-style, RTL-first. Colours come from the
+ * logo (public/favicon.svg): its sky blue is the single tint, its sun amber marks
+ * what's happening now, and dark mode is its night blue, never pure black.
+ * Every text pair is WCAG AA (4.5:1) in both modes — re-measure when changing one.
  */
 
 @theme inline {
@@ -54,217 +56,6 @@
 :root {
   --radius: 1rem;
 
-  --background: oklch(0.985 0.014 190);
-  --foreground: oklch(0.26 0.045 235);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.26 0.045 235);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.26 0.045 235);
-
-  --primary: oklch(0.66 0.126 197);
-  --primary-foreground: oklch(0.99 0.005 190);
-  --primary-soft: oklch(0.94 0.045 195);
-
-  --secondary: oklch(0.95 0.03 200);
-  --secondary-foreground: oklch(0.32 0.06 220);
-
-  --muted: oklch(0.955 0.018 200);
-  --muted-foreground: oklch(0.52 0.035 225);
-
-  --accent: oklch(0.69 0.17 30);
-  --accent-foreground: oklch(0.99 0.01 40);
-  --accent-soft: oklch(0.95 0.045 40);
-
-  --sun: oklch(0.85 0.16 92);
-  --sun-foreground: oklch(0.3 0.07 70);
-
-  --destructive: oklch(0.58 0.22 25);
-  --destructive-foreground: oklch(0.99 0.005 40);
-
-  --border: oklch(0.9 0.025 200);
-  --input: oklch(0.9 0.025 200);
-  --ring: oklch(0.66 0.126 197);
-  /* hairline between rows of a grouped list */
-  --separator: oklch(0.26 0.045 235 / 0.12);
-  /* the rounded square behind a list row's icon */
-  --tile: var(--primary);
-  --tile-foreground: var(--primary-foreground);
-  --tile-accent: var(--accent);
-  --tile-accent-foreground: var(--accent-foreground);
-
-  --sidebar: oklch(0.985 0.014 190);
-  --sidebar-foreground: oklch(0.26 0.045 235);
-
-  --gradient-sea: linear-gradient(135deg, oklch(0.72 0.13 200), oklch(0.6 0.13 235));
-  --gradient-sunset: linear-gradient(135deg, oklch(0.85 0.16 92), oklch(0.69 0.17 30));
-  --gradient-surf: linear-gradient(160deg, oklch(0.97 0.03 195), oklch(0.94 0.045 40));
-  --shadow-soft: 0 8px 24px -12px oklch(0.45 0.08 220 / 0.35);
-  --shadow-pop: 0 14px 34px -14px oklch(0.6 0.15 30 / 0.45);
-}
-
-.dark {
-  --background: oklch(0.2 0.038 240);
-  --foreground: oklch(0.96 0.012 200);
-  --card: oklch(0.255 0.04 240);
-  --card-foreground: oklch(0.96 0.012 200);
-  --popover: oklch(0.255 0.04 240);
-  --popover-foreground: oklch(0.96 0.012 200);
-
-  --primary: oklch(0.76 0.13 196);
-  --primary-foreground: oklch(0.2 0.05 235);
-  --primary-soft: oklch(0.32 0.055 220);
-
-  --secondary: oklch(0.3 0.045 235);
-  --secondary-foreground: oklch(0.95 0.015 200);
-
-  --muted: oklch(0.3 0.04 235);
-  --muted-foreground: oklch(0.75 0.03 210);
-
-  --accent: oklch(0.74 0.16 33);
-  --accent-foreground: oklch(0.2 0.05 30);
-  --accent-soft: oklch(0.34 0.07 35);
-
-  --sun: oklch(0.87 0.16 92);
-  --sun-foreground: oklch(0.25 0.06 70);
-
-  --destructive: oklch(0.66 0.2 25);
-  --destructive-foreground: oklch(0.98 0.005 40);
-
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.76 0.13 196);
-  --separator: oklch(1 0 0 / 0.1);
-
-  --sidebar: oklch(0.22 0.04 240);
-  --sidebar-foreground: oklch(0.96 0.012 200);
-
-  --gradient-sea: linear-gradient(135deg, oklch(0.5 0.11 205), oklch(0.38 0.1 245));
-  --gradient-sunset: linear-gradient(135deg, oklch(0.7 0.15 80), oklch(0.6 0.16 28));
-  --gradient-surf: linear-gradient(160deg, oklch(0.28 0.05 230), oklch(0.3 0.06 35));
-  --shadow-soft: 0 8px 24px -12px oklch(0 0 0 / 0.55);
-  --shadow-pop: 0 14px 34px -14px oklch(0 0 0 / 0.6);
-}
-
-/*
- * Candidate Apple-style palette (premium plan, phase 5) — on only when
- * `.palette-neutral` is on <html> (dev switch in localstack mode). Neutral
- * surfaces, turquoise as the single tint, colour only with meaning.
- * Dark must come after light: both selectors weigh the same.
- */
-:root.palette-neutral {
-  --background: oklch(0.965 0.004 270);
-  --foreground: oklch(0.21 0.006 270);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.006 270);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.006 270);
-
-  --primary: oklch(0.5 0.095 200);
-  --primary-foreground: oklch(1 0 0);
-  --primary-soft: oklch(0.95 0.025 200);
-
-  --secondary: oklch(0.94 0.004 270);
-  --secondary-foreground: oklch(0.21 0.006 270);
-
-  --muted: oklch(0.94 0.004 270);
-  --muted-foreground: oklch(0.5 0.01 270);
-
-  --accent: oklch(0.565 0.19 30);
-  --accent-foreground: oklch(1 0 0);
-  --accent-soft: oklch(0.95 0.03 35);
-
-  --border: oklch(0.9 0.004 270);
-  --input: oklch(0.88 0.004 270);
-  --ring: oklch(0.5 0.095 200);
-  --separator: oklch(0.21 0.006 270 / 0.12);
-
-  --sidebar: oklch(0.965 0.004 270);
-  --sidebar-foreground: oklch(0.21 0.006 270);
-
-  --gradient-sea: linear-gradient(140deg, oklch(0.56 0.1 200), oklch(0.42 0.09 228));
-  --shadow-soft: 0 1px 2px oklch(0 0 0 / 0.04), 0 8px 24px -14px oklch(0 0 0 / 0.14);
-  --shadow-pop: 0 12px 32px -14px oklch(0 0 0 / 0.22);
-}
-
-.dark.palette-neutral {
-  --background: oklch(0 0 0);
-  --foreground: oklch(0.98 0 0);
-  --card: oklch(0.215 0.004 270);
-  --card-foreground: oklch(0.98 0 0);
-  --popover: oklch(0.255 0.004 270);
-  --popover-foreground: oklch(0.98 0 0);
-
-  --primary: oklch(0.78 0.12 196);
-  --primary-foreground: oklch(0.18 0.03 220);
-  --primary-soft: oklch(0.3 0.05 205);
-
-  --secondary: oklch(0.27 0.004 270);
-  --secondary-foreground: oklch(0.98 0 0);
-
-  --muted: oklch(0.27 0.004 270);
-  --muted-foreground: oklch(0.72 0.008 270);
-
-  --accent: oklch(0.72 0.16 33);
-  --accent-foreground: oklch(0.18 0.04 30);
-  --accent-soft: oklch(0.3 0.06 35);
-
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.78 0.12 196);
-  --separator: oklch(1 0 0 / 0.1);
-
-  --sidebar: oklch(0 0 0);
-  --sidebar-foreground: oklch(0.98 0 0);
-
-  --gradient-sea: linear-gradient(140deg, oklch(0.42 0.08 205), oklch(0.28 0.06 235));
-  --shadow-soft: none;
-  --shadow-pop: 0 12px 32px -14px oklch(0 0 0 / 0.7);
-}
-
-/*
- * "חדש+" — a quieter, more premium take on the neutral palette (dev compare
- * only): a deeper petrol tint, a deep-ink hero with a soft glow, tinted-glass
- * icon tiles, and Heebo for headings. Needs .palette-neutral as well.
- */
-:root.palette-neutral.palette-premium {
-  --primary: oklch(0.46 0.075 212);
-  --ring: oklch(0.46 0.075 212);
-  --primary-soft: oklch(0.95 0.018 212);
-  --tile: oklch(0.94 0.014 212);
-  --tile-foreground: oklch(0.46 0.075 212);
-  --tile-accent: oklch(0.95 0.025 35);
-  --tile-accent-foreground: oklch(0.565 0.19 30);
-  --gradient-sea: radial-gradient(120% 90% at 90% 0%, oklch(0.55 0.08 200 / 0.55), transparent 60%),
-    linear-gradient(160deg, oklch(0.31 0.035 240), oklch(0.2 0.025 255));
-}
-
-.dark.palette-neutral.palette-premium {
-  --primary: oklch(0.82 0.085 200);
-  --ring: oklch(0.82 0.085 200);
-  --primary-soft: oklch(0.29 0.03 212);
-  --tile: oklch(0.29 0.02 212);
-  --tile-foreground: oklch(0.82 0.085 200);
-  --tile-accent: oklch(0.3 0.05 35);
-  --tile-accent-foreground: oklch(0.75 0.15 33);
-  --gradient-sea: radial-gradient(120% 90% at 90% 0%, oklch(0.5 0.08 200 / 0.45), transparent 60%),
-    linear-gradient(160deg, oklch(0.27 0.03 240), oklch(0.17 0.02 255));
-}
-
-.palette-premium :is(h1, h2, h3, h4, .type-large-title, .type-title, .font-display) {
-  font-family: "Heebo", system-ui, sans-serif;
-}
-.palette-premium .type-large-title {
-  font-weight: 800;
-  letter-spacing: -0.025em;
-}
-
-/*
- * "מותג" — derived from the logo (public/favicon.svg): its sky blue as the
- * single tint, its sun amber for "now" highlights, its deep night blue for
- * dark mode instead of black, and the logo's own gradient on the hero. Dev
- * compare only, on its own (not combined with .palette-neutral).
- */
-:root.palette-brand {
   --background: oklch(0.972 0.008 245);
   --foreground: oklch(0.22 0.03 258);
   --card: oklch(1 0 0);
@@ -282,31 +73,38 @@
   --muted: oklch(0.945 0.012 245);
   --muted-foreground: oklch(0.5 0.03 258);
 
-  --accent: oklch(0.56 0.16 48);
+  --accent: oklch(0.54 0.16 46);
   --accent-foreground: oklch(1 0 0);
-  --accent-soft: oklch(0.96 0.045 80);
+  --accent-soft: oklch(0.97 0.035 80);
 
   --sun: oklch(0.84 0.16 82);
   --sun-foreground: oklch(0.3 0.07 60);
 
+  --destructive: oklch(0.55 0.21 25);
+  --destructive-foreground: oklch(0.99 0.005 40);
+
   --border: oklch(0.9 0.015 245);
   --input: oklch(0.88 0.015 245);
   --ring: oklch(0.49 0.16 256);
+  /* hairline between rows of a grouped list */
   --separator: oklch(0.22 0.03 258 / 0.12);
+  /* the rounded square behind a list row's icon */
   --tile: oklch(0.945 0.03 245);
   --tile-foreground: oklch(0.49 0.16 256);
   --tile-accent: oklch(0.96 0.05 80);
-  --tile-accent-foreground: oklch(0.56 0.16 48);
+  --tile-accent-foreground: oklch(0.54 0.16 46);
 
   --sidebar: oklch(0.972 0.008 245);
   --sidebar-foreground: oklch(0.22 0.03 258);
 
   --gradient-sea: linear-gradient(140deg, oklch(0.36 0.15 262), oklch(0.55 0.17 245));
+  --gradient-sunset: linear-gradient(135deg, oklch(0.84 0.16 82), oklch(0.66 0.17 50));
+  --gradient-surf: linear-gradient(160deg, oklch(0.97 0.02 240), oklch(0.96 0.035 80));
   --shadow-soft: 0 1px 2px oklch(0.3 0.05 255 / 0.05), 0 8px 24px -14px oklch(0.3 0.08 255 / 0.18);
   --shadow-pop: 0 12px 32px -14px oklch(0.3 0.1 255 / 0.3);
 }
 
-.dark.palette-brand {
+.dark {
   --background: oklch(0.17 0.035 258);
   --foreground: oklch(0.97 0.005 250);
   --card: oklch(0.225 0.035 258);
@@ -328,21 +126,29 @@
   --accent-foreground: oklch(0.22 0.05 60);
   --accent-soft: oklch(0.32 0.06 70);
 
+  --sun: oklch(0.87 0.16 92);
+  --sun-foreground: oklch(0.25 0.06 70);
+
+  --destructive: oklch(0.66 0.2 25);
+  --destructive-foreground: oklch(0.98 0.005 40);
+
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 14%);
   --ring: oklch(0.78 0.12 232);
   --separator: oklch(1 0 0 / 0.1);
-  --tile: oklch(0.3 0.06 252);
-  --tile-foreground: oklch(0.78 0.12 232);
-  --tile-accent: oklch(0.32 0.06 70);
-  --tile-accent-foreground: oklch(0.8 0.15 72);
 
   --sidebar: oklch(0.17 0.035 258);
   --sidebar-foreground: oklch(0.97 0.005 250);
 
   --gradient-sea: linear-gradient(140deg, oklch(0.3 0.12 262), oklch(0.47 0.15 245));
+  --gradient-sunset: linear-gradient(135deg, oklch(0.72 0.15 78), oklch(0.58 0.16 50));
+  --gradient-surf: linear-gradient(160deg, oklch(0.24 0.04 255), oklch(0.27 0.05 60));
   --shadow-soft: none;
   --shadow-pop: 0 12px 32px -14px oklch(0 0 0 / 0.6);
+  --tile: oklch(0.3 0.06 252);
+  --tile-foreground: oklch(0.78 0.12 232);
+  --tile-accent: oklch(0.32 0.06 70);
+  --tile-accent-foreground: oklch(0.8 0.15 72);
 }
 
 @layer base {
