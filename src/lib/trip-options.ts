@@ -1,3 +1,5 @@
+import { parseLocalDate } from "./trip-dates";
+
 export const TRIP_TYPES = [
   { value: "family", label: "משפחה", emoji: "👨‍👩‍👧‍👦" },
   { value: "couple", label: "זוג", emoji: "❤️" },
@@ -149,14 +151,6 @@ export function prefEmoji(value: string) {
   return PREFERENCES.find((p) => p.value === value)?.emoji ?? "•";
 }
 
-export function tripTypeLabel(value: string) {
-  return TRIP_TYPES.find((t) => t.value === value)?.label ?? value;
-}
-
-export function tripTypeEmoji(value: string) {
-  return TRIP_TYPES.find((t) => t.value === value)?.emoji ?? "🌍";
-}
-
 export function docCategoryLabel(value: string) {
   return DOC_CATEGORIES.find((d) => d.value === value)?.label ?? value;
 }
@@ -169,9 +163,11 @@ export function itineraryCategory(value: string) {
   return ITINERARY_CATEGORIES.find((c) => c.value === value) ?? ITINERARY_CATEGORIES[0];
 }
 
+// Date-only strings are the traveller's calendar day — parse them as local
+// (see trip-dates), or a phone west of Greenwich shows the day before.
 export function formatHeb(date?: string | null) {
   if (!date) return "";
-  return new Date(date).toLocaleDateString("he-IL", {
+  return (parseLocalDate(date) ?? new Date(date)).toLocaleDateString("he-IL", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -179,7 +175,7 @@ export function formatHeb(date?: string | null) {
 }
 
 export function formatDayHeb(date: string) {
-  return new Date(date).toLocaleDateString("he-IL", {
+  return (parseLocalDate(date) ?? new Date(date)).toLocaleDateString("he-IL", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -218,16 +214,6 @@ export function daysBetween(start: string, end: string) {
 }
 
 /** Whole days from today until `date` (can be negative). */
-export function daysUntil(date?: string | null): number | null {
-  if (!date) return null;
-  const target = new Date(date);
-  if (isNaN(target.getTime())) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  target.setHours(0, 0, 0, 0);
-  return Math.round((target.getTime() - today.getTime()) / 86400000);
-}
-
 export function tripDuration(start?: string | null, end?: string | null): number | null {
   if (!start || !end) return null;
   const d = daysBetween(start, end);

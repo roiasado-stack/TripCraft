@@ -193,7 +193,11 @@ export default function HomeTab() {
           title={`היום · ${now.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" })}`}
         >
           {today.length === 0 ? (
-            <ListRow to="itinerary" title="אין עדיין תוכניות להיום" subtitle="הוספה למסלול" />
+            <ListRow
+              to="itinerary"
+              title="אין עדיין תוכניות להיום"
+              subtitle={can(role, "edit") ? "הוספה למסלול" : "למסלול המלא"}
+            />
           ) : (
             today.map((it) => (
               <ListRow

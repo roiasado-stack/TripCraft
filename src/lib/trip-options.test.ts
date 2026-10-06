@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { destinationFlag, flagCountryCode } from "./trip-options";
+import { destinationFlag, flagCountryCode, formatDayHeb, formatHeb } from "./trip-options";
 
 describe("destinationFlag", () => {
   it("matches a city or a country anywhere in the text", () => {
@@ -34,5 +34,19 @@ describe("flagCountryCode", () => {
     expect(flagCountryCode("IT")).toBeNull();
     expect(flagCountryCode("")).toBeNull();
     expect(flagCountryCode(null)).toBeNull();
+  });
+});
+
+describe("formatHeb / formatDayHeb", () => {
+  it("shows the stored calendar day even on a phone west of Greenwich", () => {
+    const saved = process.env.TZ;
+    process.env.TZ = "America/New_York";
+    try {
+      // new Date("2026-11-15") is UTC midnight, i.e. Nov 14 in New York.
+      expect(formatHeb("2026-11-15")).toContain("15");
+      expect(formatDayHeb("2026-11-15")).toContain("15");
+    } finally {
+      process.env.TZ = saved;
+    }
   });
 });

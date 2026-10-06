@@ -20,7 +20,7 @@ const env = Object.fromEntries(
 );
 const apiUrl = env.API_URL;
 const serviceKey = env.SERVICE_ROLE_KEY;
-if (!apiUrl || !serviceKey || !/^http:\/\/(127\.0\.0\.1|localhost)/.test(apiUrl)) {
+if (!apiUrl || !serviceKey || !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/.test(apiUrl)) {
   console.error("Local Supabase is not running (or not on localhost). Start it with: npx supabase start");
   process.exit(2);
 }
