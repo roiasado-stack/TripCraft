@@ -18,7 +18,7 @@ export function BreakUiToggle() {
   return (
     <div
       dir="ltr"
-      className="fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 gap-0.5 rounded-full bg-muted p-0.5 font-[system-ui] text-[11px] shadow-soft"
+      className="fixed bottom-24 left-1/2 z-30 flex -translate-x-1/2 gap-0.5 rounded-full bg-muted p-0.5 font-[system-ui] text-[11px] shadow-soft"
     >
       {FIXTURES.map((f) => (
         <button

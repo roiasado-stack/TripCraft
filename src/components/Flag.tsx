@@ -39,5 +39,10 @@ export function Flag({
       </span>
     );
   // A flag emoji we have no SVG for would show as letters — use the globe instead.
-  return <span aria-hidden>{code ? "🌍" : (emoji ?? "🌍")}</span>;
+  // Same box as the flag, so rows line up whichever one renders.
+  return (
+    <span aria-hidden className={cn("grid shrink-0 place-items-center", className)}>
+      {code ? "🌍" : (emoji ?? "🌍")}
+    </span>
+  );
 }

@@ -1,5 +1,8 @@
 import {
   forwardRef,
+  useEffect,
+  useId,
+  useRef,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
@@ -129,7 +132,7 @@ export function ListRow({
   );
   const cls = cn("flex min-h-14 items-center gap-3 px-4 py-3", className);
   return to ? (
-    <Link to={to} className={cn(cls, "pressable active:bg-muted/60")}>
+    <Link to={to} className={cn(cls, "transition-colors active:bg-muted/70")}>
       {body}
     </Link>
   ) : (
@@ -336,20 +339,52 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Callers pass an inline onClose; a ref keeps the effect below from re-running
+  // (and re-focusing the panel) on every render.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  // Move focus into the dialog, close on Escape, and hand focus back on close.
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseRef.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      previous?.focus?.();
+    };
+  }, [open]);
+
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      role="dialog"
+      aria-modal
+      aria-labelledby={titleId}
+    >
       <div
         className="absolute inset-0 bg-black/45 backdrop-blur-sm"
         onClick={onClose}
         style={{ animation: "tc-fade 150ms ease-out" }}
       />
       <div
-        className="relative z-10 max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-4xl border border-border bg-card p-5 shadow-pop sm:rounded-4xl"
+        ref={panelRef}
+        tabIndex={-1}
+        className="relative z-10 max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-4xl border border-border bg-card p-5 shadow-pop outline-none sm:rounded-4xl"
         style={{ animation: "tc-sheet 220ms cubic-bezier(0.22,1,0.36,1)" }}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">{title}</h2>
+          <h2 id={titleId} className="text-lg font-bold">
+            {title}
+          </h2>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="סגור">
             <X className="size-5" />
           </Button>

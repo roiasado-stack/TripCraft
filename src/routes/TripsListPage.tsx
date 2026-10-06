@@ -5,10 +5,10 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { createDemoTrip } from "@/lib/demo-trip";
-import type { MemberRole, Trip } from "@/lib/types";
-import { BrandLogo } from "@/components/BrandLogo";
-import { Button, Card, EmptyState, FullSpinner } from "@/components/ui";
+import type { MemberRole, Trip, TripRole } from "@/lib/types";
+import { Button, EmptyState, FullSpinner, GroupedList, ListRow } from "@/components/ui";
 import { TripCard } from "@/components/TripCard";
+import { parseLocalDate, tripPhase, type TripPhase } from "@/lib/trip-dates";
 
 export default function TripsListPage() {
   const { profile, isAgent, user } = useAuth();
@@ -59,41 +59,60 @@ export default function TripsListPage() {
   }, [user]);
 
   const firstName = (profile?.full_name ?? "").split(" ")[0];
+  const hasTrips = trips.length > 0 || shared.length > 0;
+
+  // One list, grouped the way people think about trips: on now, coming up, done.
+  const today = new Date();
+  const time = (d: string | null) => parseLocalDate(d)?.getTime() ?? null;
+  const groups: Record<TripPhase, { trip: Trip; role: TripRole }[]> = { now: [], upcoming: [], past: [] };
+  for (const item of [...trips.map((trip) => ({ trip, role: "owner" as TripRole })), ...shared])
+    groups[tripPhase(item.trip, today)].push(item);
+  // Soonest first; undated trips (still being planned) after the dated ones.
+  const bySoonest = (a: { trip: Trip }, b: { trip: Trip }) =>
+    (time(a.trip.start_date) ?? Infinity) - (time(b.trip.start_date) ?? Infinity);
+  groups.now.sort(bySoonest);
+  groups.upcoming.sort(bySoonest);
+  // Most recent first.
+  groups.past.sort(
+    (a, b) =>
+      (time(b.trip.end_date ?? b.trip.start_date) ?? 0) - (time(a.trip.end_date ?? a.trip.start_date) ?? 0),
+  );
+  const sections: [TripPhase, string][] = [
+    ["now", "עכשיו"],
+    ["upcoming", "בקרוב"],
+    ["past", "עברו"],
+  ];
 
   return (
-    <div className="mx-auto min-h-screen max-w-lg px-4 pb-16 pt-5">
-      <header className="mb-6 flex items-center justify-between">
-        <BrandLogo />
+    <div className="mx-auto min-h-screen max-w-lg px-4 pb-32 pt-4">
+      <header className="mb-1 flex justify-end">
         <Link
           to="/settings"
-          className="grid size-11 place-items-center rounded-2xl border border-border bg-card text-foreground shadow-soft"
+          className="grid size-11 place-items-center rounded-full text-primary transition-colors active:bg-muted/70"
           aria-label="הגדרות"
         >
-          <Settings className="size-5" />
+          <Settings className="size-6" />
         </Link>
       </header>
 
-      <div className="mb-5">
-        <h1 className="text-2xl font-extrabold tracking-tight">
-          {firstName ? `היי ${firstName} 👋` : "הטיולים שלי"}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {isAgent ? "מרחב הסוכן שלך — נהל את הטיולים של הלקוחות." : "כל ההרפתקאות שלך במקום אחד."}
-        </p>
+      <div className="mb-6 px-1">
+        {firstName && <p className="type-footnote font-semibold text-muted-foreground">היי {firstName}</p>}
+        <h1 className="type-large-title">{isAgent ? "הטיולים של הלקוחות" : "הטיולים שלי"}</h1>
       </div>
 
       {pendingCount > 0 && (
-        <Card className="mb-4 flex items-center gap-3 p-4 text-sm">
-          <Clock className="size-5 shrink-0 text-primary" />
-          <span>
-            {pendingCount === 1 ? "הזמנה אחת לטיול ממתינה" : `${pendingCount} הזמנות לטיולים ממתינות`} לאישור של בעל הטיול.
-          </span>
-        </Card>
+        <GroupedList className="mb-6">
+          <ListRow
+            leading={<Clock className="size-5 text-primary" />}
+            title={pendingCount === 1 ? "הזמנה אחת ממתינה" : `${pendingCount} הזמנות ממתינות`}
+            subtitle="לאישור של בעל הטיול"
+          />
+        </GroupedList>
       )}
 
       {loading ? (
         <FullSpinner />
-      ) : trips.length === 0 && shared.length === 0 ? (
+      ) : !hasTrips ? (
         <div className="mt-8">
           <EmptyState
             emoji="🧳"
@@ -114,38 +133,35 @@ export default function TripsListPage() {
           />
         </div>
       ) : (
-        <>
-          <div className="flex flex-col gap-3.5">
-            {trips.map((trip) => (
-              <TripCard
-                key={trip.id}
-                trip={trip}
-                onDeleted={(id) => setTrips((prev) => prev.filter((t) => t.id !== id))}
-              />
-            ))}
-          </div>
-          {shared.length > 0 && (
-            <section className="mt-7">
-              <h2 className="mb-3 font-display text-lg font-bold">שותפו איתי</h2>
-              <div className="flex flex-col gap-3.5">
-                {shared.map(({ trip, role }) => (
-                  <TripCard key={trip.id} trip={trip} role={role} />
-                ))}
-              </div>
-            </section>
+        <div className="flex flex-col gap-7">
+          {sections.map(
+            ([phase, title]) =>
+              groups[phase].length > 0 && (
+                <GroupedList key={phase} title={title}>
+                  {groups[phase].map(({ trip, role }) => (
+                    <TripCard
+                      key={trip.id}
+                      trip={trip}
+                      role={role}
+                      today={today}
+                      onDeleted={(id) => setTrips((prev) => prev.filter((t) => t.id !== id))}
+                    />
+                  ))}
+                </GroupedList>
+              ),
           )}
-        </>
+        </div>
       )}
 
-      {/* Floating create button */}
-      {(trips.length > 0 || shared.length > 0) && (
-        <button
-          onClick={() => navigate("/new")}
-          className="safe-bottom fixed bottom-5 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-accent px-6 py-4 font-bold text-accent-foreground shadow-pop transition active:scale-95"
-        >
-          <Plus className="size-5" />
-          טיול חדש
-        </button>
+      {hasTrips && (
+        <div className="material safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-separator">
+          <div className="mx-auto max-w-lg px-4 pt-3">
+            <Button size="lg" className="pressable w-full" onClick={() => navigate("/new")}>
+              <Plus className="size-5" />
+              טיול חדש
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
