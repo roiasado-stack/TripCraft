@@ -16,12 +16,12 @@ import {
 } from "@/components/ImportVoucher";
 import { generateContent } from "@/lib/ai";
 import { uploadTripDocument } from "@/lib/documents";
+import { Flag } from "@/components/Flag";
 import type { Participant, Trip } from "@/lib/types";
 import {
   AGE_RANGES,
   BUDGET_LEVELS,
   COVER_EMOJIS,
-  destinationFlag,
   PREFERENCES,
   TRIP_TYPES,
   tripDuration,
@@ -1057,7 +1057,7 @@ function StepReview(p: {
       </div>
       <Card className="flex items-center gap-4 p-4">
         <div className="grid size-16 place-items-center rounded-2xl bg-gradient-sea text-3xl">
-          {destinationFlag(p.destination) ?? p.emoji}
+          <Flag destination={p.destination} fallback={p.emoji} className="w-10" />
         </div>
         <div>
           <div className="text-lg font-bold">{p.title || "טיול חדש"}</div>

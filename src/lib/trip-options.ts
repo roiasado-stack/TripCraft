@@ -65,10 +65,8 @@ export const COVER_EMOJIS = [
 
 /**
  * Hebrew destination text → flag emoji, checked as a substring against the
- * whole free-text `destination` field. Ordered so a country name doesn't
- * accidentally shadow a more specific city/region entered before it — not
- * that it matters here since every value maps to the same country, but new
- * entries should keep the "most specific first" convention.
+ * whole free-text `destination` field. The place the user wrote first wins
+ * ("מילאנו … וחזרה דרך מינכן" is Italy), so list order doesn't matter.
  */
 const DESTINATION_FLAGS: [string, string][] = [
   ["צ'כיה", "🇨🇿"], ["צ׳כיה", "🇨🇿"], ["פראג", "🇨🇿"],
@@ -125,7 +123,22 @@ const DESTINATION_FLAGS: [string, string][] = [
 export function destinationFlag(destination: string | null | undefined): string | null {
   const d = (destination ?? "").trim();
   if (!d) return null;
-  return DESTINATION_FLAGS.find(([key]) => d.includes(key))?.[1] ?? null;
+  let best: { at: number; key: string; flag: string } | null = null;
+  for (const [key, flag] of DESTINATION_FLAGS) {
+    const at = d.indexOf(key);
+    if (at < 0) continue;
+    // Earliest mention wins; at the same spot the longer key is the more
+    // specific one ("סיני" over "סין").
+    if (!best || at < best.at || (at === best.at && key.length > best.key.length)) best = { at, key, flag };
+  }
+  return best?.flag ?? null;
+}
+
+/** "🇮🇹" → "IT". Null for anything that isn't a two-letter regional-indicator flag. */
+export function flagCountryCode(emoji: string | null | undefined): string | null {
+  const points = [...(emoji ?? "").trim()].map((c) => c.codePointAt(0) ?? 0);
+  if (points.length !== 2 || points.some((p) => p < 0x1f1e6 || p > 0x1f1ff)) return null;
+  return String.fromCharCode(...points.map((p) => p - 0x1f1e6 + 65));
 }
 
 export function prefLabel(value: string) {

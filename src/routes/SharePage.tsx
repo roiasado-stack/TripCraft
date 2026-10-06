@@ -10,11 +10,11 @@ import { TripUpdates } from "@/components/TripUpdates";
 import { PhotoAlbumCard } from "@/components/PhotoAlbumCard";
 import { GuideCard } from "@/components/GuideCard";
 import { MapLink } from "@/components/MapLink";
+import { Flag } from "@/components/Flag";
 import { resolveMapUrl } from "@/lib/maps";
 import { LegalLinks } from "@/routes/LegalPages";
 import {
   daysBetween,
-  destinationFlag,
   formatDateTimeHeb,
   formatDayHeb,
   formatHeb,
@@ -97,7 +97,9 @@ export default function SharePage() {
 
       {/* hero */}
       <div className="mt-4 overflow-hidden rounded-4xl bg-gradient-sea p-6 text-white shadow-pop" style={accent ? { background: accent } : undefined}>
-        <div className="text-4xl">{destinationFlag(trip.destination) ?? trip.cover_emoji ?? "🌍"}</div>
+        <div className="text-4xl">
+          <Flag destination={trip.destination} fallback={trip.cover_emoji} className="w-12" />
+        </div>
         <h1 className="mt-2 text-2xl font-extrabold">{trip.title}</h1>
         <p className="text-white/85">{trip.destination}</p>
         {trip.start_date && (

@@ -329,6 +329,7 @@ export function CreditsPage() {
     ["Leaflet", "BSD-2-Clause"],
     ["React Leaflet", "Hippocratic License 2.1"],
     ["Lucide (אייקונים)", "ISC"],
+    ["country-flag-icons (דגלי מדינות)", "MIT"],
     ["SheetJS (קריאת קבצי Excel)", "Apache-2.0"],
     ["Tailwind CSS", "MIT"],
     ["clsx, tailwind-merge", "MIT"],
