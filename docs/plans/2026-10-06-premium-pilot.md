@@ -110,6 +110,20 @@ Each phase is done only when **all** of this passes, with screenshots in the pha
   nothing clipped, counts read correctly in Hebrew, the flight card's airline stays on ≤ 2 lines,
   `Lindt Home of Chocolate…` truncates at its end; content visibly scrolls under the header and nav.
 
+### Phase 5 — Apple-style neutral palette, compared on the phone first (added 2026-10-06, Roi approved)
+- Today's palette is "summery": a navy-tinted dark background, three strong colours (turquoise,
+  coral, yellow) used together, and gradients on many surfaces. Apple's approach: neutral surfaces
+  (pure black / iOS grouped gray), **one tint** — TripCraft's turquoise — for everything tappable,
+  and colour only with meaning (coral = now/urgent, yellow = warning).
+- Step 1: the new palette as a token override (`.palette-neutral` on `<html>`, light + dark) and a
+  dev-only switch, visible only in `--mode localstack`, to flip current ↔ new on any screen.
+  Nothing changes for real users.
+- Step 2 (only after Roi picks): the chosen values become the default tokens, the switch is removed,
+  and every screen in the app is checked, since tokens are global.
+- **Acceptance:** body text, secondary text and turquoise links meet WCAG AA (4.5:1) on their
+  surfaces in both modes, measured in the browser; buttons with text on turquoise meet AA; Roi
+  compares both palettes on his phone and decides.
+
 ## Roles touched
 Owner, editor, participant, viewer see the same layout; edit controls stay gated by `can()` as today.
 The anonymous demo banner in `TripLayout` stays visible above the new header.

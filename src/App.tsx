@@ -7,6 +7,7 @@ import { isSupabaseConfigured } from "@/lib/supabase";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { SetupNeeded } from "@/components/SetupNeeded";
+import { DevPaletteToggle } from "@/components/DevPaletteToggle";
 import AuthPage from "@/routes/AuthPage";
 import ResetPasswordPage from "@/routes/ResetPasswordPage";
 import TripsListPage from "@/routes/TripsListPage";
@@ -47,6 +48,7 @@ export default function App() {
           <ErrorBoundary>
             <AuthProvider>
               <BrowserRouter>
+              {import.meta.env.MODE === "localstack" && <DevPaletteToggle />}
               <Routes>
                 <Route path="/auth" element={<AuthPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
