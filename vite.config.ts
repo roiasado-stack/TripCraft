@@ -23,5 +23,29 @@ export default defineConfig({
     // real device — clipboard, native share and home-screen install are all
     // inert over plain http on the LAN.
     allowedHosts: [".trycloudflare.com", ".ngrok-free.app", ".loca.lt"],
+    // The dev server listens on the LAN (and on a tunnel when one is open), so
+    // anything under the project root is reachable by URL. Only the app needs
+    // to be: keep secrets, git history and the private business/docs folders out.
+    // Patterns match absolute paths, hence the leading **/.
+    fs: {
+      deny: [
+        ".env",
+        ".env.*",
+        "*.{crt,pem,key}",
+        "**/.git/**",
+        "**/.vercel/**",
+        "**/.claude/**",
+        "**/supabase/.temp/**",
+        "**/business/**",
+        "**/n8n/**",
+        "**/docs/**",
+        "**/presentation/**",
+        "**/marketing/**",
+        "**/design/**",
+        "**/evals/**",
+        "**/*.{zip,pdf}",
+        "**/CLAUDE.md",
+      ],
+    },
   },
 });

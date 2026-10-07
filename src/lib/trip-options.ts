@@ -1,3 +1,5 @@
+import { parseLocalDate } from "./trip-dates";
+
 export const TRIP_TYPES = [
   { value: "family", label: "משפחה", emoji: "👨‍👩‍👧‍👦" },
   { value: "couple", label: "זוג", emoji: "❤️" },
@@ -65,10 +67,8 @@ export const COVER_EMOJIS = [
 
 /**
  * Hebrew destination text → flag emoji, checked as a substring against the
- * whole free-text `destination` field. Ordered so a country name doesn't
- * accidentally shadow a more specific city/region entered before it — not
- * that it matters here since every value maps to the same country, but new
- * entries should keep the "most specific first" convention.
+ * whole free-text `destination` field. The place the user wrote first wins
+ * ("מילאנו … וחזרה דרך מינכן" is Italy), so list order doesn't matter.
  */
 const DESTINATION_FLAGS: [string, string][] = [
   ["צ'כיה", "🇨🇿"], ["צ׳כיה", "🇨🇿"], ["פראג", "🇨🇿"],
@@ -125,7 +125,22 @@ const DESTINATION_FLAGS: [string, string][] = [
 export function destinationFlag(destination: string | null | undefined): string | null {
   const d = (destination ?? "").trim();
   if (!d) return null;
-  return DESTINATION_FLAGS.find(([key]) => d.includes(key))?.[1] ?? null;
+  let best: { at: number; key: string; flag: string } | null = null;
+  for (const [key, flag] of DESTINATION_FLAGS) {
+    const at = d.indexOf(key);
+    if (at < 0) continue;
+    // Earliest mention wins; at the same spot the longer key is the more
+    // specific one ("סיני" over "סין").
+    if (!best || at < best.at || (at === best.at && key.length > best.key.length)) best = { at, key, flag };
+  }
+  return best?.flag ?? null;
+}
+
+/** "🇮🇹" → "IT". Null for anything that isn't a two-letter regional-indicator flag. */
+export function flagCountryCode(emoji: string | null | undefined): string | null {
+  const points = [...(emoji ?? "").trim()].map((c) => c.codePointAt(0) ?? 0);
+  if (points.length !== 2 || points.some((p) => p < 0x1f1e6 || p > 0x1f1ff)) return null;
+  return String.fromCharCode(...points.map((p) => p - 0x1f1e6 + 65));
 }
 
 export function prefLabel(value: string) {
@@ -134,14 +149,6 @@ export function prefLabel(value: string) {
 
 export function prefEmoji(value: string) {
   return PREFERENCES.find((p) => p.value === value)?.emoji ?? "•";
-}
-
-export function tripTypeLabel(value: string) {
-  return TRIP_TYPES.find((t) => t.value === value)?.label ?? value;
-}
-
-export function tripTypeEmoji(value: string) {
-  return TRIP_TYPES.find((t) => t.value === value)?.emoji ?? "🌍";
 }
 
 export function docCategoryLabel(value: string) {
@@ -156,9 +163,11 @@ export function itineraryCategory(value: string) {
   return ITINERARY_CATEGORIES.find((c) => c.value === value) ?? ITINERARY_CATEGORIES[0];
 }
 
+// Date-only strings are the traveller's calendar day — parse them as local
+// (see trip-dates), or a phone west of Greenwich shows the day before.
 export function formatHeb(date?: string | null) {
   if (!date) return "";
-  return new Date(date).toLocaleDateString("he-IL", {
+  return (parseLocalDate(date) ?? new Date(date)).toLocaleDateString("he-IL", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -166,7 +175,7 @@ export function formatHeb(date?: string | null) {
 }
 
 export function formatDayHeb(date: string) {
-  return new Date(date).toLocaleDateString("he-IL", {
+  return (parseLocalDate(date) ?? new Date(date)).toLocaleDateString("he-IL", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -205,16 +214,6 @@ export function daysBetween(start: string, end: string) {
 }
 
 /** Whole days from today until `date` (can be negative). */
-export function daysUntil(date?: string | null): number | null {
-  if (!date) return null;
-  const target = new Date(date);
-  if (isNaN(target.getTime())) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  target.setHours(0, 0, 0, 0);
-  return Math.round((target.getTime() - today.getTime()) / 86400000);
-}
-
 export function tripDuration(start?: string | null, end?: string | null): number | null {
   if (!start || !end) return null;
   const d = daysBetween(start, end);

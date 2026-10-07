@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { TripRole, TripUpdate } from "@/lib/types";
 import { useAuth } from "@/hooks/use-auth";
 import { can } from "@/lib/permissions";
-import { Button, Card, Chip, Field, Input, Modal, Textarea } from "@/components/ui";
+import { Button, Chip, Field, Input, Modal, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 const KINDS = [
@@ -13,6 +13,8 @@ const KINDS = [
   { value: "warning", label: "לתשומת לב", icon: AlertTriangle, cls: "bg-[var(--sun)] text-[var(--sun-foreground)]" },
   { value: "urgent", label: "דחוף", icon: Siren, cls: "bg-accent-soft text-accent" },
 ] as const;
+
+const RECENT_UPDATES = 3;
 
 function kindMeta(kind: string) {
   return KINDS.find((k) => k.value === kind) ?? KINDS[0];
@@ -27,6 +29,7 @@ export function TripUpdates({
   role,
   editable = true,
   preloaded,
+  className = "mt-4",
 }: {
   tripId: string;
   /** Caller's role: participants post and manage their own; editors manage all. */
@@ -34,6 +37,7 @@ export function TripUpdates({
   editable?: boolean;
   /** Already-fetched updates (the share page gets them from get_shared_trip) — skips the query. */
   preloaded?: Omit<TripUpdate, "trip_id">[];
+  className?: string;
 }) {
   const toast = useToast();
   const { user } = useAuth();
@@ -44,6 +48,13 @@ export function TripUpdates({
   const [loading, setLoading] = useState(!preloaded);
   const [draft, setDraft] = useState<{ title: string; body: string; kind: string; is_pinned: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  // Pinned updates always show; of the rest (newest first), only the latest few
+  // until expanded — a group trip piles up dozens and buries the whole screen.
+  const recentIds = new Set(updates.filter((u) => !u.is_pinned).slice(0, RECENT_UPDATES).map((u) => u.id));
+  const visible = showAll ? updates : updates.filter((u) => u.is_pinned || recentIds.has(u.id));
+  const hiddenCount = updates.length - visible.length;
 
   const load = async () => {
     const { data } = await supabase
@@ -99,60 +110,85 @@ export function TripUpdates({
   if (!canPost && updates.length === 0) return null;
 
   return (
-    <section className="mt-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="flex items-center gap-1.5 font-bold">
+    <section className={className}>
+      <div className="mb-1.5 flex min-h-11 items-center justify-between gap-2 ps-4">
+        <h2 className="type-footnote flex items-center gap-1.5 font-semibold text-muted-foreground">
           <Megaphone className="size-4 text-accent" />
           עדכונים חשובים
-        </h3>
+        </h2>
         {canPost && (
-          <Button
-            size="sm"
-            variant="outline"
+          <button
+            type="button"
             onClick={() => setDraft({ title: "", body: "", kind: "info", is_pinned: false })}
             aria-label="הוספת עדכון"
+            className="grid size-11 place-items-center rounded-full text-primary transition-colors active:bg-muted/70"
           >
-            <Plus className="size-4" />
-          </Button>
+            <Plus className="size-5" />
+          </button>
         )}
       </div>
 
-      {updates.length === 0 ? (
-        <Card className="p-3 text-center text-xs text-muted-foreground">
-          אין עדכונים. הוסף הודעה חשובה שכולם צריכים לראות.
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {updates.map((u) => {
-            const meta = kindMeta(u.kind);
-            const Icon = meta.icon;
-            return (
-              <Card key={u.id} className={cn("flex items-start gap-3 p-3", u.is_pinned && "border-accent")}>
-                <div className={cn("grid size-9 shrink-0 place-items-center rounded-xl", meta.cls)}>
-                  <Icon className="size-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    {u.is_pinned && <Pin className="size-3 shrink-0 text-accent" />}
-                    <span className="font-semibold">{u.title}</span>
+      <div className="divide-y divide-separator overflow-hidden rounded-2xl bg-card text-card-foreground">
+        {updates.length === 0 ? (
+          <p className="type-footnote px-4 py-3 text-muted-foreground">
+            אין עדכונים. הוסף הודעה חשובה שכולם צריכים לראות.
+          </p>
+        ) : (
+          <>
+            {visible.map((u) => {
+              const meta = kindMeta(u.kind);
+              const Icon = meta.icon;
+              return (
+                <div key={u.id} className="flex items-start gap-3 py-3 ps-4 pe-4">
+                  <div className={cn("grid size-9 shrink-0 place-items-center rounded-full", meta.cls)}>
+                    <Icon className="size-4" />
                   </div>
-                  {u.body && <p className="mt-0.5 whitespace-pre-wrap text-sm text-muted-foreground">{u.body}</p>}
-                </div>
-                {canManage(u) && (
-                  <div className="flex shrink-0 flex-col gap-1.5">
-                    <button onClick={() => togglePin(u)} className="text-muted-foreground" aria-label="נעיצה">
-                      <Pin className={cn("size-4", u.is_pinned && "fill-current text-accent")} />
-                    </button>
-                    <button onClick={() => remove(u.id)} className="text-destructive" aria-label="מחיקה">
-                      <Trash2 className="size-4" />
-                    </button>
+                  <div className="min-w-0 flex-1">
+                    {/* items-start: the pin stays on the title's first line when it wraps. */}
+                    <div className="flex items-start gap-1.5">
+                      {u.is_pinned && <Pin className="mt-1 size-3.5 shrink-0 fill-current text-accent" role="img" aria-label="נעוץ" />}
+                      <span className="type-headline min-w-0 [overflow-wrap:anywhere]">{u.title}</span>
+                    </div>
+                    {u.body && (
+                      <p className="type-footnote mt-0.5 whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">
+                        {u.body}
+                      </p>
+                    )}
+                    {/* Under the text, not beside it: a side column starves the text on narrow screens. */}
+                    {canManage(u) && (
+                      <div className="-ms-2 mt-1 flex gap-1">
+                        <button
+                          onClick={() => togglePin(u)}
+                          className="grid size-9 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                          aria-label={u.is_pinned ? "ביטול נעיצה" : "נעיצה"}
+                        >
+                          <Pin className={cn("size-4", u.is_pinned && "fill-current text-accent")} />
+                        </button>
+                        <button
+                          onClick={() => remove(u.id)}
+                          className="grid size-9 place-items-center rounded-full text-destructive transition-colors active:bg-destructive/10"
+                          aria-label="מחיקה"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                </div>
+              );
+            })}
+            {hiddenCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAll(true)}
+                className="type-headline w-full px-4 py-3 text-start text-primary transition-colors active:bg-muted/70"
+              >
+                הצגת כל {updates.length} העדכונים
+              </button>
+            )}
+          </>
+        )}
+      </div>
 
       <Modal
         open={!!draft}

@@ -23,6 +23,14 @@
         "5174"
       ],
       "port": 5174
+    },
+    {
+      "name": "tripcraft-phone",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "scripts/dev-phone.mjs"
+      ],
+      "port": 5175
     }
   ]
 }

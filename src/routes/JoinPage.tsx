@@ -6,7 +6,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import type { MemberRole } from "@/lib/types";
 import { ROLE_HINTS, ROLE_LABELS } from "@/lib/permissions";
-import { destinationFlag, formatHeb } from "@/lib/trip-options";
+import { formatHeb } from "@/lib/trip-options";
+import { Flag } from "@/components/Flag";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button, Card, FullSpinner } from "@/components/ui";
 
@@ -80,7 +81,9 @@ export default function JoinPage() {
         ) : (
           <Card className="p-6">
             <div className="text-center">
-              <div className="text-5xl">{destinationFlag(preview.destination) ?? preview.cover_emoji ?? "🌍"}</div>
+              <div className="flex justify-center text-5xl">
+                <Flag destination={preview.destination} fallback={preview.cover_emoji} className="w-16" />
+              </div>
               <p className="mt-3 text-sm text-muted-foreground">הוזמנת להצטרף לטיול</p>
               <h1 className="mt-1 font-display text-2xl font-extrabold">{preview.title}</h1>
               <p className="text-muted-foreground">{preview.destination}</p>

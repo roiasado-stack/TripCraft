@@ -1,11 +1,15 @@
 import {
   forwardRef,
+  useEffect,
+  useId,
+  useRef,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
   type TextareaHTMLAttributes,
 } from "react";
-import { Loader2, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ChevronLeft, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* ---------------------------------- Button --------------------------------- */
@@ -65,6 +69,74 @@ export function Card({ className, children, ...props }: React.HTMLAttributes<HTM
     >
       {children}
     </div>
+  );
+}
+
+/* ------------------------------- Grouped list ------------------------------ */
+/**
+ * iOS-style inset grouped list: one quiet surface, rows split by hairlines,
+ * an optional small header above. Use instead of a stack of separate Cards.
+ */
+export function GroupedList({
+  title,
+  action,
+  className,
+  children,
+}: {
+  title?: React.ReactNode;
+  action?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={className}>
+      {(title || action) && (
+        <div className="mb-1.5 flex min-h-8 items-end justify-between gap-2 px-4">
+          {title && <h2 className="type-footnote font-semibold text-muted-foreground">{title}</h2>}
+          {action}
+        </div>
+      )}
+      <div className="divide-y divide-separator overflow-hidden rounded-2xl bg-card text-card-foreground">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/** One row of a GroupedList. With `to` it's a link with press feedback and a chevron. */
+export function ListRow({
+  to,
+  leading,
+  title,
+  subtitle,
+  trailing,
+  className,
+}: {
+  to?: string;
+  leading?: React.ReactNode;
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  trailing?: React.ReactNode;
+  className?: string;
+}) {
+  const body = (
+    <>
+      {leading && <div className="shrink-0">{leading}</div>}
+      <div className="min-w-0 flex-1">
+        <div className="type-headline line-clamp-2 [overflow-wrap:anywhere] [unicode-bidi:plaintext]">{title}</div>
+        {subtitle && <div className="type-footnote mt-0.5 line-clamp-2 text-muted-foreground">{subtitle}</div>}
+      </div>
+      {trailing && <div className="shrink-0 text-muted-foreground">{trailing}</div>}
+      {to && <ChevronLeft className="size-5 shrink-0 text-muted-foreground/60" aria-hidden />}
+    </>
+  );
+  const cls = cn("flex min-h-14 items-center gap-3 px-4 py-3", className);
+  return to ? (
+    <Link to={to} className={cn(cls, "transition-colors active:bg-muted/70")}>
+      {body}
+    </Link>
+  ) : (
+    <div className={cls}>{body}</div>
   );
 }
 
@@ -267,20 +339,52 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Callers pass an inline onClose; a ref keeps the effect below from re-running
+  // (and re-focusing the panel) on every render.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  // Move focus into the dialog, close on Escape, and hand focus back on close.
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseRef.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      previous?.focus?.();
+    };
+  }, [open]);
+
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      role="dialog"
+      aria-modal
+      aria-labelledby={titleId}
+    >
       <div
         className="absolute inset-0 bg-black/45 backdrop-blur-sm"
         onClick={onClose}
         style={{ animation: "tc-fade 150ms ease-out" }}
       />
       <div
-        className="relative z-10 max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-4xl border border-border bg-card p-5 shadow-pop sm:rounded-4xl"
+        ref={panelRef}
+        tabIndex={-1}
+        className="relative z-10 max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-4xl border border-border bg-card p-5 shadow-pop outline-none sm:rounded-4xl"
         style={{ animation: "tc-sheet 220ms cubic-bezier(0.22,1,0.36,1)" }}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">{title}</h2>
+          <h2 id={titleId} className="text-lg font-bold">
+            {title}
+          </h2>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="סגור">
             <X className="size-5" />
           </Button>

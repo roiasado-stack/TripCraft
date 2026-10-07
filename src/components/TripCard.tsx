@@ -1,38 +1,43 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Calendar, MapPin, Trash2 } from "lucide-react";
+import { MoreHorizontal, Trash2 } from "lucide-react";
 import type { Trip, TripRole } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/permissions";
-import { Badge, Button, Modal } from "@/components/ui";
-import { daysUntil, destinationFlag, formatHeb, tripTypeEmoji, tripTypeLabel } from "@/lib/trip-options";
+import { Button, Modal } from "@/components/ui";
+import { countdownLabel, dateRangeHeb, daysFrom, tripPhase } from "@/lib/trip-dates";
+import { Flag } from "@/components/Flag";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
+/**
+ * One trip in the trips list, as a row of a GroupedList: flag, title,
+ * destination, dates and one quiet status line. The owner's destructive action
+ * lives behind "⋯", away from the row's tap target.
+ */
 export function TripCard({
   trip,
   role = "owner",
+  today,
   onDeleted,
 }: {
   trip: Trip;
-  /** A trip shared with the caller shows its role instead of the delete button. */
+  /** A trip shared with the caller shows its role and has no "⋯" menu. */
   role?: TripRole;
+  today: Date;
   onDeleted?: (id: string) => void;
 }) {
   const toast = useToast();
+  const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const until = daysUntil(trip.start_date);
-  const ongoing =
-    until !== null &&
-    until <= 0 &&
-    trip.end_date !== null &&
-    (daysUntil(trip.end_date) ?? -1) >= 0;
 
-  let countdown: { text: string; tone: "sun" | "accent" | "muted" } | null = null;
-  if (ongoing) countdown = { text: "בטיול עכשיו! 🌊", tone: "accent" };
-  else if (until !== null && until > 0)
-    countdown = { text: `בעוד ${until} ימים`, tone: until <= 30 ? "sun" : "muted" };
-  else if (until !== null && until <= 0) countdown = { text: "הסתיים", tone: "muted" };
+  const phase = tripPhase(trip, today);
+  const toStart = daysFrom(trip.start_date, today);
+  const status = phase === "now" ? "בטיול עכשיו" : phase === "upcoming" && toStart !== null ? countdownLabel(toStart) : null;
+  const meta = [dateRangeHeb(trip.start_date, trip.end_date, today), role !== "owner" ? ROLE_LABELS[role] : null]
+    .filter(Boolean)
+    .join(" · ");
 
   const remove = async () => {
     setDeleting(true);
@@ -47,52 +52,54 @@ export function TripCard({
     onDeleted?.(trip.id);
   };
 
+  // One element per trip, so the GroupedList's hairlines never land on the modals.
   return (
-    <>
-      <Link
-        to={`/trip/${trip.id}`}
-        className="group relative flex items-center gap-4 overflow-hidden rounded-3xl border border-border bg-card p-4 shadow-soft transition active:scale-[0.99]"
-      >
-        <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-gradient-sea text-3xl shadow-soft">
-          {destinationFlag(trip.destination) ?? trip.cover_emoji ?? "🌍"}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate text-lg font-bold">{trip.title}</h3>
-          </div>
-          <div className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground">
-            <MapPin className="size-3.5 shrink-0" />
-            <span className="truncate">{trip.destination}</span>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <Badge tone="primary">
-              {tripTypeEmoji(trip.trip_type)} {tripTypeLabel(trip.trip_type)}
-            </Badge>
-            {trip.start_date && (
-              <Badge tone="muted">
-                <Calendar className="size-3" />
-                {formatHeb(trip.start_date)}
-              </Badge>
+    <div>
+      <div className="flex items-center">
+        <Link
+          to={`/trip/${trip.id}`}
+          className="flex min-w-0 flex-1 items-center gap-3.5 py-3.5 ps-4 pe-2 transition-colors active:bg-muted/70"
+        >
+          <Flag destination={trip.destination} fallback={trip.cover_emoji} className="w-[44px] text-[30px]" />
+          <div className="min-w-0 flex-1">
+            <div className="type-headline line-clamp-2 [overflow-wrap:anywhere] [unicode-bidi:plaintext]">{trip.title}</div>
+            <div className="type-footnote truncate text-muted-foreground">{trip.destination}</div>
+            {(meta || status) && (
+              <div className="type-footnote mt-0.5 flex flex-wrap gap-x-1.5">
+                {meta && <span className="text-muted-foreground">{meta}</span>}
+                {meta && status && <span className="text-muted-foreground">·</span>}
+                {status && (
+                  <span className={cn("font-semibold", phase === "now" ? "text-accent" : "text-primary")}>{status}</span>
+                )}
+              </div>
             )}
-            {countdown && <Badge tone={countdown.tone}>{countdown.text}</Badge>}
-            {role !== "owner" && <Badge tone="accent">{ROLE_LABELS[role]}</Badge>}
           </div>
-        </div>
+        </Link>
         {role === "owner" && (
           <button
             type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setConfirmOpen(true);
-            }}
-            aria-label="מחיקת טיול"
-            className="grid size-9 shrink-0 place-items-center self-start rounded-xl text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setMenuOpen(true)}
+            aria-label="אפשרויות לטיול"
+            className="me-1 grid size-[44px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
           >
-            <Trash2 className="size-4" />
+            <MoreHorizontal className="size-5" />
           </button>
         )}
-      </Link>
+      </div>
+
+      <Modal open={menuOpen} onClose={() => setMenuOpen(false)} title={trip.title}>
+        <button
+          type="button"
+          onClick={() => {
+            setMenuOpen(false);
+            setConfirmOpen(true);
+          }}
+          className="flex w-full items-center gap-3 rounded-2xl bg-muted px-4 py-3.5 text-start font-semibold text-destructive transition-colors active:bg-destructive/10"
+        >
+          <Trash2 className="size-5" />
+          מחיקת הטיול
+        </button>
+      </Modal>
 
       <Modal
         open={confirmOpen}
@@ -113,6 +120,6 @@ export function TripCard({
           למחוק את "{trip.title}"? המסלול, המשתתפים, המסמכים והצ'קליסט של הטיול יימחקו לצמיתות. אי אפשר לשחזר.
         </p>
       </Modal>
-    </>
+    </div>
   );
 }

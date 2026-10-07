@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { CalendarDays, CopyPlus, Plane, Sparkles, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { CopyPlus, Plane, Sparkles, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -11,15 +11,18 @@ import { TripHeader } from "@/components/TripHeader";
 import { TripUpdates } from "@/components/TripUpdates";
 import { PhotoAlbumCard } from "@/components/PhotoAlbumCard";
 import { GuideCard } from "@/components/GuideCard";
-import { Button, Card, Spinner } from "@/components/ui";
+import { GroupedList, ListRow, Spinner } from "@/components/ui";
+import { formatDateTimeHeb, itineraryCategory } from "@/lib/trip-options";
 import {
-  daysUntil,
-  formatDateTimeHeb,
-  formatDayHeb,
-  formatHeb,
-  itineraryCategory,
-  tripDuration,
-} from "@/lib/trip-options";
+  countdownLabel,
+  dateRangeHeb,
+  dayCount,
+  daysFrom,
+  localDateString,
+  tripLength,
+  tripPhase,
+} from "@/lib/trip-dates";
+import { cn } from "@/lib/utils";
 
 export default function HomeTab() {
   const { trip, role, participants, openShare } = useTrip();
@@ -113,7 +116,8 @@ export default function HomeTab() {
 
   useEffect(() => {
     (async () => {
-      const todayStr = new Date().toISOString().slice(0, 10);
+      // The traveller's own day — UTC's date is still yesterday at 6am in Bangkok.
+      const todayStr = localDateString(new Date());
       const [f, s, it] = await Promise.all([
         supabase.from("flights").select("*").eq("trip_id", trip.id).order("depart_at"),
         supabase.from("stays").select("*").eq("trip_id", trip.id).order("check_in"),
@@ -126,195 +130,187 @@ export default function HomeTab() {
     })();
   }, [trip.id]);
 
-  const until = daysUntil(trip.start_date);
-  const endUntil = daysUntil(trip.end_date);
-  const ongoing = until !== null && until <= 0 && endUntil !== null && endUntil >= 0;
-  const duration = tripDuration(trip.start_date, trip.end_date);
+  const now = new Date();
+  const phase = tripPhase(trip, now);
+  const toStart = daysFrom(trip.start_date, now);
+  const toEnd = daysFrom(trip.end_date ?? trip.start_date, now);
+  const length = tripLength(trip.start_date, trip.end_date);
+  const range = dateRangeHeb(trip.start_date, trip.end_date, now);
 
-  const nextFlight = flights.find((f) => !f.depart_at || new Date(f.depart_at) >= new Date()) ?? flights[0];
+  let headline: string;
+  let detail: string;
+  if (toStart === null) {
+    headline = "התאריכים עוד פתוחים";
+    detail = "בינתיים אפשר לבנות מסלול ולאסוף המלצות";
+  } else if (phase === "upcoming") {
+    headline = toStart === 1 ? "מחר יוצאים" : countdownLabel(toStart);
+    detail = [range, length ? dayCount(length) : null].filter(Boolean).join(" · ");
+  } else if (phase === "now") {
+    const day = 1 - toStart;
+    headline = length ? `יום ${day} מתוך ${length}` : `יום ${day} בטיול`;
+    // Without an end date we don't know when it ends — say nothing rather than guess.
+    detail = !trip.end_date
+      ? ""
+      : toEnd === 0
+        ? "זה היום האחרון"
+        : toEnd === 1
+          ? "מחר היום האחרון"
+          : `עוד ${dayCount(toEnd ?? 0)}`;
+  } else {
+    headline = "הטיול הסתיים";
+    detail = range;
+  }
+
+  // Only a flight still ahead counts — after the trip there is no "next" one.
+  const nextFlight = flights.find((f) => !f.depart_at || new Date(f.depart_at) >= new Date());
+  const travelSummary = loading
+    ? undefined
+    : [
+        flights.length ? (flights.length === 1 ? "טיסה אחת" : `${flights.length} טיסות`) : null,
+        stays.length ? (stays.length === 1 ? "מלון אחד" : `${stays.length} מלונות`) : null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || "עוד לא הוזנו";
 
   return (
     <div className="px-4">
       <TripHeader trip={trip} onShare={openShare} />
 
-      {/* Countdown hero */}
-      <div className="relative overflow-hidden rounded-4xl bg-gradient-sea p-6 text-white shadow-pop">
-        <div className="pointer-events-none absolute -top-8 -left-8 size-32 rounded-full bg-white/15 blur-2xl" />
+      {/* Hero: where and when, in one calm statement */}
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-sea px-5 py-6 text-white">
+        <div className="pointer-events-none absolute -top-10 -left-10 size-40 rounded-full bg-white/10 blur-2xl" />
         <div className="relative">
-          <p className="text-sm font-medium text-white/85">{trip.destination}</p>
-          {ongoing ? (
-            <>
-              <div className="mt-1 text-4xl font-extrabold">בטיול! 🌊</div>
-              <p className="mt-1 text-white/85">
-                {endUntil === 0 ? "היום היום האחרון" : `עוד ${endUntil} ימים של כיף`}
-              </p>
-            </>
-          ) : until !== null && until > 0 ? (
-            <>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-5xl font-extrabold">{until}</span>
-                <span className="text-xl font-bold">ימים</span>
-              </div>
-              <p className="mt-1 text-white/85">
-                עד היציאה · {formatHeb(trip.start_date)}
-                {duration ? ` · ${duration} ימים` : ""}
-              </p>
-            </>
-          ) : (
-            <>
-              <div className="mt-1 text-3xl font-extrabold">הטיול הסתיים 💛</div>
-              <p className="mt-1 text-white/85">מקווים שנהניתם!</p>
-            </>
-          )}
+          {/* The destination is already in the header right above — no need to repeat it. */}
+          <h2 className="type-large-title">{headline}</h2>
+          {detail && <p className="type-body mt-1 font-medium text-white">{detail}</p>}
         </div>
-      </div>
+      </section>
 
-      {/* quick stats */}
-      <div className="mt-4 grid grid-cols-3 gap-3">
-        <Link to="people">
-          <Stat icon={<Users className="size-5" />} value={participants.length} label="משתתפים" actionable />
-        </Link>
-        <Link to="transport">
-          <Stat icon={<Plane className="size-5" />} value={flights.length} label="נסיעה" actionable />
-        </Link>
-        <Stat icon={<CalendarDays className="size-5" />} value={duration ?? "—"} label="ימים" />
-      </div>
+      {/* Today — only while the trip is on */}
+      {phase === "now" && !loading && (
+        <GroupedList
+          className="mt-6"
+          title={`היום · ${now.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" })}`}
+        >
+          {today.length === 0 ? (
+            <ListRow
+              to="itinerary"
+              title="אין עדיין תוכניות להיום"
+              subtitle={can(role, "edit") ? "הוספה למסלול" : "למסלול המלא"}
+            />
+          ) : (
+            today.map((it) => (
+              <ListRow
+                key={it.id}
+                to="itinerary"
+                leading={
+                  <span className="grid size-9 place-items-center rounded-xl bg-primary-soft text-lg">
+                    {itineraryCategory(it.category).emoji}
+                  </span>
+                }
+                title={it.title}
+                subtitle={it.start_time ? it.start_time.slice(0, 5) : undefined}
+              />
+            ))
+          )}
+        </GroupedList>
+      )}
 
-      <GuideCard trip={trip} />
+      <TripUpdates tripId={trip.id} role={role} className="mt-6" />
 
-      <TripUpdates tripId={trip.id} role={role} />
-
-      <PhotoAlbumCard trip={trip} editable={can(role, "edit")} />
-
-      <Link to="ask">
-        <Card className="mt-4 flex items-center gap-3 p-4">
-          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary-soft text-primary">
-            <Sparkles className="size-5" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="font-bold leading-snug">שאל את הסוכן</div>
-            <div className="text-sm text-muted-foreground">שאלות והמלצות בהתאמה לטיול שלך</div>
-          </div>
-        </Card>
-      </Link>
+      <GroupedList className="mt-6">
+        <ListRow
+          to="people"
+          leading={<IconTile icon={<Users className="size-[18px]" />} />}
+          title="משתתפים"
+          trailing={<span className="type-body tabular-nums">{participants.length}</span>}
+        />
+        <ListRow
+          to="transport"
+          leading={<IconTile icon={<Plane className="size-[18px]" />} />}
+          title="טיסות ולינה"
+          subtitle={travelSummary}
+        />
+        <ListRow
+          to="ask"
+          leading={<IconTile icon={<Sparkles className="size-[18px]" />} tone="accent" />}
+          title="שאל את הסוכן"
+          subtitle="שאלות והמלצות בהתאמה לטיול שלך"
+        />
+      </GroupedList>
 
       {loading ? (
         <div className="flex justify-center py-10">
           <Spinner />
         </div>
       ) : (
-        <>
-          {/* Next flight */}
-          {nextFlight && (
-            <Card className="mt-4 p-4">
-              <div className="mb-2 flex items-center gap-2 text-sm font-bold text-primary">
-                <Plane className="size-4" />
-                {nextFlight.direction === "inbound" ? "טיסת חזור" : "הטיסה הקרובה"}
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="text-center">
-                  <div className="text-xl font-extrabold">{nextFlight.from_airport || "—"}</div>
-                  <div className="text-xs text-muted-foreground">מוצא</div>
-                </div>
-                <div className="flex flex-1 flex-col items-center px-2">
-                  <Plane className="size-4 -scale-x-100 text-muted-foreground" />
-                  <div className="my-1 h-px w-full bg-border" />
-                  <div className="text-xs font-medium text-muted-foreground">
-                    {nextFlight.airline} {nextFlight.flight_number}
-                  </div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl font-extrabold">{nextFlight.to_airport || "—"}</div>
-                  <div className="text-xs text-muted-foreground">יעד</div>
-                </div>
-              </div>
-              {nextFlight.depart_at && (
-                <div className="mt-3 rounded-2xl bg-muted px-3 py-2 text-center text-sm font-semibold">
-                  {formatDateTimeHeb(nextFlight.depart_at)}
-                </div>
-              )}
-            </Card>
-          )}
-
-          {/* Today */}
-          {ongoing && (
-            <div className="mt-4">
-              <h3 className="mb-2 font-bold">מה קורה היום · {formatDayHeb(new Date().toISOString().slice(0, 10))}</h3>
-              {today.length === 0 ? (
-                <Card className="p-4 text-center text-sm text-muted-foreground">
-                  אין עדיין תוכניות להיום.{" "}
-                  <Link to="itinerary" className="font-semibold text-primary">
-                    הוסף למסלול
-                  </Link>
-                </Card>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {today.map((it) => {
-                    const cat = itineraryCategory(it.category);
-                    return (
-                      <Card key={it.id} className="flex items-center gap-3 p-3">
-                        <div className="grid size-10 place-items-center rounded-xl bg-primary-soft text-lg">{cat.emoji}</div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-semibold">{it.title}</div>
-                          {it.start_time && <div className="text-xs text-muted-foreground">{it.start_time.slice(0, 5)}</div>}
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Duplicate as a new trip */}
-          <Button variant="outline" size="lg" className="mt-4 w-full" loading={duplicating} onClick={duplicate}>
-            <CopyPlus className="size-5" />
-            שכפול הטיול כתבנית חדשה
-          </Button>
-
-          {/* Stays summary */}
-          {stays.length > 0 && (
-            <Card className="mt-4 p-4">
-              <div className="mb-1 text-sm font-bold text-primary">🏨 לינה</div>
-              {stays.map((s) => (
-                <div key={s.id} className="border-b border-border py-2 last:border-0">
-                  <div className="font-semibold">{s.hotel_name}</div>
-                  {(s.check_in || s.check_out) && (
-                    <div className="text-xs text-muted-foreground">
-                      {formatHeb(s.check_in)} – {formatHeb(s.check_out)}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </Card>
-          )}
-        </>
+        nextFlight && (
+          <GroupedList className="mt-6" title={nextFlight.direction === "inbound" ? "טיסת חזור" : "הטיסה הקרובה"}>
+            <ListRow
+              to="transport"
+              leading={<IconTile icon={<Plane className="size-[18px]" />} />}
+              // Flights read left-to-right everywhere (TLV → FCO), Hebrew names included.
+              title={
+                // Each airport isolated, so a Hebrew name keeps its own word order.
+                <span dir="ltr">
+                  <bdi>{nextFlight.from_airport || "—"}</bdi> → <bdi>{nextFlight.to_airport || "—"}</bdi>
+                </span>
+              }
+              subtitle={
+                [
+                  [nextFlight.airline, nextFlight.flight_number].filter(Boolean).join(" "),
+                  formatDateTimeHeb(nextFlight.depart_at),
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || undefined
+              }
+            />
+          </GroupedList>
+        )
       )}
+
+      <GuideCard trip={trip} className="mt-6" />
+
+      <PhotoAlbumCard trip={trip} editable={can(role, "edit")} className="mt-6" />
+
+      {!loading && stays.length > 0 && (
+        <GroupedList className="mt-6" title="לינה">
+          {stays.map((s) => (
+            <ListRow
+              key={s.id}
+              to="transport"
+              title={s.hotel_name}
+              subtitle={dateRangeHeb(s.check_in, s.check_out, now) || undefined}
+            />
+          ))}
+        </GroupedList>
+      )}
+
+      <div className="mt-6 overflow-hidden rounded-2xl bg-card">
+        <button
+          type="button"
+          onClick={duplicate}
+          disabled={duplicating}
+          className="type-headline flex min-h-14 w-full items-center gap-3 px-4 py-3 text-start text-primary transition-colors active:bg-muted/70 disabled:opacity-60"
+        >
+          {duplicating ? <Spinner className="size-5" /> : <CopyPlus className="size-5" />}
+          שכפול הטיול כתבנית חדשה
+        </button>
+      </div>
     </div>
   );
 }
 
-function Stat({
-  icon,
-  value,
-  label,
-  actionable,
-}: {
-  icon: React.ReactNode;
-  value: React.ReactNode;
-  label: string;
-  actionable?: boolean;
-}) {
+/** iOS Settings-style rounded square behind a row's icon. */
+function IconTile({ icon, tone = "primary" }: { icon: React.ReactNode; tone?: "primary" | "accent" }) {
   return (
-    <Card
-      className={`flex h-full flex-col items-center gap-1 p-3 ${actionable ? "border-primary/40 transition active:scale-[0.98]" : ""}`}
+    <span
+      className={cn(
+        "grid size-8 place-items-center rounded-[9px]",
+        tone === "accent" ? "bg-tile-accent text-tile-accent-foreground" : "bg-tile text-tile-foreground",
+      )}
     >
-      <div className="text-primary">{icon}</div>
-      <div className="text-xl font-extrabold leading-none">{value}</div>
-      <div className="text-xs text-muted-foreground">
-        {label}
-        {actionable && " ›"}
-      </div>
-    </Card>
+      {icon}
+    </span>
   );
 }
