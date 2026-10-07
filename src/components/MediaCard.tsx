@@ -59,7 +59,7 @@ export function wikimediaFilePage(url?: string | null): string | null {
  * `illustrative` marks a stand-in ambience photo (see @/lib/photos) so it's
  * never mistaken for the venue itself.
  */
-function ImageCredit({ imageUrl, compact, illustrative }: { imageUrl: string; compact?: boolean; illustrative?: boolean }) {
+export function ImageCredit({ imageUrl, compact, illustrative }: { imageUrl: string; compact?: boolean; illustrative?: boolean }) {
   const page = wikimediaFilePage(imageUrl);
   if (!page) return null;
   const label = illustrative ? "תמונה להמחשה, לא של המקום עצמו. מקור ורישיון" : "מקור התמונה ורישיון (ויקיפדיה)";

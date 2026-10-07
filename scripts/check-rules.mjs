@@ -231,6 +231,14 @@ for (const f of migs) {
       const bgName = typeof bg === "object" ? `${bg.tint}/${bg.alpha * 100} over ${bg.over}` : bg;
       if (r < min) fail(file, 0, "contrast", `${mode}: ${fg} on ${bgName} is ${r.toFixed(2)}:1 (needs ${min}:1)`);
     }
+    // A hero photo can be anything, so judge its scrim against the worst case: a
+    // pure-white pixel. Stops in the text zone (bottom 45%) must keep white text readable.
+    for (const [, color, pos] of (vars["--hero-scrim"] ?? "").matchAll(/(oklch\([^)]*\))\s+([\d.]+)%/g)) {
+      if (+pos > 45) continue;
+      const c = linear(color);
+      const r = ratio(white, over(c.rgb, c.alpha, white));
+      if (r < 4.5) fail(file, 0, "contrast", `${mode}: white text on --hero-scrim at ${pos}% over a white photo is ${r.toFixed(2)}:1 (needs 4.5:1)`);
+    }
     for (const stop of vars["--gradient-sea"]?.match(/oklch\([^)]*\)/g) ?? []) {
       const r = ratio(white, linear(stop).rgb);
       if (r < 4.5) fail(file, 0, "contrast", `${mode}: white hero text on --gradient-sea stop ${stop} is ${r.toFixed(2)}:1 (needs 4.5:1)`);

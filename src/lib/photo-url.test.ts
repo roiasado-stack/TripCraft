@@ -11,6 +11,9 @@ describe("isPhotoUrl", () => {
     expect(isPhotoUrl(thumb("Pantheon_(Rome)_-_Right_side_and_front.jpg"))).toBe(true);
     expect(isPhotoUrl(thumb("Sealife_aquarium_Konstanz.jpg"))).toBe(true);
     expect(isPhotoUrl(thumb("Mappatura_Venezia_2019.jpg"))).toBe(true);
+    for (const f of ["Seal_Rock_Oregon.jpg", "Elephant_seals_at_Piedras_Blancas.jpg", "Map_Room_White_House.jpg",
+      "Icon_of_the_Seas.jpg", "Flags_at_UN_Headquarters.jpg", "Theotokos_icon_Tretyakov.jpg", "Icons_at_Sinai_monastery.jpg"])
+      expect(isPhotoUrl(thumb(f)), f).toBe(true);
   });
 
   it("rejects logos, flags, maps, coats of arms and drawings", () => {
@@ -18,6 +21,8 @@ describe("isPhotoUrl", () => {
     expect(isPhotoUrl(thumb("Galleria_Borghese_-_logo_(Italy,_2022-).svg") + ".png")).toBe(false);
     expect(isPhotoUrl(thumb("Flag_of_Italy.svg") + ".png")).toBe(false);
     expect(isPhotoUrl(thumb("Italy_location_map.jpg"))).toBe(false);
+    expect(isPhotoUrl(thumb("Flag_of_Japan.png"))).toBe(false);
+    expect(isPhotoUrl(thumb("Map_of_Rome_1890.jpg"))).toBe(false);
     expect(isPhotoUrl(thumb("Coat_of_arms_of_Rome.png"))).toBe(false);
     expect(isPhotoUrl(thumb("Seal_of_New_York_City.png"))).toBe(false);
     expect(isPhotoUrl(thumb("Some_building.svg"))).toBe(false);

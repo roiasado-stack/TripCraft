@@ -15,6 +15,8 @@ export type TripContext = {
   role: TripRole;
   participants: Participant[];
   reloadParticipants: () => Promise<void>;
+  /** Re-read the trip row after writing to it (e.g. the hero photo). */
+  reloadTrip: () => Promise<void>;
   openShare: () => void;
 };
 
@@ -39,6 +41,12 @@ export default function TripLayout() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "notfound">("loading");
   const [shareOpen, setShareOpen] = useState(false);
+
+  const reloadTrip = async () => {
+    if (!tripId) return;
+    const { data } = await supabase.from("trips").select("*").eq("id", tripId).maybeSingle();
+    if (data) setTrip(data as Trip);
+  };
 
   const reloadParticipants = async () => {
     if (!tripId) return;
@@ -83,6 +91,7 @@ export default function TripLayout() {
     role,
     participants,
     reloadParticipants,
+    reloadTrip,
     openShare: () => setShareOpen(true),
   };
 

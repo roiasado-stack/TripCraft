@@ -6,14 +6,17 @@
 // The same pattern lives in supabase/functions/generate/index.ts (Deno can't
 // import from src/); `npm run rules` fails if the two copies differ.
 export const NOT_A_PHOTO =
-  /\.svg(\.png)?$|(^|[^a-z])(logo|logotype|emblem|coat[ _-]of[ _-]arms|seal|flag|map|locator|signature|icon)s?([^a-z]|$)/i;
+  /\.svg(\.png)?$|(^|[^a-z])(logo|logotype|emblem|coat[ _-]of[ _-]arms|flag[ _-]of|seal[ _-]of|map[ _-]of|(location|locator|relief|topographic)[ _-]?map|wappen|escudo|blason|bandera|karte)([^a-z]|$)/i;
 
 /** True unless the image's file name says it's a drawing (SVG), logo, flag, map, coat of arms… */
 export function isPhotoUrl(url?: string | null): boolean {
   if (!url) return false;
   let name: string;
   try {
-    name = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "");
+    const u = new URL(url);
+    // Only Wikimedia file names are meaningful; Google photo URLs are random tokens.
+    if (!u.hostname.endsWith("wikimedia.org")) return u.protocol === "https:" || u.protocol === "http:";
+    name = decodeURIComponent(u.pathname.split("/").pop() ?? "");
   } catch {
     return false;
   }

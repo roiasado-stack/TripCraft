@@ -396,7 +396,7 @@ const WIKIPEDIA_USER_AGENT = "TripCraft/1.0 (https://tripcraft-lac.vercel.app)";
 // flag or map, a city's coat of arms). Same pattern as src/lib/photo-url.ts —
 // `npm run rules` fails if the two differ.
 const NOT_A_PHOTO =
-  /\.svg(\.png)?$|(^|[^a-z])(logo|logotype|emblem|coat[ _-]of[ _-]arms|seal|flag|map|locator|signature|icon)s?([^a-z]|$)/i;
+  /\.svg(\.png)?$|(^|[^a-z])(logo|logotype|emblem|coat[ _-]of[ _-]arms|flag[ _-]of|seal[ _-]of|map[ _-]of|(location|locator|relief|topographic)[ _-]?map|wappen|escudo|blason|bandera|karte)([^a-z]|$)/i;
 
 function looksLikePhoto(u: string): boolean {
   try {

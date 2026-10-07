@@ -20,6 +20,7 @@ import { KosherPanel } from "@/components/KosherPanel";
 import { CardCoverImage } from "@/components/MediaCard";
 import { TripMap, type TripMapItem } from "@/components/TripMap";
 import { localDateString } from "@/lib/trip-dates";
+import { isPhotoUrl } from "@/lib/photo-url";
 
 const TUNE: { value: TuneOption; label: string }[] = [
   { value: "more_kids", label: "יותר ידידותי לילדים" },
@@ -196,7 +197,7 @@ export default function SuggestionsTab() {
         <FillPhotos
           tripId={trip.id}
           destination={trip.destination}
-          missing={items.filter((i) => i.kind === "attraction" && !i.image_url).length}
+          missing={items.filter((i) => i.kind === "attraction" && !isPhotoUrl(i.image_url)).length}
           onDone={load}
         />
       )}
