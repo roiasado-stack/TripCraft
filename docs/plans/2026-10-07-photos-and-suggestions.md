@@ -2,7 +2,7 @@
 title: Destination photo on the trip screen + suggestions redesign
 date: 2026-10-07
 route: Straight (/ship)
-status: awaiting Roi's approval
+status: approved by Roi 2026-10-07 (all four phases, order 1→2→3→4)
 ---
 
 # Destination photo + suggestions redesign
@@ -88,7 +88,6 @@ Phase 1: deploy `generate`. Phase 3 (if approved): migration 021, then the site.
 site deploy. No new third party — Wikipedia and Wikimedia are already used and listed on
 /privacy and /credits.
 
-## Open decisions for Roi
-1. Phase 3 — show the photo on the public share page too (needs migration 021 you paste)? I'd say
-   yes: it's the page clients see first.
-2. Order: 1 → 2 → (3) → 4 as above, each checked on your phone?
+## Decisions (Roi, 2026-10-07)
+1. Phase 3 is in: the photo also appears on the public share page (migration 021).
+2. Order 1 → 2 → 3 → 4, each checked on the phone.
