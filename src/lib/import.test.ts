@@ -56,6 +56,19 @@ describe("normDate in Israel", () => {
     try {
       // Local midnight Nov 15 in Israel is Nov 14 in UTC.
       expect(normDate("Nov 15 2026")).toBe("2026-11-15");
+      // Late-evening UTC timestamp: the written day, not Israel's next day.
+      expect(normDate("2026-11-15T23:30:00Z")).toBe("2026-11-15");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
+describe("normDate with ISO timestamps", () => {
+  it("keeps the written day west of Greenwich too", () => {
+    vi.stubEnv("TZ", "America/New_York");
+    try {
+      expect(normDate("2026-11-15T00:00:00.000Z")).toBe("2026-11-15");
     } finally {
       vi.unstubAllEnvs();
     }

@@ -171,11 +171,20 @@ for (const f of migs) {
     return { rgb, alpha };
   };
   const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // Browsers blend a translucent colour over what's beneath in gamma-encoded sRGB.
+  const encode = (x) => (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055);
+  const decode = (x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
+  const over = (top, alpha, base) => top.map((t, i) => decode(encode(t) * alpha + encode(base[i]) * (1 - alpha)));
   const ratio = (x, y) => {
     const [hi, lo] = [lum(x), lum(y)].sort((p, q) => q - p);
     return (hi + 0.05) / (lo + 0.05);
   };
   const token = (vars, name) => {
+    if (typeof name === "object") {
+      const tint = token(vars, name.tint);
+      const base = token(vars, name.over);
+      return tint && base ? { rgb: over(tint.rgb, name.alpha, base.rgb), alpha: 1 } : null;
+    }
     let v = vars[name];
     for (let k = 0; k < 5 && v?.startsWith("var("); k++) v = vars[v.slice(4, -1).trim()];
     return v ? linear(v) : null;
@@ -189,6 +198,9 @@ for (const f of migs) {
     ["--accent", "--card"], ["--accent", "--background"], ["--accent", "--accent-soft"], ["--accent-foreground", "--accent"],
     ["--destructive", "--card"], ["--destructive-foreground", "--destructive"], ["--sun-foreground", "--sun"],
     ["--tile-foreground", "--tile", 3], ["--tile-accent-foreground", "--tile-accent", 3],
+    // Error boxes: text-destructive on bg-destructive/10 (import dialogs, the agent).
+    ["--destructive", { tint: "--destructive", alpha: 0.1, over: "--card" }],
+    ["--destructive", { tint: "--destructive", alpha: 0.1, over: "--background" }],
   ];
   const white = [1, 1, 1];
   for (const [mode, vars] of Object.entries(modes)) {
@@ -196,12 +208,13 @@ for (const f of migs) {
       const f = token(vars, fg);
       const b = token(vars, bg);
       if (!f || !b) {
-        fail(file, 0, "contrast", `${mode}: can't read ${!f ? fg : bg} as oklch()`);
+        fail(file, 0, "contrast", `${mode}: can't read ${JSON.stringify(!f ? fg : bg)} as oklch()`);
         continue;
       }
       if (f.alpha < 1 || b.alpha < 1) continue; // translucent pairs depend on what's underneath
       const r = ratio(f.rgb, b.rgb);
-      if (r < min) fail(file, 0, "contrast", `${mode}: ${fg} on ${bg} is ${r.toFixed(2)}:1 (needs ${min}:1)`);
+      const bgName = typeof bg === "object" ? `${bg.tint}/${bg.alpha * 100} over ${bg.over}` : bg;
+      if (r < min) fail(file, 0, "contrast", `${mode}: ${fg} on ${bgName} is ${r.toFixed(2)}:1 (needs ${min}:1)`);
     }
     for (const stop of vars["--gradient-sea"]?.match(/oklch\([^)]*\)/g) ?? []) {
       const r = ratio(white, linear(stop).rgb);

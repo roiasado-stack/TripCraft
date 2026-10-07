@@ -102,6 +102,10 @@ export function normDate(raw: unknown): string | null {
     return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
 
+  // An ISO timestamp ("2026-11-15T00:00:00Z", a common export shape): keep the written day.
+  const iso = /^(\d{4}-\d{2}-\d{2})T/.exec(s);
+  if (iso) return iso[1];
+
   // Anything else the browser can read ("Nov 15 2026") parses as local midnight:
   // take that local day, not its UTC date (which is the day before in Israel).
   const d = new Date(s);

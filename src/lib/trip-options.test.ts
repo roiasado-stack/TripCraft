@@ -52,7 +52,7 @@ describe("formatHeb / formatDayHeb", () => {
 
 describe("daysBetween", () => {
   it("lists every calendar day of the trip, whatever the phone's time zone", () => {
-    for (const tz of ["Asia/Jerusalem", "America/New_York", "Asia/Bangkok"]) {
+    for (const tz of ["Asia/Jerusalem", "America/New_York", "Asia/Bangkok", "Africa/Cairo"]) {
       vi.stubEnv("TZ", tz);
       try {
         expect(daysBetween("2026-10-23", "2026-10-27")).toEqual([
@@ -65,6 +65,17 @@ describe("daysBetween", () => {
       } finally {
         vi.unstubAllEnvs();
       }
+    }
+  });
+});
+
+describe("daysBetween across a daylight-saving change at midnight", () => {
+  it("keeps the last day where midnight doesn't exist (Cairo, Apr 24 2026)", () => {
+    vi.stubEnv("TZ", "Africa/Cairo");
+    try {
+      expect(daysBetween("2026-04-23", "2026-04-26")).toEqual(["2026-04-23", "2026-04-24", "2026-04-25", "2026-04-26"]);
+    } finally {
+      vi.unstubAllEnvs();
     }
   });
 });

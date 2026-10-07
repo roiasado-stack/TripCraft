@@ -1,4 +1,4 @@
-import { localDateString, parseLocalDate } from "./trip-dates";
+import { localDateString, parseLocalDate, tripLength } from "./trip-dates";
 
 export const TRIP_TYPES = [
   { value: "family", label: "משפחה", emoji: "👨‍👩‍👧‍👦" },
@@ -206,9 +206,12 @@ export function formatDateTimeHeb(value?: string | null) {
 export function daysBetween(start: string, end: string) {
   const out: string[] = [];
   const from = parseLocalDate(start);
-  const to = parseLocalDate(end);
-  if (!from || !to) return out;
-  for (const d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) out.push(localDateString(d));
+  const n = tripLength(start, end);
+  if (!from || !n) return out;
+  // Count days and build each one at noon: where daylight saving starts at
+  // midnight (Cairo, Santiago, Beirut) that midnight doesn't exist, and a
+  // midnight-based walk loses the last day.
+  for (let i = 0; i < n; i++) out.push(localDateString(new Date(from.getFullYear(), from.getMonth(), from.getDate() + i, 12)));
   return out;
 }
 
