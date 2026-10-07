@@ -19,6 +19,7 @@ import { resolveMapUrl, vegetarianSearchUrl } from "@/lib/maps";
 import { KosherPanel } from "@/components/KosherPanel";
 import { CardCoverImage } from "@/components/MediaCard";
 import { TripMap, type TripMapItem } from "@/components/TripMap";
+import { localDateString } from "@/lib/trip-dates";
 
 const TUNE: { value: TuneOption; label: string }[] = [
   { value: "more_kids", label: "יותר ידידותי לילדים" },
@@ -117,7 +118,7 @@ export default function SuggestionsTab() {
     await supabase.from("suggestions").delete().eq("id", id);
   };
   const addToItinerary = async (s: Suggestion) => {
-    const day = trip.start_date ?? new Date().toISOString().slice(0, 10);
+    const day = trip.start_date ?? localDateString(new Date());
     await supabase.from("itinerary_items").insert({
       trip_id: trip.id,
       day_date: day,

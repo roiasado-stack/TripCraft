@@ -129,8 +129,8 @@
   --sun: oklch(0.87 0.16 92);
   --sun-foreground: oklch(0.25 0.06 70);
 
-  --destructive: oklch(0.66 0.2 25);
-  --destructive-foreground: oklch(0.98 0.005 40);
+  --destructive: oklch(0.7 0.19 25);
+  --destructive-foreground: oklch(0.18 0.04 25);
 
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 14%);

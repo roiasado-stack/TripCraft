@@ -12,6 +12,7 @@ import { MapLink } from "@/components/MapLink";
 import { suggestionKindLabel } from "@/lib/trip-options";
 import { resolveMapUrl } from "@/lib/maps";
 import { cn } from "@/lib/utils";
+import { localDateString } from "@/lib/trip-dates";
 
 const STARTERS = [
   "מה עושים ביום גשום?",
@@ -147,7 +148,7 @@ export default function AskTab() {
   };
 
   const addToItinerary = async (card: AgentCard, key: string) => {
-    const day = trip.start_date ?? new Date().toISOString().slice(0, 10);
+    const day = trip.start_date ?? localDateString(new Date());
     const { error } = await supabase.from("itinerary_items").insert({
       trip_id: trip.id,
       day_date: day,

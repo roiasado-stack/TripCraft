@@ -1,3 +1,5 @@
+import { localDateString } from "./trip-dates";
+
 /**
  * Parses a pasted/uploaded itinerary into structured rows — locally, with no
  * LLM involved. Accepts JSON or CSV/TSV, with Hebrew or English headers.
@@ -100,8 +102,10 @@ export function normDate(raw: unknown): string | null {
     return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
 
+  // Anything else the browser can read ("Nov 15 2026") parses as local midnight:
+  // take that local day, not its UTC date (which is the day before in Israel).
   const d = new Date(s);
-  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  if (!isNaN(d.getTime())) return localDateString(d);
   return null;
 }
 

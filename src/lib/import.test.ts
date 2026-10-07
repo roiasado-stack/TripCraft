@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { normDate, normTime } from "./import-itinerary";
 import { normAge, normPreferences, parseParticipants } from "./import-participants";
 
@@ -47,5 +47,17 @@ describe("participants import", () => {
     const r = parseParticipants("   ");
     expect(r.items).toEqual([]);
     expect(r.errors[0]).toMatch(/[֐-׿]/);
+  });
+});
+
+describe("normDate in Israel", () => {
+  it("keeps the written day for formats the browser parses as local midnight", () => {
+    vi.stubEnv("TZ", "Asia/Jerusalem");
+    try {
+      // Local midnight Nov 15 in Israel is Nov 14 in UTC.
+      expect(normDate("Nov 15 2026")).toBe("2026-11-15");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

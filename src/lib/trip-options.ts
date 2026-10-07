@@ -1,4 +1,4 @@
-import { parseLocalDate } from "./trip-dates";
+import { localDateString, parseLocalDate } from "./trip-dates";
 
 export const TRIP_TYPES = [
   { value: "family", label: "משפחה", emoji: "👨‍👩‍👧‍👦" },
@@ -205,11 +205,10 @@ export function formatDateTimeHeb(value?: string | null) {
 
 export function daysBetween(start: string, end: string) {
   const out: string[] = [];
-  const from = new Date(start);
-  const to = new Date(end);
-  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-    out.push(d.toISOString().slice(0, 10));
-  }
+  const from = parseLocalDate(start);
+  const to = parseLocalDate(end);
+  if (!from || !to) return out;
+  for (const d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) out.push(localDateString(d));
   return out;
 }
 

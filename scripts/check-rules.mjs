@@ -67,6 +67,17 @@ for (const file of src) {
     if (/createClient\s*[<(]/.test(line) && rel !== "src/lib/supabase.ts")
       fail(file, n, "one-client", "use the single supabase client from @/lib/supabase");
     if (/createClient\s*</.test(line)) fail(file, n, "untyped-client", "the client is untyped on purpose — assert row shapes at the call site");
+
+    // Trip dates are the traveller's calendar day. `new Date("2026-11-15")` is UTC
+    // midnight (the day before west of Greenwich) and toISOString() is the UTC day
+    // (yesterday in Israel until 3am) — both shipped as bugs. trip-dates.ts is the
+    // one place that converts.
+    if (rel !== "src/lib/trip-dates.ts") {
+      if (/toISOString\(\)\s*\.slice\(\s*0\s*,\s*10\s*\)/.test(line))
+        fail(file, n, "local-date", "that's the UTC day, not the traveller's — use localDateString() from @/lib/trip-dates");
+      if (/new Date\([^)]*\b(start_date|end_date|check_in|check_out|day_date)\b/.test(line))
+        fail(file, n, "local-date", "a date-only string parses as UTC midnight — use parseLocalDate() from @/lib/trip-dates");
+    }
   });
 }
 
@@ -121,6 +132,81 @@ for (const f of migs) {
     });
     if (!ALLOW.migrationCheck.has(f) && !/^--.*\b((must|should) return zero rows|zero rows =)/im.test(sql))
       fail(file, 0, "migration-check", "end the migration with the check query that must return zero rows");
+  }
+}
+
+// 4. Colour contrast ---------------------------------------------------------------
+// Every text/background token pair in src/styles.css must meet WCAG AA (4.5:1) in
+// light and dark, and white hero text must stay readable on both ends of
+// --gradient-sea. Measured from the tokens themselves, so a palette tweak that
+// breaks a pair fails here instead of on someone's phone. (Icon tiles: 3:1.)
+{
+  const file = join(ROOT, "src/styles.css");
+  const css = readFileSync(file, "utf8").replace(/\r\n/g, "\n");
+  const block = (sel) => {
+    const i = css.indexOf(`\n${sel} {\n`);
+    if (i < 0) return {};
+    const body = css.slice(i, css.indexOf("\n}\n", i + 1));
+    return Object.fromEntries([...body.matchAll(/^\s*(--[\w-]+):\s*([^;]+);/gm)].map((m) => [m[1], m[2].trim()]));
+  };
+  const light = block(":root");
+  const modes = { light, dark: { ...light, ...block(".dark") } };
+
+  // oklch → linear sRGB (clamped to the gamut); relative luminance uses linear values.
+  const linear = (v) => {
+    const m = v.match(/oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.]+)(%?))?\s*\)/);
+    if (!m) return null;
+    const [L, C, h] = [+m[1], +m[2], +m[3]];
+    const alpha = m[4] === undefined ? 1 : m[5] ? +m[4] / 100 : +m[4];
+    const a = C * Math.cos((h * Math.PI) / 180);
+    const b = C * Math.sin((h * Math.PI) / 180);
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+    const mm = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+    const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+    const rgb = [
+      4.0767416621 * l - 3.3077115913 * mm + 0.2309699292 * s,
+      -1.2684380046 * l + 2.6097574011 * mm - 0.3413193965 * s,
+      -0.0041960863 * l - 0.7034186147 * mm + 1.707614701 * s,
+    ].map((x) => Math.min(1, Math.max(0, x)));
+    return { rgb, alpha };
+  };
+  const lum = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const ratio = (x, y) => {
+    const [hi, lo] = [lum(x), lum(y)].sort((p, q) => q - p);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const token = (vars, name) => {
+    let v = vars[name];
+    for (let k = 0; k < 5 && v?.startsWith("var("); k++) v = vars[v.slice(4, -1).trim()];
+    return v ? linear(v) : null;
+  };
+
+  const PAIRS = [
+    ["--foreground", "--background"], ["--foreground", "--card"], ["--card-foreground", "--card"],
+    ["--popover-foreground", "--popover"], ["--muted-foreground", "--card"], ["--muted-foreground", "--background"],
+    ["--muted-foreground", "--muted"], ["--secondary-foreground", "--secondary"],
+    ["--primary", "--card"], ["--primary", "--background"], ["--primary", "--primary-soft"], ["--primary-foreground", "--primary"],
+    ["--accent", "--card"], ["--accent", "--background"], ["--accent", "--accent-soft"], ["--accent-foreground", "--accent"],
+    ["--destructive", "--card"], ["--destructive-foreground", "--destructive"], ["--sun-foreground", "--sun"],
+    ["--tile-foreground", "--tile", 3], ["--tile-accent-foreground", "--tile-accent", 3],
+  ];
+  const white = [1, 1, 1];
+  for (const [mode, vars] of Object.entries(modes)) {
+    for (const [fg, bg, min = 4.5] of PAIRS) {
+      const f = token(vars, fg);
+      const b = token(vars, bg);
+      if (!f || !b) {
+        fail(file, 0, "contrast", `${mode}: can't read ${!f ? fg : bg} as oklch()`);
+        continue;
+      }
+      if (f.alpha < 1 || b.alpha < 1) continue; // translucent pairs depend on what's underneath
+      const r = ratio(f.rgb, b.rgb);
+      if (r < min) fail(file, 0, "contrast", `${mode}: ${fg} on ${bg} is ${r.toFixed(2)}:1 (needs ${min}:1)`);
+    }
+    for (const stop of vars["--gradient-sea"]?.match(/oklch\([^)]*\)/g) ?? []) {
+      const r = ratio(white, linear(stop).rgb);
+      if (r < 4.5) fail(file, 0, "contrast", `${mode}: white hero text on --gradient-sea stop ${stop} is ${r.toFixed(2)}:1 (needs 4.5:1)`);
+    }
   }
 }
 

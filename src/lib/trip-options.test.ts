@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { destinationFlag, flagCountryCode, formatDayHeb, formatHeb } from "./trip-options";
+import { daysBetween, destinationFlag, flagCountryCode, formatDayHeb, formatHeb } from "./trip-options";
 
 describe("destinationFlag", () => {
   it("matches a city or a country anywhere in the text", () => {
@@ -46,6 +46,25 @@ describe("formatHeb / formatDayHeb", () => {
       expect(formatDayHeb("2026-11-15")).toContain("15");
     } finally {
       vi.unstubAllEnvs();
+    }
+  });
+});
+
+describe("daysBetween", () => {
+  it("lists every calendar day of the trip, whatever the phone's time zone", () => {
+    for (const tz of ["Asia/Jerusalem", "America/New_York", "Asia/Bangkok"]) {
+      vi.stubEnv("TZ", tz);
+      try {
+        expect(daysBetween("2026-10-23", "2026-10-27")).toEqual([
+          "2026-10-23",
+          "2026-10-24",
+          "2026-10-25",
+          "2026-10-26",
+          "2026-10-27",
+        ]);
+      } finally {
+        vi.unstubAllEnvs();
+      }
     }
   });
 });
