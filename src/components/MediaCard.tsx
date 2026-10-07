@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PlacePhoto } from "@/lib/ai";
+import { isPhotoUrl } from "@/lib/photo-url";
 
 /**
  * Credits Google Places requires on its photos: the photographer (linked) and
@@ -133,6 +134,8 @@ export function CardCoverImage({
   /** Set when imageUrl came from Google Places — shows its required credits. */
   googlePhoto?: PlacePhoto | null;
 }) {
+  // A stored logo/flag/map (Wikipedia's page image isn't always a photo) shows as no photo.
+  if (!isPhotoUrl(imageUrl)) imageUrl = null;
   const hasImage = !!imageUrl;
   return (
     // No photo yet? Keep the fallback compact — a full 16:9 hero of empty
@@ -184,6 +187,7 @@ export function CardThumbnail({
   className?: string;
   illustrative?: boolean;
 }) {
+  if (!isPhotoUrl(imageUrl)) imageUrl = null;
   return (
     <div className={cn("relative shrink-0 overflow-hidden", size, rounded, className)}>
       {imageUrl ? (

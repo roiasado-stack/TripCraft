@@ -90,6 +90,21 @@ for (const file of src) {
   });
 }
 
+// The "is this a photo?" filter exists twice — in the app and in the generate
+// Edge Function (Deno can't import from src/). They must stay the same pattern.
+{
+  const pattern = (rel) => {
+    const text = readFileSync(join(ROOT, rel), "utf8");
+    const m = text.match(/const NOT_A_PHOTO =\s*(\/.*\/[a-z]*);/);
+    return m ? m[1] : null;
+  };
+  const app = pattern("src/lib/photo-url.ts");
+  const fn = pattern("supabase/functions/generate/index.ts");
+  if (!app || !fn) fail(join(ROOT, "src/lib/photo-url.ts"), 0, "photo-filter-sync", "NOT_A_PHOTO not found in one of the two files");
+  else if (app !== fn)
+    fail(join(ROOT, "supabase/functions/generate/index.ts"), 0, "photo-filter-sync", "NOT_A_PHOTO differs from src/lib/photo-url.ts — keep the two identical");
+}
+
 // 2. package.json ------------------------------------------------------------------
 {
   const file = join(ROOT, "package.json");

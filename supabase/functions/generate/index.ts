@@ -392,6 +392,20 @@ function parseWikipediaTitle(raw: unknown): string | null {
 const WIKIPEDIA_USER_AGENT = "TripCraft/1.0 (https://tripcraft-lac.vercel.app)";
 
 /** Only ever store/show images served from Wikimedia's own upload hosts. */
+// Wikipedia's page image isn't always a photograph (a museum's logo, a country's
+// flag or map, a city's coat of arms). Same pattern as src/lib/photo-url.ts —
+// `npm run rules` fails if the two differ.
+const NOT_A_PHOTO =
+  /\.svg(\.png)?$|(^|[^a-z])(logo|logotype|emblem|coat[ _-]of[ _-]arms|seal|flag|map|locator|signature|icon)s?([^a-z]|$)/i;
+
+function looksLikePhoto(u: string): boolean {
+  try {
+    return !NOT_A_PHOTO.test(decodeURIComponent(new URL(u).pathname.split("/").pop() ?? ""));
+  } catch {
+    return false;
+  }
+}
+
 function isWikimediaImage(u: unknown): u is string {
   if (typeof u !== "string") return false;
   try {
@@ -424,7 +438,8 @@ async function wikipediaPhoto(title: string): Promise<{ url: string | null; fail
     try {
       const { data } = await db.from("photo_cache").select("url").eq("query_key", cacheKey).maybeSingle();
       const cachedUrl = (data as { url?: string } | null)?.url;
-      if (isWikimediaImage(cachedUrl)) return { url: cachedUrl, cached: true };
+      // A logo cached before the photo filter existed is skipped (and re-looked-up).
+      if (isWikimediaImage(cachedUrl) && looksLikePhoto(cachedUrl)) return { url: cachedUrl, cached: true };
     } catch {
       // Cache is an optimization only — fall through to Wikipedia.
     }
@@ -448,6 +463,7 @@ async function wikipediaPhoto(title: string): Promise<{ url: string | null; fail
     const found = page.thumbnail?.source;
     if (!found) return { url: null, fail: `no_image:${clean.slice(0, 40)}` };
     if (!isWikimediaImage(found)) return { url: null, fail: "bad_host" };
+    if (!looksLikePhoto(found)) return { url: null, fail: `not_a_photo:${clean.slice(0, 40)}` };
     if (db) {
       try {
         // Awaited on purpose: an un-awaited write can be cut off when the function returns.
