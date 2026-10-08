@@ -145,3 +145,12 @@ INSERT INTO checklist_items (trip_id, title, is_done, is_shared, sort_order, cre
   ('b4ea0000-0000-4000-8000-000000000002', 'SIM eSIM for Switzerland (Swisscom)', true, true, 2, :'uid');
 INSERT INTO checklist_items (trip_id, title, is_shared, sort_order, created_by)
 SELECT 'b4ea0000-0000-4000-8000-000000000005', 'פריט ' || g, true, g, :'uid' FROM generate_series(1, 60) g;
+
+-- A short agent conversation on the Demo trip (the agent screen): text, a card, a pending action.
+INSERT INTO trip_chat_messages (trip_id, role, content, cards, pending_actions, user_id, created_at) VALUES
+  ('b4ea0000-0000-4000-8000-000000000001', 'user', 'איפה אוכלים פסטה טובה ליד הקולוסיאום?', '[]', '[]', :'uid', now() - interval '3 minutes'),
+  ('b4ea0000-0000-4000-8000-000000000001', 'assistant',
+   E'ליד הקולוסיאום כדאי לנסות את Trattoria Luzzi, מקום משפחתי עם מחירים סבירים.\nVia di San Giovanni in Laterano 88 — כדאי להגיע לפני 19:30.',
+   '[{"kind":"restaurant","title":"Trattoria Luzzi","description":"טרטוריה משפחתית, פסטה ביתית ופיצה, 5 דקות הליכה מהקולוסיאום.","tags":["פסטה","משפחות"],"price_level":"€€","location":"Via di San Giovanni in Laterano 88, Roma"}]',
+   '[{"tool":"add_to_itinerary","id":"breakui-pa-1","input":{"title":"ארוחת ערב ב-Trattoria Luzzi","day_date":"2026-11-18","start_time":"19:30"}}]',
+   :'uid', now() - interval '2 minutes');
