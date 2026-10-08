@@ -142,9 +142,21 @@ export function CardCoverImage({
     // gradient just for one centered icon reads as wasted space; a short
     // banner still gives the kind badge room without pretending there's a
     // photo there.
-    <div className={cn("relative w-full overflow-hidden rounded-t-3xl", hasImage ? "aspect-[16/9]" : "h-20", className)}>
+    // Without a photo but with a title over it, the box grows with the title (two
+    // lines at a large text size don't fit the short banner).
+    <div
+      className={cn(
+        "relative w-full overflow-hidden rounded-t-3xl",
+        hasImage ? "aspect-[16/9]" : children ? "min-h-24" : "h-20",
+        className,
+      )}
+    >
       {hasImage ? (
         <img src={imageUrl!} alt={alt} className="size-full object-cover" loading="lazy" />
+      ) : children ? (
+        <div className="absolute inset-0">
+          <Fallback gradient={gradient} icon={icon} />
+        </div>
       ) : (
         <Fallback gradient={gradient} icon={icon} />
       )}
@@ -156,7 +168,9 @@ export function CardCoverImage({
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
       )}
       {cornerSlot && <div className="absolute end-3 top-3">{cornerSlot}</div>}
-      {children && <div className="absolute inset-x-0 bottom-0 p-3 text-white">{children}</div>}
+      {children && (
+        <div className={cn("p-3 text-white", hasImage ? "absolute inset-x-0 bottom-0" : "relative pt-12")}>{children}</div>
+      )}
     </div>
   );
 }
