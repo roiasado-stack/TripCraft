@@ -423,7 +423,7 @@ export function Modal({
         style={{ animation: "tc-sheet 220ms cubic-bezier(0.22,1,0.36,1)" }}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 id={titleId} className="text-lg font-bold">
+          <h2 id={titleId} className="text-lg font-bold [overflow-wrap:anywhere] [unicode-bidi:plaintext]">
             {title}
           </h2>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="סגור">

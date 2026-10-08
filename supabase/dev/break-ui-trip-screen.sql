@@ -118,3 +118,11 @@ INSERT INTO itinerary_items (trip_id, day_date, start_time, title, description, 
   ('b4ea0000-0000-4000-8000-000000000001', current_date + 41, '10:00', 'מזרקת טרווי והפנתיאון', 'מגיעים מוקדם לפני ההמונים.', 'activity', 'Piazza di Trevi', 1,
    'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Trevi_Fountain_-_Roma.jpg/960px-Trevi_Fountain_-_Roma.jpg'),
   ('b4ea0000-0000-4000-8000-000000000001', current_date + 45, '13:40', 'נסיעה לשדה התעופה', NULL, 'transport', 'Fiumicino', 1, NULL);
+
+-- Booking details and a transfer on the Demo trip (the transport screen's full layout).
+UPDATE flights SET booking_ref = 'XK7Q2P', seats = '23A, 23B', baggage = '23 ק"ג', from_terminal = '3'
+WHERE trip_id = 'b4ea0000-0000-4000-8000-000000000001' AND direction = 'outbound';
+UPDATE stays SET address = 'Via Nazionale, 22, Roma', booking_ref = '4417-889-213', phone = '+39 06 489911', url = 'https://www.hotelartemide.it'
+WHERE trip_id = 'b4ea0000-0000-4000-8000-000000000001';
+INSERT INTO transfers (trip_id, kind, provider, pickup_location, pickup_at, booking_ref, phone) VALUES
+  ('b4ea0000-0000-4000-8000-000000000001', 'transfer', 'Rome Airport Shuttle', 'Fiumicino Terminal 3', (current_date + 40) + time '11:30', 'RAS-55821', '+39 06 1234567');

@@ -177,10 +177,12 @@ export default function ItineraryTab() {
       lat: editing.lat ?? coords?.lat ?? null,
       lng: editing.lng ?? coords?.lng ?? null,
     };
-    if (editing.id) {
-      await supabase.from("itinerary_items").update(payload).eq("id", editing.id);
-    } else {
-      await supabase.from("itinerary_items").insert(payload);
+    const { error } = editing.id
+      ? await supabase.from("itinerary_items").update(payload).eq("id", editing.id)
+      : await supabase.from("itinerary_items").insert(payload);
+    if (error) {
+      toast.error("השמירה נכשלה. נסו שוב.");
+      return;
     }
     setEditing(null);
     toast.success("נשמר");
@@ -188,8 +190,13 @@ export default function ItineraryTab() {
   };
 
   const remove = async (id: string) => {
-    await supabase.from("itinerary_items").delete().eq("id", id);
-    setItems((x) => x.filter((i) => i.id !== id));
+    const { error } = await supabase.from("itinerary_items").delete().eq("id", id);
+    if (error) {
+      toast.error("המחיקה נכשלה. נסו שוב.");
+      return;
+    }
+    toast.success("הפריט נמחק");
+    load();
   };
 
   const generate = async () => {
@@ -395,7 +402,7 @@ export default function ItineraryTab() {
           <SheetRow
             icon={<Sparkles className="size-5" />}
             label="מסלול מוצע עם AI"
-            hint="לפי המשתתפים, ההעדפות והתאריכים"
+            hint={generating ? "בתהליך… זה לוקח כמה שניות" : "לפי המשתתפים, ההעדפות והתאריכים"}
             onClick={() => {
               setAddOpen(false);
               if (!generating) generate();
