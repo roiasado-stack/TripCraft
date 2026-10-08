@@ -20,7 +20,8 @@ export function MapLink({
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
       className={cn(
-        "inline-flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-secondary-foreground",
+        // The pill is ~24px; the ::before pad gives it a 44px tap target without changing the look.
+        "relative inline-flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-secondary-foreground before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']",
         className,
       )}
     >
