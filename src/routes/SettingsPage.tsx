@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
-import { Button, Card, Field, Input, Modal } from "@/components/ui";
+import { Button, Field, GroupedList, Input, ListRow, Modal, Switch } from "@/components/ui";
 import { DOCS_BUCKET } from "@/lib/documents";
 import { LegalLinks } from "@/routes/LegalPages";
 
@@ -65,10 +65,15 @@ export default function SettingsPage() {
   const saveProfile = async () => {
     if (!user) return;
     setSaving(true);
-    await supabase
+    const { error } = await supabase
       .from("profiles")
       .update({ full_name: fullName || null, agency_name: agencyName || null, agency_color: agencyColor })
       .eq("id", user.id);
+    if (error) {
+      setSaving(false);
+      toast.error("השמירה נכשלה");
+      return;
+    }
     await refreshProfile();
     setSaving(false);
     toast.success("נשמר ✓");
@@ -76,107 +81,120 @@ export default function SettingsPage() {
 
   const roleLabel = roles.includes("admin") ? "מנהל" : roles.includes("agent") ? "סוכן נסיעות" : "מטייל";
 
+  const fieldRow = "flex min-h-12 items-center gap-3 px-4";
+  const fieldInput = "type-body min-w-0 flex-1 bg-transparent py-3 outline-none placeholder:text-muted-foreground";
+
   return (
     <div className="mx-auto min-h-screen max-w-lg px-4 pb-16 pt-5">
-      <header className="mb-6 flex items-center gap-3">
-        <button onClick={() => navigate("/")} className="grid size-10 place-items-center rounded-2xl border border-border bg-card" aria-label="חזרה">
-          <ChevronRight className="size-5" />
+      <header className="mb-5">
+        <button
+          onClick={() => navigate("/")}
+          className="-ms-2 grid size-11 place-items-center rounded-full text-primary transition-colors active:bg-muted/70"
+          aria-label="חזרה"
+        >
+          <ChevronRight className="size-6" />
         </button>
-        <h1 className="text-xl font-extrabold">הגדרות</h1>
+        <h1 className="type-large-title mt-1">הגדרות</h1>
       </header>
 
-      {/* account */}
-      <Card className="mb-4 p-5">
-        <div className="mb-4 flex items-center gap-3">
-          <div className="grid size-14 place-items-center rounded-2xl bg-gradient-sunset text-2xl font-bold text-white">
-            {(fullName || user?.email || "?").slice(0, 1).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <div className="truncate font-bold">{fullName || "משתמש"}</div>
-            <div className="truncate text-sm text-muted-foreground" dir="ltr">
-              {user?.email}
+      <div className="flex flex-col gap-6">
+        {/* account */}
+        <GroupedList>
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="grid size-14 shrink-0 place-items-center rounded-full bg-gradient-sunset text-2xl font-bold text-white">
+              {(Array.from((fullName || user?.email || "?").trim())[0] ?? "?").toUpperCase()}
             </div>
-            <span className="mt-1 inline-block rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold text-secondary-foreground">
-              {roleLabel}
-            </span>
-          </div>
-        </div>
-        <Field label="שם מלא">
-          <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
-        </Field>
-      </Card>
-
-      {/* agent branding */}
-      {isAgent && (
-        <Card className="mb-4 p-5">
-          <h2 className="mb-3 font-bold">🏢 מיתוג סוכנות</h2>
-          <p className="mb-3 text-sm text-muted-foreground">המיתוג יופיע בקישורי השיתוף שתשלח ללקוחות.</p>
-          <div className="flex flex-col gap-3">
-            <Field label="שם הסוכנות">
-              <Input value={agencyName} onChange={(e) => setAgencyName(e.target.value)} />
-            </Field>
-            <Field label="צבע מותג">
-              <div className="flex items-center gap-3">
-                <input type="color" value={agencyColor} onChange={(e) => setAgencyColor(e.target.value)} className="size-12 rounded-xl border border-border" />
-                <span dir="ltr" className="font-mono text-sm">
-                  {agencyColor}
-                </span>
+            <div className="min-w-0">
+              <div className="type-headline truncate">
+                <bdi>{fullName || "משתמש"}</bdi>
               </div>
-            </Field>
+              <div className="type-footnote truncate text-muted-foreground" dir="ltr">
+                {user?.email}
+              </div>
+              <span className="type-footnote mt-0.5 inline-block font-semibold text-primary">{roleLabel}</span>
+            </div>
           </div>
-        </Card>
-      )}
+          <label className={fieldRow}>
+            <span className="type-body w-24 shrink-0">שם מלא</span>
+            <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="השם שלך" className={fieldInput} />
+          </label>
+        </GroupedList>
 
-      <Button className="mb-4 w-full" size="lg" loading={saving} onClick={saveProfile}>
-        שמירת פרופיל
-      </Button>
+        {/* agent branding */}
+        {isAgent && (
+          <GroupedList title="מיתוג סוכנות">
+            <label className={fieldRow}>
+              <span className="type-body w-24 shrink-0">שם הסוכנות</span>
+              <input value={agencyName} onChange={(e) => setAgencyName(e.target.value)} placeholder="לא חובה" className={fieldInput} />
+            </label>
+            <label className={fieldRow}>
+              <span className="type-body w-24 shrink-0">צבע מותג</span>
+              <span dir="ltr" className="type-footnote min-w-0 flex-1 text-end font-mono text-muted-foreground">
+                {agencyColor}
+              </span>
+              <input
+                type="color"
+                value={agencyColor}
+                onChange={(e) => setAgencyColor(e.target.value)}
+                className="size-9 shrink-0 cursor-pointer rounded-lg border border-border"
+              />
+            </label>
+          </GroupedList>
+        )}
+        {isAgent && (
+          <p className="type-footnote -mt-4 px-4 text-muted-foreground">המיתוג יופיע בקישורי השיתוף שתשלח ללקוחות.</p>
+        )}
 
-      {/* appearance */}
-      <Card className="mb-4 flex items-center justify-between p-4">
-        <div className="flex items-center gap-3">
-          {theme === "dark" ? <Moon className="size-5 text-primary" /> : <Sun className="size-5 text-primary" />}
-          <div>
-            <div className="font-semibold">מצב כהה</div>
-            <div className="text-xs text-muted-foreground">נוח יותר לעיניים בלילה</div>
-          </div>
-        </div>
-        <button
-          onClick={toggle}
-          role="switch"
-          aria-checked={theme === "dark"}
-          className={`relative h-7 w-12 rounded-full transition ${theme === "dark" ? "bg-primary" : "bg-muted"}`}
-        >
-          <span className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-all ${theme === "dark" ? "end-0.5" : "start-0.5"}`} />
-        </button>
-      </Card>
-
-      {isAdmin && (
-        <Button variant="outline" size="lg" className="mb-4 w-full" onClick={() => navigate("/admin/monitoring")}>
-          <Gauge className="size-5" />
-          מוניטורינג
+        <Button className="w-full" size="lg" loading={saving} onClick={saveProfile}>
+          שמירת פרופיל
         </Button>
-      )}
 
-      <Button variant="outline" size="lg" className="w-full text-destructive" onClick={async () => { await signOut(); navigate("/auth", { replace: true }); }}>
-        <LogOut className="size-5" />
-        התנתקות
-      </Button>
+        {/* appearance */}
+        <GroupedList title="תצוגה">
+          <div className={fieldRow}>
+            {theme === "dark" ? <Moon className="size-5 shrink-0 text-primary" /> : <Sun className="size-5 shrink-0 text-primary" />}
+            <div className="min-w-0 flex-1 py-2.5">
+              <div className="type-body">מצב כהה</div>
+              <div className="type-footnote text-muted-foreground">נוח יותר לעיניים בלילה</div>
+            </div>
+            <Switch checked={theme === "dark"} onChange={toggle} label="מצב כהה" />
+          </div>
+        </GroupedList>
 
-      <Button
-        variant="ghost"
-        size="lg"
-        className="mt-3 w-full text-destructive"
-        onClick={() => {
-          setDeleteConfirm("");
-          setDeleteOpen(true);
-        }}
-      >
-        <Trash2 className="size-5" />
-        מחיקת החשבון
-      </Button>
+        {isAdmin && (
+          <GroupedList>
+            <ListRow to="/admin/monitoring" leading={<Gauge className="size-5 text-primary" />} title="מוניטורינג" />
+          </GroupedList>
+        )}
 
-      <LegalLinks className="mt-6" />
-      <p className="mt-3 text-center text-xs text-muted-foreground">TripCraft · גרסה 0.1</p>
+        <GroupedList>
+          <button
+            type="button"
+            onClick={async () => {
+              await signOut();
+              navigate("/auth", { replace: true });
+            }}
+            className="type-body flex min-h-12 w-full items-center gap-3 px-4 text-start text-destructive transition-colors active:bg-muted/70"
+          >
+            <LogOut className="size-5" />
+            התנתקות
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteConfirm("");
+              setDeleteOpen(true);
+            }}
+            className="type-body flex min-h-12 w-full items-center gap-3 px-4 text-start text-destructive transition-colors active:bg-muted/70"
+          >
+            <Trash2 className="size-5" />
+            מחיקת החשבון
+          </button>
+        </GroupedList>
+      </div>
+
+      <LegalLinks className="mt-8" />
+      <p className="type-footnote mt-3 text-center text-muted-foreground">TripCraft · גרסה 0.1</p>
 
       <Modal
         open={deleteOpen}
@@ -199,7 +217,7 @@ export default function SettingsPage() {
           </>
         }
       >
-        <p className="mb-3 text-sm text-muted-foreground">
+        <p className="type-footnote mb-3 text-muted-foreground">
           כל הטיולים, המשתתפים, המסמכים שהועלו, הצ'אטים וקישורי השיתוף יימחקו לצמיתות. אי אפשר לבטל את הפעולה.
         </p>
         <Field label={`כדי לאשר, הקלידו "${DELETE_CONFIRM_WORD}"`}>

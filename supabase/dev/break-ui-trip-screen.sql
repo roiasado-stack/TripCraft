@@ -126,3 +126,32 @@ UPDATE stays SET address = 'Via Nazionale, 22, Roma', booking_ref = '4417-889-21
 WHERE trip_id = 'b4ea0000-0000-4000-8000-000000000001';
 INSERT INTO transfers (trip_id, kind, provider, pickup_location, pickup_at, booking_ref, phone) VALUES
   ('b4ea0000-0000-4000-8000-000000000001', 'transfer', 'Rome Airport Shuttle', 'Fiumicino Terminal 3', (current_date + 40) + time '11:30', 'RAS-55821', '+39 06 1234567');
+
+-- Documents and checklist (the documents / checklist screens). Links only — no storage objects.
+INSERT INTO documents (trip_id, name, category, external_url, visibility, uploaded_by) VALUES
+  ('b4ea0000-0000-4000-8000-000000000001', 'כרטיסי טיסה — אל על', 'flight', 'https://drive.google.com/file/d/breakui-flight', 'members', :'uid'),
+  ('b4ea0000-0000-4000-8000-000000000001', 'Hotel Artemide — booking confirmation', 'hotel', 'https://drive.google.com/file/d/breakui-hotel', 'members', :'uid'),
+  ('b4ea0000-0000-4000-8000-000000000001', 'פוליסת ביטוח נסיעות', 'insurance', 'https://drive.google.com/file/d/breakui-insurance', 'private', :'uid'),
+  ('b4ea0000-0000-4000-8000-000000000002', 'Lufthansa e-ticket receipt LH687/LH5720 — Abrahami-Rosenblum family (6 passengers) — PNR XK7Q2P.pdf', 'flight', 'https://drive.google.com/file/d/breakui-long', 'private', :'uid'),
+  ('b4ea0000-0000-4000-8000-000000000002', 'ויזה', 'unknown-category', 'https://drive.google.com/file/d/breakui-visa', 'members', :'uid');
+UPDATE documents SET participant_id = (SELECT id FROM participants WHERE trip_id = 'b4ea0000-0000-4000-8000-000000000001' AND name = 'נועה')
+WHERE trip_id = 'b4ea0000-0000-4000-8000-000000000001' AND category = 'insurance';
+INSERT INTO checklist_items (trip_id, title, is_done, is_shared, sort_order, created_by) VALUES
+  ('b4ea0000-0000-4000-8000-000000000001', 'דרכונים בתוקף לכל המשפחה', true, true, 1, :'uid'),
+  ('b4ea0000-0000-4000-8000-000000000001', 'ביטוח נסיעות', true, true, 2, :'uid'),
+  ('b4ea0000-0000-4000-8000-000000000001', 'מתאם חשמל (Type L)', false, true, 3, :'uid'),
+  ('b4ea0000-0000-4000-8000-000000000001', 'הזמנת כרטיסים לוותיקן', false, true, 4, :'uid'),
+  ('b4ea0000-0000-4000-8000-000000000002', 'לבדוק שהכרטיסים לרכבת השיניים של הריגי באמת במייל של אבא ולהדפיס עותק גיבוי לסבתא שושנה', false, true, 1, :'uid'),
+  ('b4ea0000-0000-4000-8000-000000000002', 'SIM eSIM for Switzerland (Swisscom)', true, true, 2, :'uid');
+INSERT INTO checklist_items (trip_id, title, is_shared, sort_order, created_by)
+SELECT 'b4ea0000-0000-4000-8000-000000000005', 'פריט ' || g, true, g, :'uid' FROM generate_series(1, 60) g;
+
+-- A short agent conversation on the Demo trip (the agent screen): text, a card, a pending action.
+INSERT INTO trip_chat_messages (trip_id, role, content, cards, pending_actions, user_id, created_at) VALUES
+  ('b4ea0000-0000-4000-8000-000000000001', 'user', 'איפה אוכלים פסטה טובה ליד הקולוסיאום?', '[]', '[]', :'uid', now() - interval '3 minutes'),
+  ('b4ea0000-0000-4000-8000-000000000001', 'assistant',
+   E'ליד הקולוסיאום כדאי לנסות את Trattoria Luzzi, מקום משפחתי עם מחירים סבירים.\nVia di San Giovanni in Laterano 88 — כדאי להגיע לפני 19:30.',
+   '[{"kind":"restaurant","title":"Trattoria Luzzi","description":"טרטוריה משפחתית, פסטה ביתית ופיצה, 5 דקות הליכה מהקולוסיאום.","tags":["פסטה","משפחות"],"price_level":"€€","location":"Via di San Giovanni in Laterano 88, Roma"}]',
+   jsonb_build_array(jsonb_build_object('tool', 'add_to_itinerary', 'id', 'breakui-pa-1', 'input',
+     jsonb_build_object('title', 'ארוחת ערב ב-Trattoria Luzzi', 'day_date', to_char(current_date + 41, 'YYYY-MM-DD'), 'start_time', '19:30'))),
+   :'uid', now() - interval '2 minutes');

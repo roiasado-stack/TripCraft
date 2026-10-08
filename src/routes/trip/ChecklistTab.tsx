@@ -4,8 +4,8 @@ import { supabase } from "@/lib/supabase";
 import type { ChecklistItem } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { can } from "@/lib/permissions";
-import { TripHeader, ScreenTitle } from "@/components/TripHeader";
-import { Button, Card, Checkbox, EmptyState, Input, Segmented, Spinner } from "@/components/ui";
+import { TripHeader } from "@/components/TripHeader";
+import { Button, Checkbox, EmptyState, GroupedList, Segmented, Spinner } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
 import { starterChecklist } from "@/lib/starter";
 import { PreflightPanel } from "@/components/PreflightPanel";
@@ -42,15 +42,23 @@ export default function ChecklistTab() {
 
   const toggle = async (item: ChecklistItem) => {
     setItems((x) => x.map((i) => (i.id === item.id ? { ...i, is_done: !i.is_done } : i)));
-    await supabase.from("checklist_items").update({ is_done: !item.is_done }).eq("id", item.id);
+    const { error } = await supabase.from("checklist_items").update({ is_done: !item.is_done }).eq("id", item.id);
+    if (error) {
+      toast.error("העדכון נכשל");
+      load();
+    }
   };
-  const remove = async (id: string) => {
-    setItems((x) => x.filter((i) => i.id !== id));
-    await supabase.from("checklist_items").delete().eq("id", id);
+  const remove = async (item: ChecklistItem) => {
+    setItems((x) => x.filter((i) => i.id !== item.id));
+    const { error } = await supabase.from("checklist_items").delete().eq("id", item.id);
+    if (error) {
+      toast.error("המחיקה נכשלה");
+      load();
+    }
   };
   const add = async () => {
     if (!newTitle.trim()) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("checklist_items")
       .insert({
         trip_id: trip.id,
@@ -60,7 +68,11 @@ export default function ChecklistTab() {
       })
       .select()
       .single();
-    if (data) setItems((x) => [...x, data as ChecklistItem]);
+    if (error || !data) {
+      toast.error("ההוספה נכשלה");
+      return;
+    }
+    setItems((x) => [...x, data as ChecklistItem]);
     setNewTitle("");
   };
 
@@ -75,7 +87,11 @@ export default function ChecklistTab() {
         toast.toast("הרשימה המומלצת כבר קיימת");
         return;
       }
-      await supabase.from("checklist_items").insert(rows);
+      const { error } = await supabase.from("checklist_items").insert(rows);
+      if (error) {
+        toast.error("לא הצלחנו להוסיף את הרשימה");
+        return;
+      }
       toast.success(`נוספו ${rows.length} פריטים מומלצים ✨`);
       load();
     } finally {
@@ -83,108 +99,159 @@ export default function ChecklistTab() {
     }
   };
 
+  const canAdd = canParticipate && tab !== "preflight";
+  const addRow = canAdd && (
+    <div className="flex min-h-12 items-center gap-3 py-1.5 ps-4 pe-1.5">
+      <Plus className="size-5 shrink-0 text-primary" aria-hidden />
+      <input
+        value={newTitle}
+        onChange={(e) => setNewTitle(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && add()}
+        placeholder="הוספת פריט…"
+        aria-label="פריט חדש"
+        className="type-body min-w-0 flex-1 bg-transparent py-2 outline-none placeholder:text-muted-foreground"
+      />
+      {newTitle.trim() && (
+        <Button size="sm" onClick={add}>
+          הוספה
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <div className="px-4">
       <TripHeader trip={trip} subtitle="צ'קליסט" />
-      <ScreenTitle
-        title="צ'קליסט"
-        action={
-          canParticipate && (
-            <Button size="sm" variant="soft" loading={seeding} onClick={seed}>
-              <Sparkles className="size-4" /> רשימה מומלצת
-            </Button>
-          )
-        }
-      />
+
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="type-title">צ'קליסט</h2>
+        {canParticipate && tab === "shared" && (
+          <Button size="sm" variant="soft" loading={seeding} onClick={seed}>
+            <Sparkles className="size-4" /> רשימה מומלצת
+          </Button>
+        )}
+      </div>
 
       <Segmented
-        className="mb-3"
+        className="mb-4"
         options={[
-          { value: "shared", label: "משותף 👥" },
+          { value: "shared", label: "משותף" },
           // Personal items are private to whoever adds them; viewers can't add any.
-          ...(canParticipate ? [{ value: "personal" as const, label: "אישי 🧍" }] : []),
-          { value: "preflight", label: "לפני טיסה ✈️" },
+          ...(canParticipate ? [{ value: "personal" as const, label: "אישי" }] : []),
+          { value: "preflight", label: "לפני טיסה" },
         ]}
         value={tab}
         onChange={(v) => setTab(v)}
       />
 
+      {canAdd && tab === "personal" && participants.length > 0 && (
+        <select
+          value={owner}
+          onChange={(e) => setOwner(e.target.value)}
+          aria-label="שיוך פריט חדש לנוסע"
+          className="type-footnote mb-3 h-11 w-full rounded-2xl border border-input bg-card px-3"
+        >
+          <option value="">פריטים חדשים: בלי שיוך לנוסע</option>
+          {participants.map((p) => (
+            <option key={p.id} value={p.id}>
+              פריטים חדשים: עבור {p.name}
+            </option>
+          ))}
+        </select>
+      )}
+
       {tab === "preflight" && (
         <PreflightPanel trip={trip} participants={participants} existing={items} onAdded={load} readOnly={!canParticipate} />
       )}
-
-      {tab !== "preflight" && shown.length > 0 && (
-        <div className="mb-3 flex items-center gap-2">
-          <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(doneCount / shown.length) * 100}%` }} />
-          </div>
-          <span className="text-xs font-semibold text-muted-foreground">
-            {doneCount}/{shown.length}
-          </span>
-        </div>
-      )}
-
-      {/* add row */}
-      <div className={cn("mb-4 flex-col gap-2", tab === "preflight" || !canParticipate ? "hidden" : "flex")}>
-        <div className="flex gap-2">
-          <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="הוספת פריט…" />
-          <Button size="icon" onClick={add} aria-label="הוספה">
-            <Plus className="size-5" />
-          </Button>
-        </div>
-        {tab === "personal" && participants.length > 0 && (
-          <select
-            value={owner}
-            onChange={(e) => setOwner(e.target.value)}
-            className="h-11 w-full rounded-2xl border border-input bg-card px-3 text-sm"
-          >
-            <option value="">בלי שיוך לנוסע</option>
-            {participants.map((p) => (
-              <option key={p.id} value={p.id}>
-                עבור {p.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
 
       {tab === "preflight" ? null : loading ? (
         <div className="flex justify-center py-10">
           <Spinner />
         </div>
-      ) : shown.length === 0 ? (
-        <EmptyState
-          emoji="✅"
-          title={tab === "shared" ? "הרשימה המשותפת ריקה" : "אין עדיין פריטים אישיים"}
-          description={canParticipate ? "הוסף פריטים ידנית, או צור רשימה מומלצת חכמה לפי המשתתפים והטיול." : undefined}
-          action={
-            tab === "shared" && canParticipate ? (
-              <Button variant="outline" loading={seeding} onClick={seed}>
-                <ListPlus className="size-4" /> רשימה מומלצת
-              </Button>
-            ) : undefined
-          }
-        />
       ) : (
-        <div className="flex flex-col gap-2">
-          {shown.map((item) => (
-            <Card key={item.id} className={cn("flex items-center gap-3 p-3 transition", item.is_done && "opacity-60")}>
-              <Checkbox checked={item.is_done} onChange={() => canParticipate && toggle(item)} />
-              <div className="min-w-0 flex-1">
-                <div className={cn("font-medium", item.is_done && "line-through")}>{item.title}</div>
-                {ownerName(item.participant_id) && (
-                  <div className="text-xs text-muted-foreground">👤 {ownerName(item.participant_id)}</div>
-                )}
+        <>
+          {/* One list for items and the add row, so the input keeps focus when the first item lands. */}
+          {shown.length > 0 && (
+            <>
+              {/* Progress */}
+              <div className="mb-4 rounded-2xl bg-card px-4 py-3 text-card-foreground">
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <span className="type-headline">
+                    {doneCount === shown.length ? "הכול מוכן ✓" : `${doneCount} מתוך ${shown.length} הושלמו`}
+                  </span>
+                  <span className="type-footnote tabular-nums text-muted-foreground">
+                    {Math.round((doneCount / shown.length) * 100)}%
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(doneCount / shown.length) * 100}%` }} />
+                </div>
               </div>
-              {canParticipate && (
-                <button onClick={() => remove(item.id)} className="text-destructive" aria-label="מחיקה">
-                  <Trash2 className="size-4" />
-                </button>
-              )}
-            </Card>
-          ))}
-        </div>
+            </>
+          )}
+          {(shown.length > 0 || addRow) && (
+            <GroupedList className={shown.length === 0 ? "mb-2" : undefined}>
+              {shown.map((item) => (
+                <div key={item.id} className="flex min-h-12 items-center gap-3 py-2 ps-4 pe-1">
+                  <Checkbox
+                    checked={item.is_done}
+                    onChange={() => toggle(item)}
+                    disabled={!canParticipate}
+                    label={item.title}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className={cn(
+                        "type-body [overflow-wrap:anywhere] transition-colors",
+                        item.is_done && "text-muted-foreground line-through",
+                      )}
+                    >
+                      <bdi>{item.title}</bdi>
+                    </div>
+                    {ownerName(item.participant_id) && (
+                      <div className="type-footnote text-muted-foreground">
+                        עבור <bdi>{ownerName(item.participant_id)}</bdi>
+                      </div>
+                    )}
+                  </div>
+                  {canParticipate && (
+                    <button
+                      type="button"
+                      onClick={() => remove(item)}
+                      aria-label={`מחיקת ${item.title}`}
+                      className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {addRow}
+            </GroupedList>
+          )}
+          {shown.length === 0 && (
+            <EmptyState
+              emoji="✅"
+              title={tab === "shared" ? "הרשימה המשותפת ריקה" : "אין עדיין פריטים אישיים"}
+              description={
+                !canParticipate
+                  ? undefined
+                  : tab === "shared"
+                    ? "הוסף פריטים ידנית, או צור רשימה מומלצת חכמה לפי המשתתפים והטיול."
+                    : "הוסף פריטים ידנית בשורה למעלה."
+              }
+              action={
+                tab === "shared" && canParticipate ? (
+                  <Button variant="outline" loading={seeding} onClick={seed}>
+                    <ListPlus className="size-4" /> רשימה מומלצת
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
+        </>
       )}
+
     </div>
   );
 }

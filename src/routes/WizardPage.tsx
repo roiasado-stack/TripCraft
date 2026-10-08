@@ -486,15 +486,19 @@ export default function WizardPage() {
       <div className="mb-4 flex items-center justify-between">
         <button
           onClick={() => (step === 0 ? navigate("/") : setStep((s) => s - 1))}
-          className="grid size-10 place-items-center rounded-2xl border border-border bg-card"
+          className="-ms-2 grid size-11 place-items-center rounded-full text-primary transition-colors active:bg-muted/70"
           aria-label="חזרה"
         >
-          <ArrowRight className="size-5" />
+          <ArrowRight className="size-6" />
         </button>
-        <span className="text-sm font-semibold text-muted-foreground">
+        <span className="type-footnote font-semibold text-muted-foreground">
           שלב {step + 1} מתוך {STEPS.length}
         </span>
-        <button onClick={() => navigate("/")} className="grid size-10 place-items-center rounded-2xl border border-border bg-card" aria-label="ביטול">
+        <button
+          onClick={() => navigate("/")}
+          className="-me-2 grid size-11 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+          aria-label="ביטול"
+        >
           <X className="size-5" />
         </button>
       </div>
@@ -503,8 +507,8 @@ export default function WizardPage() {
       <div className="mb-6 flex gap-1.5">
         {STEPS.map((s, i) => (
           <div key={s} className="flex-1">
-            <div className={`h-1.5 rounded-full ${i <= step ? "bg-primary" : "bg-muted"}`} />
-            <div className={`mt-1 text-center text-[11px] font-medium ${i === step ? "text-primary" : "text-muted-foreground"}`}>
+            <div className={`h-1 rounded-full transition-colors ${i <= step ? "bg-primary" : "bg-muted"}`} />
+            <div className={`type-footnote mt-1 min-w-0 truncate text-center ${i === step ? "font-semibold text-primary" : "text-muted-foreground"}`}>
               {s}
             </div>
           </div>
@@ -597,7 +601,7 @@ export default function WizardPage() {
       />
 
       {/* bottom action */}
-      <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 px-4 py-3 backdrop-blur">
+      <div className="material safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-separator px-4 py-3">
         <div className="mx-auto max-w-lg">
           {step < STEPS.length - 1 ? (
             <Button size="lg" className="w-full" disabled={!canNext()} onClick={() => setStep((s) => s + 1)}>
@@ -643,7 +647,7 @@ function StepBasics(p: {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h2 className="text-xl font-bold">לאן נוסעים?</h2>
+        <h2 className="type-large-title">לאן נוסעים?</h2>
         <p className="text-sm text-muted-foreground">נתחיל מהבסיס — אפשר לשנות הכל אחר כך.</p>
       </div>
 
@@ -795,7 +799,7 @@ function StepParticipants({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-xl font-bold">מי מגיע?</h2>
+        <h2 className="type-large-title">מי מגיע?</h2>
         <p className="text-sm text-muted-foreground">
           הגילאים וההעדפות עוזרים ל-AI להתאים המלצות. אפשר גם לדלג ולהוסיף אחר כך.
         </p>
@@ -903,13 +907,13 @@ function StepLogistics({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-xl font-bold">טיסות, לינה והעברות</h2>
+        <h2 className="type-large-title">טיסות, לינה והעברות</h2>
         <p className="text-sm text-muted-foreground">הכול אופציונלי — מלא מה שיש לך, אפשר להשלים אחר כך.</p>
       </div>
 
       {/* Flights */}
       <section className="flex flex-col gap-3">
-        <h3 className="font-bold">✈️ טיסות</h3>
+        <h3 className="type-title">✈️ טיסות</h3>
         {flights.map((f, i) => (
           <Card key={i} className="flex flex-col gap-2 p-4">
             <div className="flex items-center justify-between">
@@ -953,7 +957,7 @@ function StepLogistics({
 
       {/* Stays */}
       <section className="flex flex-col gap-3">
-        <h3 className="font-bold">🏨 לינה</h3>
+        <h3 className="type-title">🏨 לינה</h3>
         {stays.map((s, i) => (
           <Card key={i} className="flex flex-col gap-2 p-4">
             <div className="flex items-center gap-2">
@@ -990,7 +994,7 @@ function StepLogistics({
 
       {/* Transfers */}
       <section className="flex flex-col gap-3">
-        <h3 className="font-bold">🚗 העברות ורכב</h3>
+        <h3 className="type-title">🚗 העברות ורכב</h3>
         {transfers.map((t, i) => (
           <Card key={i} className="flex flex-col gap-2 p-4">
             <div className="flex items-center gap-2">
@@ -1053,7 +1057,7 @@ function StepReview(p: {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-xl font-bold">כמעט שם! 🎉</h2>
+        <h2 className="type-large-title">כמעט שם! 🎉</h2>
         <p className="text-sm text-muted-foreground">בדוק שהכול נכון ולחץ ליצירת הטיול.</p>
       </div>
       <Card className="flex items-center gap-4 p-4">
@@ -1101,7 +1105,7 @@ function BuildingView({ state }: { state: BuildState }) {
     <div className="mx-auto flex min-h-screen max-w-lg flex-col items-center justify-center gap-6 px-4 text-center">
       <Spinner className="size-10" />
       <div>
-        <h2 className="text-xl font-bold">הטיול נוצר! הסוכן משלים את הפרטים</h2>
+        <h2 className="type-large-title">הטיול נוצר! הסוכן משלים את הפרטים</h2>
         <p className="text-sm text-muted-foreground">עוד רגע ונעבור לטיול — אין צורך לעשות כלום.</p>
       </div>
       <Card className="flex w-full flex-col gap-3 p-4 text-start">
