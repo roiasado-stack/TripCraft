@@ -140,6 +140,47 @@ export function ListRow({
   );
 }
 
+/* -------------------------------- Sheet row --------------------------------- */
+/** A full-width action in a bottom sheet: a button, or a link that opens outside. */
+export function SheetRow({
+  icon,
+  label,
+  hint,
+  href,
+  onClick,
+  destructive,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  hint?: string;
+  href?: string;
+  onClick?: () => void;
+  destructive?: boolean;
+}) {
+  const cls = cn(
+    "flex min-h-14 w-full items-center gap-3 rounded-2xl bg-muted px-4 py-3 text-start transition-colors active:bg-muted/60",
+    destructive ? "text-destructive" : "text-foreground",
+  );
+  const body = (
+    <>
+      <span className={destructive ? "text-destructive" : "text-primary"}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="type-headline block">{label}</span>
+        {hint && <span className="type-footnote block text-muted-foreground">{hint}</span>}
+      </span>
+    </>
+  );
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+      {body}
+    </a>
+  ) : (
+    <button type="button" onClick={onClick} className={cls}>
+      {body}
+    </button>
+  );
+}
+
 /* ---------------------------------- Inputs --------------------------------- */
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...props }, ref) {
