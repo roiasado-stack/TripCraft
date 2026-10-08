@@ -279,9 +279,10 @@ export default function TransportTab() {
                   <span className="type-footnote shrink-0 rounded-full bg-primary-soft px-2.5 py-0.5 font-semibold text-primary">
                     {f.direction === "inbound" ? "חזור" : "הלוך"}
                   </span>
-                  <span className="type-footnote min-w-0 flex-1 truncate font-semibold [unicode-bidi:plaintext]">
-                    {[f.airline, f.flight_number].filter(Boolean).join(" ")}
+                  <span className="type-footnote min-w-0 flex-1 truncate font-semibold">
+                    <bdi>{[f.airline, f.flight_number].filter(Boolean).join(" ")}</bdi>
                   </span>
+                  {(canEdit || flightStatusUrl(f.airline, f.flight_number) || airportMapUrl(f.from_airport) || airportMapUrl(f.to_airport)) && (
                   <button
                     type="button"
                     onClick={() =>
@@ -310,6 +311,7 @@ export default function TransportTab() {
                   >
                     <MoreHorizontal className="size-5" />
                   </button>
+                  )}
                 </div>
 
                 {/* Route: always left-to-right, each airport isolated (Hebrew names keep their order). */}
@@ -323,7 +325,11 @@ export default function TransportTab() {
                     <div className="type-footnote text-muted-foreground">
                       <bdi dir="rtl">{formatHeb(f.depart_at)}</bdi>
                     </div>
-                    {f.from_terminal && <div className="type-footnote text-muted-foreground" dir="rtl">טרמינל {f.from_terminal}</div>}
+                    {f.from_terminal && (
+                      <div className="type-footnote text-muted-foreground">
+                        <bdi dir="rtl">טרמינל {f.from_terminal}</bdi>
+                      </div>
+                    )}
                   </div>
                   <div className="flex w-16 shrink-0 flex-col items-center pt-2 text-muted-foreground">
                     <Plane className="size-4" />
@@ -338,7 +344,11 @@ export default function TransportTab() {
                     <div className="type-footnote text-muted-foreground">
                       <bdi dir="rtl">{formatHeb(f.arrive_at)}</bdi>
                     </div>
-                    {f.to_terminal && <div className="type-footnote text-muted-foreground" dir="rtl">טרמינל {f.to_terminal}</div>}
+                    {f.to_terminal && (
+                      <div className="type-footnote text-muted-foreground">
+                        <bdi dir="rtl">טרמינל {f.to_terminal}</bdi>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -379,10 +389,16 @@ export default function TransportTab() {
             return (
               <div key={st.id} className="flex items-start gap-3 py-3 ps-4 pe-1">
                 <div className="min-w-0 flex-1">
-                  <div className="type-headline [overflow-wrap:anywhere] [unicode-bidi:plaintext]">{st.hotel_name}</div>
-                  {st.address && <div className="type-footnote text-muted-foreground [unicode-bidi:plaintext]">{st.address}</div>}
+                  <div className="type-headline [overflow-wrap:anywhere]">
+                    <bdi>{st.hotel_name}</bdi>
+                  </div>
+                  {st.address && (
+                    <div className="type-footnote text-muted-foreground">
+                      <bdi>{st.address}</bdi>
+                    </div>
+                  )}
                   {(st.check_in || st.check_out) && (
-                    <div className="type-footnote mt-0.5 text-muted-foreground">{dateRangeHeb(st.check_in, st.check_out, now)}</div>
+                    <div className="type-footnote mt-0.5 text-muted-foreground">{dateRangeHeb(st.check_in ?? st.check_out, st.check_out, now)}</div>
                   )}
                   {st.booking_ref && (
                     <div className="type-footnote text-muted-foreground">
@@ -401,7 +417,7 @@ export default function TransportTab() {
                         label: "ניווט",
                         href: directionsUrl(place, trip.destination)!,
                       },
-                      telHref(st.phone) && { icon: <Phone className="size-5" />, label: `התקשרות ${st.phone}`, href: telHref(st.phone)! },
+                      telHref(st.phone) && { icon: <Phone className="size-5" />, label: `התקשרות \u2066${st.phone}\u2069`, href: telHref(st.phone)! },
                       st.url && isSafeHttpUrl(st.url) && { icon: <ExternalLink className="size-5" />, label: "אתר המלון", href: st.url },
                     ])
                   }
@@ -460,7 +476,7 @@ export default function TransportTab() {
                         label: "ניווט לנקודת האיסוף",
                         href: directionsUrl(t.pickup_location, trip.destination)!,
                       },
-                      telHref(t.phone) && { icon: <Phone className="size-5" />, label: `התקשרות ${t.phone}`, href: telHref(t.phone)! },
+                      telHref(t.phone) && { icon: <Phone className="size-5" />, label: `התקשרות \u2066${t.phone}\u2069`, href: telHref(t.phone)! },
                       t.url && isSafeHttpUrl(t.url) && { icon: <ExternalLink className="size-5" />, label: "פרטי ההזמנה", href: t.url },
                     ])
                   }
@@ -509,9 +525,9 @@ export default function TransportTab() {
       <Modal open={!!sheet} onClose={() => setSheet(null)} title={sheet?.title ?? ""}>
         {sheet && (
           <div className="flex flex-col gap-2">
-            {sheet.actions.map((a) => (
+            {sheet.actions.map((a, i) => (
               <SheetRow
-                key={a.label}
+                key={`${i}-${a.label}`}
                 icon={a.icon}
                 label={a.label}
                 href={a.href}
