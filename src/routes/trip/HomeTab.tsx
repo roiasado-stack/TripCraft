@@ -23,15 +23,18 @@ import {
   tripPhase,
 } from "@/lib/trip-dates";
 import { cn } from "@/lib/utils";
+import { searchPhoto } from "@/lib/ai";
+import { isPhotoUrl } from "@/lib/photo-url";
+import { ImageCredit } from "@/components/MediaCard";
 
 export default function HomeTab() {
-  const { trip, role, participants, openShare } = useTrip();
+  const { trip, role, participants, openShare, reloadTrip } = useTrip();
   const [flights, setFlights] = useState<Flight[]>([]);
   const [stays, setStays] = useState<Stay[]>([]);
   const [today, setToday] = useState<ItineraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [duplicating, setDuplicating] = useState(false);
-  const { user } = useAuth();
+  const { user, isAnonymous } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -114,6 +117,23 @@ export default function HomeTab() {
     }
   };
 
+  // The destination photo: looked up once by someone who can edit the trip (viewers
+  // and demo visitors never spend an AI call), saved on the trip, then shown to all.
+  const heroPhoto = isPhotoUrl(trip.image_url) ? trip.image_url : null;
+  const canEdit = can(role, "edit");
+  useEffect(() => {
+    if (heroPhoto || !canEdit || isAnonymous || !trip.destination.trim()) return;
+    if (photoLookups.has(trip.id) || recentMiss(trip.id)) return;
+    photoLookups.add(trip.id);
+    (async () => {
+      const url = await searchPhoto(trip.id, trip.destination);
+      if (!url || !isPhotoUrl(url)) return rememberMiss(trip.id);
+      const { error } = await supabase.from("trips").update({ image_url: url }).eq("id", trip.id);
+      if (!error) await reloadTrip();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip.id, heroPhoto, canEdit, isAnonymous]);
+
   useEffect(() => {
     (async () => {
       // The traveller's own day — UTC's date is still yesterday at 6am in Bangkok.
@@ -177,9 +197,23 @@ export default function HomeTab() {
       <TripHeader trip={trip} onShare={openShare} />
 
       {/* Hero: where and when, in one calm statement */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-sea px-5 py-6 text-white">
-        <div className="pointer-events-none absolute -top-10 -left-10 size-40 rounded-full bg-white/10 blur-2xl" />
-        <div className="relative">
+      <section
+        className={cn(
+          "relative overflow-hidden rounded-3xl text-white",
+          heroPhoto ? "flex min-h-56 items-end" : "bg-gradient-sea",
+        )}
+      >
+        {heroPhoto ? (
+          <>
+            <img src={heroPhoto} alt={trip.destination} className="absolute inset-0 size-full object-cover" />
+            {/* Dark at the bottom where the text sits — npm run rules checks it against a white photo. */}
+            <div className="hero-scrim pointer-events-none absolute inset-0" />
+            <ImageCredit imageUrl={heroPhoto} />
+          </>
+        ) : (
+          <div className="pointer-events-none absolute -top-10 -left-10 size-40 rounded-full bg-white/10 blur-2xl" />
+        )}
+        <div className="relative w-full px-5 py-6">
           {/* The destination is already in the header right above — no need to repeat it. */}
           <h2 className="type-large-title">{headline}</h2>
           {detail && <p className="type-body mt-1 font-medium text-white">{detail}</p>}
@@ -313,4 +347,27 @@ function IconTile({ icon, tone = "primary" }: { icon: React.ReactNode; tone?: "p
       {icon}
     </span>
   );
+}
+
+// One lookup per trip per session (StrictMode runs effects twice; revisits remount).
+const photoLookups = new Set<string>();
+const MISS_KEY = (tripId: string) => `tc-photo-miss:${tripId}`;
+const MISS_DAYS = 7;
+
+/** A destination with no usable photo isn't asked about again for a week. */
+function recentMiss(tripId: string): boolean {
+  try {
+    const at = Number(localStorage.getItem(MISS_KEY(tripId)));
+    return !!at && Date.now() - at < MISS_DAYS * 86400000;
+  } catch {
+    return false;
+  }
+}
+
+function rememberMiss(tripId: string) {
+  try {
+    localStorage.setItem(MISS_KEY(tripId), String(Date.now()));
+  } catch {
+    // Storage blocked — worst case we ask again next session.
+  }
 }
