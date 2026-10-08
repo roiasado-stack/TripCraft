@@ -8,7 +8,7 @@ import { TripHeader } from "@/components/TripHeader";
 import { Button, Chip, EmptyState, Field, GroupedList, Input, Label, Modal, Segmented, SheetRow, Spinner } from "@/components/ui";
 import { can } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
-import { DOC_CATEGORIES, docCategoryLabel } from "@/lib/trip-options";
+import { DOC_CATEGORIES } from "@/lib/trip-options";
 import { ImportVoucher, type VoucherResult } from "@/components/ImportVoucher";
 import { DOCS_BUCKET as BUCKET, uploadTripDocument } from "@/lib/documents";
 import { isSafeHttpUrl } from "@/lib/maps";
@@ -224,19 +224,25 @@ export default function DocumentsTab() {
 
   const remove = async (doc: DocumentRow) => {
     setDocs((x) => x.filter((d) => d.id !== doc.id));
-    if (doc.storage_path) await supabase.storage.from(BUCKET).remove([doc.storage_path]);
+    // Row first: if it fails, the file is still there for the row that remains.
     const { error } = await supabase.from("documents").delete().eq("id", doc.id);
     if (error) {
       toast.error("המחיקה נכשלה");
       load();
       return;
     }
+    if (doc.storage_path) {
+      const { error: fileError } = await supabase.storage.from(BUCKET).remove([doc.storage_path]);
+      if (fileError) console.error(fileError);
+    }
     toast.success("המסמך נמחק");
   };
 
   // A category this build doesn't know shows under "אחר".
   const groupOf = (category: string) => (DOC_CATEGORIES.some((c) => c.value === category) ? category : "other");
-  const filtered = docs.filter((d) => filter === "all" || groupOf(d.category) === filter);
+  // Fall back to "all" once the chosen category has no documents left (its chip is gone).
+  const activeFilter = filter !== "all" && docs.some((d) => groupOf(d.category) === filter) ? filter : "all";
+  const filtered = docs.filter((d) => activeFilter === "all" || groupOf(d.category) === activeFilter);
   const participantName = (id: string | null) => participants.find((p) => p.id === id)?.name;
 
   return (
@@ -248,7 +254,8 @@ export default function DocumentsTab() {
           <button
             type="button"
             onClick={() => setAddOpen(true)}
-            aria-label="הוספת מסמך"
+            disabled={uploading}
+            aria-label={uploading ? "מעלה קובץ…" : "הוספת מסמך"}
             className="grid size-11 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95"
           >
             {uploading ? <Spinner className="size-5" /> : <Plus className="size-5" />}
@@ -264,11 +271,11 @@ export default function DocumentsTab() {
       {/* filter — one scrolling row */}
       {docs.length > 0 && (
         <div className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&>*]:shrink-0 [&>*]:whitespace-nowrap">
-          <Chip active={filter === "all"} onClick={() => setFilter("all")}>
+          <Chip active={activeFilter === "all"} onClick={() => setFilter("all")}>
             הכל
           </Chip>
           {DOC_CATEGORIES.filter((c) => docs.some((d) => groupOf(d.category) === c.value)).map((c) => (
-            <Chip key={c.value} active={filter === c.value} onClick={() => setFilter(c.value)}>
+            <Chip key={c.value} active={activeFilter === c.value} onClick={() => setFilter(c.value)}>
               {c.emoji} {c.label}
             </Chip>
           ))}

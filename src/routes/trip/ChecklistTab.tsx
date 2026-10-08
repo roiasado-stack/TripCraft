@@ -168,83 +168,87 @@ export default function ChecklistTab() {
         <div className="flex justify-center py-10">
           <Spinner />
         </div>
-      ) : shown.length === 0 ? (
-        <>
-          {addRow && <GroupedList className="mb-2">{addRow}</GroupedList>}
-          <EmptyState
-            emoji="✅"
-            title={tab === "shared" ? "הרשימה המשותפת ריקה" : "אין עדיין פריטים אישיים"}
-            description={
-              !canParticipate
-                ? undefined
-                : tab === "shared"
-                  ? "הוסף פריטים ידנית, או צור רשימה מומלצת חכמה לפי המשתתפים והטיול."
-                  : "הוסף פריטים ידנית בשורה למעלה."
-            }
-            action={
-              tab === "shared" && canParticipate ? (
-                <Button variant="outline" loading={seeding} onClick={seed}>
-                  <ListPlus className="size-4" /> רשימה מומלצת
-                </Button>
-              ) : undefined
-            }
-          />
-        </>
       ) : (
         <>
-          {/* Progress */}
-          <div className="mb-4 rounded-2xl bg-card px-4 py-3 text-card-foreground">
-            <div className="mb-2 flex items-baseline justify-between gap-2">
-              <span className="type-headline">
-                {doneCount === shown.length ? "הכול מוכן ✓" : `${doneCount} מתוך ${shown.length} הושלמו`}
-              </span>
-              <span className="type-footnote tabular-nums text-muted-foreground">
-                {Math.round((doneCount / shown.length) * 100)}%
-              </span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(doneCount / shown.length) * 100}%` }} />
-            </div>
-          </div>
-
-          <GroupedList>
-            {shown.map((item) => (
-              <div key={item.id} className="flex min-h-12 items-center gap-3 py-2 ps-4 pe-1">
-                <Checkbox
-                  checked={item.is_done}
-                  onChange={() => toggle(item)}
-                  disabled={!canParticipate}
-                  label={item.title}
-                />
-                <div className="min-w-0 flex-1">
-                  <div
-                    className={cn(
-                      "type-body [overflow-wrap:anywhere] transition-colors",
-                      item.is_done && "text-muted-foreground line-through",
-                    )}
-                  >
-                    <bdi>{item.title}</bdi>
-                  </div>
-                  {ownerName(item.participant_id) && (
-                    <div className="type-footnote text-muted-foreground">
-                      עבור <bdi>{ownerName(item.participant_id)}</bdi>
+          {/* One list for items and the add row, so the input keeps focus when the first item lands. */}
+          {shown.length > 0 && (
+            <>
+              {/* Progress */}
+              <div className="mb-4 rounded-2xl bg-card px-4 py-3 text-card-foreground">
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <span className="type-headline">
+                    {doneCount === shown.length ? "הכול מוכן ✓" : `${doneCount} מתוך ${shown.length} הושלמו`}
+                  </span>
+                  <span className="type-footnote tabular-nums text-muted-foreground">
+                    {Math.round((doneCount / shown.length) * 100)}%
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(doneCount / shown.length) * 100}%` }} />
+                </div>
+              </div>
+            </>
+          )}
+          {(shown.length > 0 || addRow) && (
+            <GroupedList className={shown.length === 0 ? "mb-2" : undefined}>
+              {shown.map((item) => (
+                <div key={item.id} className="flex min-h-12 items-center gap-3 py-2 ps-4 pe-1">
+                  <Checkbox
+                    checked={item.is_done}
+                    onChange={() => toggle(item)}
+                    disabled={!canParticipate}
+                    label={item.title}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className={cn(
+                        "type-body [overflow-wrap:anywhere] transition-colors",
+                        item.is_done && "text-muted-foreground line-through",
+                      )}
+                    >
+                      <bdi>{item.title}</bdi>
                     </div>
+                    {ownerName(item.participant_id) && (
+                      <div className="type-footnote text-muted-foreground">
+                        עבור <bdi>{ownerName(item.participant_id)}</bdi>
+                      </div>
+                    )}
+                  </div>
+                  {canParticipate && (
+                    <button
+                      type="button"
+                      onClick={() => remove(item)}
+                      aria-label={`מחיקת ${item.title}`}
+                      className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
                   )}
                 </div>
-                {canParticipate && (
-                  <button
-                    type="button"
-                    onClick={() => remove(item)}
-                    aria-label={`מחיקת ${item.title}`}
-                    className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                )}
-              </div>
-            ))}
-            {addRow}
-          </GroupedList>
+              ))}
+              {addRow}
+            </GroupedList>
+          )}
+          {shown.length === 0 && (
+            <EmptyState
+              emoji="✅"
+              title={tab === "shared" ? "הרשימה המשותפת ריקה" : "אין עדיין פריטים אישיים"}
+              description={
+                !canParticipate
+                  ? undefined
+                  : tab === "shared"
+                    ? "הוסף פריטים ידנית, או צור רשימה מומלצת חכמה לפי המשתתפים והטיול."
+                    : "הוסף פריטים ידנית בשורה למעלה."
+              }
+              action={
+                tab === "shared" && canParticipate ? (
+                  <Button variant="outline" loading={seeding} onClick={seed}>
+                    <ListPlus className="size-4" /> רשימה מומלצת
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
         </>
       )}
 
