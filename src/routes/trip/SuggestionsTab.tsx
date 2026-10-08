@@ -6,7 +6,7 @@ import type { Suggestion } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { can } from "@/lib/permissions";
 import { TripHeader } from "@/components/TripHeader";
-import { Button, Card, Chip, EmptyState, Field, GroupedList, Input, Modal, Spinner, Textarea } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, Field, GroupedList, Input, Modal, SheetRow, Spinner, Textarea } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
 import { useSuggestionPhoto } from "@/lib/photos";
 import { FillPhotos } from "@/components/FillPhotos";
@@ -561,46 +561,6 @@ function SuggestionCover({
     >
       {children}
     </CardCoverImage>
-  );
-}
-
-/** A full-width action in a bottom sheet: a button, or a link that opens outside. */
-function SheetRow({
-  icon,
-  label,
-  hint,
-  href,
-  onClick,
-  destructive,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  hint?: string;
-  href?: string;
-  onClick?: () => void;
-  destructive?: boolean;
-}) {
-  const cls = cn(
-    "flex min-h-14 w-full items-center gap-3 rounded-2xl bg-muted px-4 py-3 text-start transition-colors active:bg-muted/60",
-    destructive ? "text-destructive" : "text-foreground",
-  );
-  const body = (
-    <>
-      <span className={destructive ? "text-destructive" : "text-primary"}>{icon}</span>
-      <span className="min-w-0 flex-1">
-        <span className="type-headline block">{label}</span>
-        {hint && <span className="type-footnote block text-muted-foreground">{hint}</span>}
-      </span>
-    </>
-  );
-  return href ? (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
-      {body}
-    </a>
-  ) : (
-    <button type="button" onClick={onClick} className={cls}>
-      {body}
-    </button>
   );
 }
 

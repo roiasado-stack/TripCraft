@@ -140,6 +140,88 @@ export function ListRow({
   );
 }
 
+/* -------------------------------- Sheet row --------------------------------- */
+/** A full-width action in a bottom sheet: a button, or a link that opens outside. */
+export function SheetRow({
+  icon,
+  label,
+  hint,
+  href,
+  onClick,
+  destructive,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  hint?: string;
+  href?: string;
+  onClick?: () => void;
+  destructive?: boolean;
+}) {
+  const cls = cn(
+    "flex min-h-14 w-full items-center gap-3 rounded-2xl bg-muted px-4 py-3 text-start transition-colors active:bg-muted/60",
+    destructive ? "text-destructive" : "text-foreground",
+  );
+  const body = (
+    <>
+      <span className={destructive ? "text-destructive" : "text-primary"}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="type-headline block">{label}</span>
+        {hint && <span className="type-footnote block text-muted-foreground">{hint}</span>}
+      </span>
+    </>
+  );
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+      {body}
+    </a>
+  ) : (
+    <button type="button" onClick={onClick} className={cls}>
+      {body}
+    </button>
+  );
+}
+
+/** A grouped list inside a sheet (the sheet is already bg-card, so the group sits on muted). */
+export function InsetGroup({ className, children }: { className?: string; children: React.ReactNode }) {
+  return <div className={cn("divide-y divide-separator overflow-hidden rounded-2xl bg-muted", className)}>{children}</div>;
+}
+
+/** iOS-style on/off switch. In RTL the knob sits at the end (left) when on. */
+export function Switch({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onChange}
+      className={cn(
+        // The visible switch is 31px; the ::before pad makes the tap target 47px.
+        "relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors before:absolute before:-inset-2 before:content-[''] disabled:opacity-60",
+        checked ? "bg-primary" : "bg-foreground/20",
+      )}
+    >
+      <span
+        className={cn(
+          "absolute top-0.5 size-[27px] rounded-full bg-white shadow transition-all",
+          checked ? "end-0.5" : "start-0.5",
+        )}
+      />
+    </button>
+  );
+}
+
 /* ---------------------------------- Inputs --------------------------------- */
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...props }, ref) {
@@ -382,7 +464,7 @@ export function Modal({
         style={{ animation: "tc-sheet 220ms cubic-bezier(0.22,1,0.36,1)" }}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 id={titleId} className="text-lg font-bold">
+          <h2 id={titleId} className="text-lg font-bold [overflow-wrap:anywhere] [unicode-bidi:plaintext]">
             {title}
           </h2>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="סגור">

@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileUp, Flame, Pencil, Plus, Sparkles, Trash2, TriangleAlert } from "lucide-react";
+import { FileUp, Flame, List, Map as MapIcon, MapPin, MoreHorizontal, Navigation, Pencil, Plus, Sparkles, Trash2, TriangleAlert } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { ItineraryItem, ShabbatDay, ShabbatInfo } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { can } from "@/lib/permissions";
-import { TripHeader, ScreenTitle } from "@/components/TripHeader";
-import { Button, Card, EmptyState, Field, Input, Label, Modal, Segmented, Spinner, Textarea } from "@/components/ui";
+import { TripHeader } from "@/components/TripHeader";
+import { Button, EmptyState, Field, Input, Label, Modal, SheetRow, Spinner, Textarea } from "@/components/ui";
 import { ImportItinerary } from "@/components/ImportItinerary";
-import { DirectionsLink, MapLink } from "@/components/MapLink";
 import { CardThumbnail } from "@/components/MediaCard";
-import { mapsUrl, resolveMapUrl } from "@/lib/maps";
+import { directionsUrl, isSafeHttpUrl, mapsUrl, resolveMapUrl } from "@/lib/maps";
 import { useToast } from "@/hooks/use-toast";
 import { ambientPhoto } from "@/lib/photos";
 import { FillPhotos } from "@/components/FillPhotos";
@@ -18,6 +17,7 @@ import { daysBetween, formatDayHeb, ITINERARY_CATEGORIES, itineraryCategory } fr
 import { TripMap, type TripMapItem } from "@/components/TripMap";
 import { localDateString, parseLocalDate } from "@/lib/trip-dates";
 import { isPhotoUrl } from "@/lib/photo-url";
+import { cn } from "@/lib/utils";
 
 /**
  * Departure-day flights leave from the origin airport, so scoping them to the
@@ -77,6 +77,8 @@ export default function ItineraryTab() {
   const [importing, setImporting] = useState(false);
   const [view, setView] = useState<"list" | "map">("list");
   const [shabbat, setShabbat] = useState<ShabbatInfo | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [actionsFor, setActionsFor] = useState<ItineraryItem | null>(null);
 
   // Shabbat / yom tov times (Hebcal, via the ask function — no model, no
   // Google) for trips where someone keeps kosher.
@@ -175,10 +177,12 @@ export default function ItineraryTab() {
       lat: editing.lat ?? coords?.lat ?? null,
       lng: editing.lng ?? coords?.lng ?? null,
     };
-    if (editing.id) {
-      await supabase.from("itinerary_items").update(payload).eq("id", editing.id);
-    } else {
-      await supabase.from("itinerary_items").insert(payload);
+    const { error } = editing.id
+      ? await supabase.from("itinerary_items").update(payload).eq("id", editing.id)
+      : await supabase.from("itinerary_items").insert(payload);
+    if (error) {
+      toast.error("השמירה נכשלה. נסו שוב.");
+      return;
     }
     setEditing(null);
     toast.success("נשמר");
@@ -186,8 +190,13 @@ export default function ItineraryTab() {
   };
 
   const remove = async (id: string) => {
-    await supabase.from("itinerary_items").delete().eq("id", id);
-    setItems((x) => x.filter((i) => i.id !== id));
+    const { error } = await supabase.from("itinerary_items").delete().eq("id", id);
+    if (error) {
+      toast.error("המחיקה נכשלה. נסו שוב.");
+      return;
+    }
+    toast.success("הפריט נמחק");
+    load();
   };
 
   const generate = async () => {
@@ -202,25 +211,50 @@ export default function ItineraryTab() {
     }
   };
 
+  const newItem = (day: string): Draft => ({
+    day_date: day,
+    start_time: "",
+    title: "",
+    description: "",
+    category: "activity",
+    location: "",
+    image_url: null,
+    lat: null,
+    lng: null,
+  });
+  const scope = actionsFor ? scopeFor(actionsFor.category, trip.destination) : null;
+  const actionsMapUrl = actionsFor?.location ? resolveMapUrl(actionsFor.map_url, actionsFor.location, scope) : null;
+  const actionsDirections = actionsFor?.location ? directionsUrl(actionsFor.location, scope) : null;
+
   return (
     <div className="px-4">
       <TripHeader trip={trip} subtitle="המסלול היומי" />
-      <ScreenTitle
-        title="מסלול"
-        action={
-          canEdit && (
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" onClick={() => setImporting(true)} aria-label="ייבוא מסלול">
-              <FileUp className="size-4" />
-            </Button>
-            <Button size="sm" variant="soft" loading={generating} onClick={generate}>
-              <Sparkles className="size-4" />
-              AI
-            </Button>
-          </div>
-          )
-        }
-      />
+
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="type-title">מסלול</h2>
+        <div className="flex items-center gap-1">
+          {!loading && days.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setView(view === "list" ? "map" : "list")}
+              aria-label={view === "list" ? "תצוגת מפה" : "תצוגת רשימה"}
+              className="grid size-11 place-items-center rounded-full text-primary transition-colors active:bg-muted/70"
+            >
+              {view === "list" ? <MapIcon className="size-5" /> : <List className="size-5" />}
+            </button>
+          )}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              aria-label="הוספה למסלול"
+              className="grid size-11 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95"
+            >
+              {generating ? <Spinner className="size-5" /> : <Plus className="size-5" />}
+            </button>
+          )}
+        </div>
+      </div>
 
       {canEdit && (
         <FillPhotos
@@ -228,18 +262,6 @@ export default function ItineraryTab() {
           destination={trip.destination}
           missing={items.filter((i) => i.category === "activity" && !isPhotoUrl(i.image_url)).length}
           onDone={load}
-        />
-      )}
-
-      {!loading && days.length > 0 && (
-        <Segmented
-          className="mb-3"
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "list", label: "רשימה", emoji: "📋" },
-            { value: "map", label: "מפה", emoji: "🗺️" },
-          ]}
         />
       )}
 
@@ -254,14 +276,14 @@ export default function ItineraryTab() {
           description={canEdit ? "הוסף תאריכים לטיול או פריט ראשון, או תן ל-AI להציע מסלול יומי." : "בעל הטיול עוד לא בנה מסלול."}
           action={
             canEdit && (
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button onClick={() => setEditing({ day_date: defaultDay, start_time: "", title: "", description: "", category: "activity", location: "", image_url: null, lat: null, lng: null })}>
-                <Plus className="size-4" /> הוספת פריט
-              </Button>
-              <Button variant="outline" onClick={() => setImporting(true)}>
-                <FileUp className="size-4" /> ייבוא מסלול
-              </Button>
-            </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button onClick={() => setEditing(newItem(defaultDay))}>
+                  <Plus className="size-4" /> הוספת פריט
+                </Button>
+                <Button variant="outline" onClick={() => setImporting(true)}>
+                  <FileUp className="size-4" /> ייבוא מסלול
+                </Button>
+              </div>
             )
           }
         />
@@ -272,97 +294,177 @@ export default function ItineraryTab() {
           <TripMap items={mapItems} />
         )
       ) : (
-        <div className="flex flex-col gap-5">
-          {days.map((day, idx) => (
-            <div key={day}>
-              <div className="mb-2 flex items-center gap-2">
-                <span className="grid size-7 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                  {idx + 1}
-                </span>
-                <h3 className="font-bold">{formatDayHeb(day)}</h3>
-              </div>
-              {shabbatByDate.get(day) && (
-                <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-muted px-3 py-1.5 text-xs font-semibold">
-                  <Flame className="size-3.5 text-accent" />
-                  {shabbatByDate.get(day)!.holiday && <span>{shabbatByDate.get(day)!.holiday}</span>}
-                  {!shabbatByDate.get(day)!.restricted && nextDayHoliday(shabbatByDate, day) && (
-                    <span>ערב {nextDayHoliday(shabbatByDate, day)}</span>
-                  )}
-                  {shabbatByDate.get(day)!.candles && (
-                    <span>
-                      {/* On Shabbat / yom tov itself, the next night's candles are lit after dark from an existing flame. */}
-                      {shabbatByDate.get(day)!.restricted
-                        ? `הדלקת נרות לא לפני ${shabbatByDate.get(day)!.candles}, מאש קיימת`
-                        : `הדלקת נרות ${shabbatByDate.get(day)!.candles}`}
-                    </span>
-                  )}
-                  {shabbatByDate.get(day)!.havdalah && <span>הבדלה {shabbatByDate.get(day)!.havdalah}</span>}
-                  {!shabbatByDate.get(day)!.candles && !shabbatByDate.get(day)!.havdalah && <span>שבת / חג</span>}
+        <div className="flex flex-col gap-6">
+          {days.map((day, idx) => {
+            const sh = shabbatByDate.get(day);
+            const erevOf = sh && !sh.restricted ? nextDayHoliday(shabbatByDate, day) : null;
+            const dayItems = grouped[day] ?? [];
+            return (
+              <section key={day}>
+                <div className="mb-1.5 flex items-baseline gap-2 px-1">
+                  <span className="type-footnote font-semibold text-primary">יום {idx + 1}</span>
+                  <h3 className="type-headline">{formatDayHeb(day)}</h3>
                 </div>
-              )}
-              <div className="flex flex-col gap-2">
-                {(grouped[day] ?? []).map((it) => {
-                  const cat = itineraryCategory(it.category);
-                  return (
-                    <Card key={it.id} className="flex items-start gap-3 p-3">
-                      <CardThumbnail
-                        imageUrl={(isPhotoUrl(it.image_url) ? it.image_url : null) ?? ambientPhoto(it.category === "food", it.title)}
-                        illustrative={!isPhotoUrl(it.image_url) && it.category === "food"}
-                        alt={it.title}
-                        gradient="sunset"
-                        size="size-10"
-                        rounded="rounded-xl"
-                        icon={<span className="text-lg">{cat.emoji}</span>}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          {it.start_time && <span className="text-xs font-bold text-primary">{it.start_time.slice(0, 5)}</span>}
-                          <span className="truncate font-semibold">{it.title}</span>
-                        </div>
-                        {it.location && <div className="text-xs text-muted-foreground">📍 {it.location}</div>}
-                        {shabbatConflict(shabbatByDate.get(day), it.start_time) && (
-                          <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sun px-2 py-0.5 text-[11px] font-semibold text-sun-foreground">
-                            <TriangleAlert className="size-3" />
-                            {(shabbatByDate.get(day)!.restricted ? shabbatByDate.get(day)!.holiday : nextDayHoliday(shabbatByDate, day))
-                              ? "בחג"
-                              : "בשבת"}
-                            {shabbatByDate.get(day)!.havdalah ? ` — לפני ההבדלה (${shabbatByDate.get(day)!.havdalah})` : ""}
-                          </div>
-                        )}
-                        {it.description && <p className="mt-0.5 text-sm text-muted-foreground">{it.description}</p>}
-                        {it.location && (
-                          <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            <MapLink url={resolveMapUrl(it.map_url, it.location, scopeFor(it.category, trip.destination))} />
-                            <DirectionsLink place={it.location} near={scopeFor(it.category, trip.destination)} />
-                          </div>
-                        )}
-                      </div>
-                      {canEdit && (
-                      <div className="flex shrink-0 flex-col gap-1">
-                        <button onClick={() => setEditing({ id: it.id, day_date: it.day_date, start_time: it.start_time ?? "", title: it.title, description: it.description ?? "", category: it.category, location: it.location ?? "", image_url: it.image_url ?? null, lat: it.lat ?? null, lng: it.lng ?? null })} className="text-muted-foreground" aria-label="עריכה">
-                          <Pencil className="size-4" />
-                        </button>
-                        <button onClick={() => remove(it.id)} className="text-destructive" aria-label="מחיקה">
-                          <Trash2 className="size-4" />
-                        </button>
-                      </div>
+                <div className="divide-y divide-separator overflow-hidden rounded-2xl bg-card text-card-foreground">
+                  {sh && (
+                    <div className="type-footnote flex flex-wrap items-center gap-x-3 gap-y-1 bg-muted/60 px-4 py-2 font-semibold">
+                      <Flame className="size-3.5 text-accent" />
+                      {sh.holiday && <span>{sh.holiday}</span>}
+                      {erevOf && <span>ערב {erevOf}</span>}
+                      {sh.candles && (
+                        <span>
+                          {/* On Shabbat / yom tov itself, the next night's candles are lit after dark from an existing flame. */}
+                          {sh.restricted ? `הדלקת נרות לא לפני ${sh.candles}, מאש קיימת` : `הדלקת נרות ${sh.candles}`}
+                        </span>
                       )}
-                    </Card>
-                  );
-                })}
-                {canEdit && (
-                  <button
-                    onClick={() => setEditing({ day_date: day, start_time: "", title: "", description: "", category: "activity", location: "", image_url: null, lat: null, lng: null })}
-                    className="flex items-center justify-center gap-1 rounded-2xl border border-dashed border-border py-2.5 text-sm font-semibold text-muted-foreground"
-                  >
-                    <Plus className="size-4" /> הוספה ליום זה
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+                      {sh.havdalah && <span>הבדלה {sh.havdalah}</span>}
+                      {!sh.candles && !sh.havdalah && <span>שבת / חג</span>}
+                    </div>
+                  )}
+                  {dayItems.map((it) => {
+                    const cat = itineraryCategory(it.category);
+                    const conflict = shabbatConflict(sh, it.start_time);
+                    return (
+                      <div key={it.id} className="flex items-start gap-3 py-3 ps-4 pe-1">
+                        <CardThumbnail
+                          imageUrl={(isPhotoUrl(it.image_url) ? it.image_url : null) ?? ambientPhoto(it.category === "food", it.title)}
+                          illustrative={!isPhotoUrl(it.image_url) && it.category === "food"}
+                          alt={it.title}
+                          gradient="sunset"
+                          size="size-11"
+                          rounded="rounded-xl"
+                          icon={<span className="text-lg">{cat.emoji}</span>}
+                        />
+                        <div className="min-w-0 flex-1">
+                          {it.start_time && (
+                            <div className="type-footnote font-semibold tabular-nums text-primary">{it.start_time.slice(0, 5)}</div>
+                          )}
+                          <div className="type-headline line-clamp-2 [overflow-wrap:anywhere] [unicode-bidi:plaintext]">{it.title}</div>
+                          {it.location && (
+                            <div className="type-footnote truncate text-muted-foreground [unicode-bidi:plaintext]">{it.location}</div>
+                          )}
+                          {conflict && (
+                            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sun px-2 py-0.5 text-[11px] font-semibold text-sun-foreground">
+                              <TriangleAlert className="size-3" />
+                              {(sh!.restricted ? sh!.holiday : erevOf) ? "בחג" : "בשבת"}
+                              {sh!.havdalah ? ` — לפני ההבדלה (${sh!.havdalah})` : ""}
+                            </div>
+                          )}
+                          {it.description && (
+                            <p className="type-footnote mt-0.5 line-clamp-3 text-muted-foreground [overflow-wrap:anywhere]">{it.description}</p>
+                          )}
+                        </div>
+                        {(canEdit || it.location) && (
+                          <button
+                            type="button"
+                            onClick={() => setActionsFor(it)}
+                            aria-label={`אפשרויות עבור ${it.title}`}
+                            className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                          >
+                            <MoreHorizontal className="size-5" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {dayItems.length === 0 && !canEdit && (
+                    <p className="type-footnote px-4 py-3 text-muted-foreground">אין עדיין תוכניות ליום הזה.</p>
+                  )}
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setEditing(newItem(day))}
+                      className={cn(
+                        "type-headline flex min-h-12 w-full items-center gap-2 px-4 py-3 text-start text-primary transition-colors active:bg-muted/70",
+                      )}
+                    >
+                      <Plus className="size-5" /> הוספה ליום זה
+                    </button>
+                  )}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
+
+      {/* Every way to add, behind one "+" */}
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="הוספה למסלול">
+        <div className="flex flex-col gap-2">
+          <SheetRow
+            icon={<Plus className="size-5" />}
+            label="פריט חדש"
+            onClick={() => {
+              setAddOpen(false);
+              setEditing(newItem(defaultDay));
+            }}
+          />
+          <SheetRow
+            icon={<Sparkles className="size-5" />}
+            label="מסלול מוצע עם AI"
+            hint={generating ? "בתהליך… זה לוקח כמה שניות" : "לפי המשתתפים, ההעדפות והתאריכים"}
+            onClick={() => {
+              setAddOpen(false);
+              if (!generating) generate();
+            }}
+          />
+          <SheetRow
+            icon={<FileUp className="size-5" />}
+            label="ייבוא מסלול"
+            hint="מקובץ Excel או מטקסט"
+            onClick={() => {
+              setAddOpen(false);
+              setImporting(true);
+            }}
+          />
+        </div>
+      </Modal>
+
+      {/* One item's actions */}
+      <Modal open={!!actionsFor} onClose={() => setActionsFor(null)} title={actionsFor?.title ?? ""}>
+        {actionsFor && (
+          <div className="flex flex-col gap-2">
+            {actionsMapUrl && isSafeHttpUrl(actionsMapUrl) && (
+              <SheetRow icon={<MapPin className="size-5" />} label="פתיחה במפה" href={actionsMapUrl} />
+            )}
+            {actionsDirections && <SheetRow icon={<Navigation className="size-5" />} label="ניווט" href={actionsDirections} />}
+            {canEdit && (
+              <SheetRow
+                icon={<Pencil className="size-5" />}
+                label="עריכה"
+                onClick={() => {
+                  const it = actionsFor;
+                  setActionsFor(null);
+                  setEditing({
+                    id: it.id,
+                    day_date: it.day_date,
+                    start_time: it.start_time ?? "",
+                    title: it.title,
+                    description: it.description ?? "",
+                    category: it.category,
+                    location: it.location ?? "",
+                    image_url: it.image_url ?? null,
+                    lat: it.lat ?? null,
+                    lng: it.lng ?? null,
+                  });
+                }}
+              />
+            )}
+            {canEdit && (
+              <SheetRow
+                icon={<Trash2 className="size-5" />}
+                label="מחיקה"
+                destructive
+                onClick={() => {
+                  const id = actionsFor.id;
+                  setActionsFor(null);
+                  remove(id);
+                }}
+              />
+            )}
+          </div>
+        )}
+      </Modal>
 
       {shabbat && shabbat.days.length > 0 && view === "list" && (
         <p className="mt-4 text-[11px] text-muted-foreground">

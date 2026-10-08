@@ -1,14 +1,56 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Copy, LogOut, MessageCircle, UserMinus, X } from "lucide-react";
+import { Check, Copy, Link2, Link2Off, LogOut, MessageCircle, UserMinus, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import type { MemberRole, Trip, TripInvite, TripMember, TripRole } from "@/lib/types";
 import { ROLE_HINTS, ROLE_LABELS } from "@/lib/permissions";
-import { Badge, Button, Segmented, Spinner } from "@/components/ui";
+import { InsetGroup, Segmented, Spinner, Switch } from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 const MEMBER_ROLES: MemberRole[] = ["viewer", "participant", "editor"];
+
+/** A tappable row inside an InsetGroup. */
+function ActionRow({
+  icon,
+  label,
+  onClick,
+  href,
+  destructive,
+  disabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+  href?: string;
+  destructive?: boolean;
+  disabled?: boolean;
+}) {
+  const cls = cn(
+    "type-headline flex min-h-12 w-full items-center gap-3 px-4 py-3 text-start transition-colors active:bg-foreground/5 disabled:opacity-60",
+    destructive ? "text-destructive" : "text-primary",
+  );
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+      {icon}
+      {label}
+    </a>
+  ) : (
+    <button type="button" onClick={onClick} disabled={disabled} className={cls}>
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function Avatar({ name }: { name: string }) {
+  return (
+    <div className="grid size-9 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary">
+      {Array.from(name.trim())[0] ?? "?"}
+    </div>
+  );
+}
 
 /**
  * People on a trip (migration 015). The owner creates one invite link per
@@ -73,11 +115,13 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
   };
 
   const toggleApproval = async () => {
-    if (!invite) return;
+    if (!invite || busy) return;
+    setBusy(true);
     const { error } = await supabase
       .from("trip_invites")
       .update({ requires_approval: !invite.requires_approval })
       .eq("id", invite.id);
+    setBusy(false);
     if (error) {
       toast.error("העדכון נכשל");
       return;
@@ -143,106 +187,126 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
 
   const pending = members.filter((m) => m.status === "pending");
   const active = members.filter((m) => m.status === "active");
+  const sectionTitle = "type-footnote mb-1.5 px-4 font-semibold text-muted-foreground";
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {isOwner && isAnonymous && (
-        <p className="rounded-2xl bg-muted p-3 text-sm text-muted-foreground">
+        <p className="type-footnote rounded-2xl bg-muted p-4 text-muted-foreground">
           בעותק דמו אי אפשר להזמין אנשים. אחרי הרשמה תוכלו לשתף טיולים עם המשפחה או הלקוחות.
         </p>
       )}
 
       {isOwner && !isAnonymous && (
-        <div className="flex flex-col gap-3 rounded-2xl border border-border p-3">
-          <div className="font-semibold">הזמנת אנשים</div>
+        <section>
+          <h3 className={sectionTitle}>הזמנת אנשים</h3>
           <Segmented
             value={inviteRole}
             onChange={setInviteRole}
             options={MEMBER_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
           />
-          <p className="text-xs text-muted-foreground">{ROLE_HINTS[inviteRole]}</p>
+          <p className="type-footnote mb-2 mt-1.5 px-4 text-muted-foreground">{ROLE_HINTS[inviteRole]}</p>
 
           {invite ? (
-            <>
-              <div dir="ltr" className="overflow-x-auto rounded-2xl bg-muted px-3 py-2.5 font-mono text-xs">
+            <InsetGroup>
+              <div dir="ltr" className="overflow-x-auto whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
                 {inviteUrl}
               </div>
-              <div className="flex gap-2">
-                <Button className="flex-1" onClick={copy}>
-                  {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-                  העתקה
-                </Button>
-                <a
-                  href={`https://wa.me/?text=${encodeURIComponent(whatsappText)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl border border-border text-[15px] font-semibold"
-                >
-                  <MessageCircle className="size-4" />
-                  וואטסאפ
-                </a>
+              <ActionRow
+                icon={copied ? <Check className="size-5" /> : <Copy className="size-5" />}
+                label="העתקת הקישור"
+                onClick={copy}
+              />
+              <ActionRow
+                icon={<MessageCircle className="size-5" />}
+                label="שליחה בוואטסאפ"
+                href={`https://wa.me/?text=${encodeURIComponent(whatsappText)}`}
+              />
+              <div className="flex min-h-12 items-center gap-3 px-4 py-2.5">
+                <span className="type-body min-w-0 flex-1">כל מצטרף חדש צריך את האישור שלי</span>
+                <Switch
+                  checked={invite.requires_approval}
+                  onChange={toggleApproval}
+                  label="כל מצטרף חדש צריך את האישור שלי"
+                  disabled={busy}
+                />
               </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={invite.requires_approval} onChange={toggleApproval} className="size-4" />
-                כל מצטרף חדש צריך את האישור שלי
-              </label>
-              <Button variant="ghost" size="sm" className="text-destructive" loading={busy} onClick={revokeInvite}>
-                ביטול הקישור
-              </Button>
-            </>
+              <ActionRow
+                icon={<Link2Off className="size-5" />}
+                label="ביטול הקישור"
+                destructive
+                disabled={busy}
+                onClick={revokeInvite}
+              />
+            </InsetGroup>
           ) : (
-            <Button loading={busy} onClick={createInvite}>
-              יצירת קישור הזמנה ל{ROLE_LABELS[inviteRole]}
-            </Button>
+            <InsetGroup>
+              <ActionRow
+                icon={busy ? <Spinner className="size-5" /> : <Link2 className="size-5" />}
+                label={`יצירת קישור הזמנה ל${ROLE_LABELS[inviteRole]}`}
+                disabled={busy}
+                onClick={createInvite}
+              />
+            </InsetGroup>
           )}
-        </div>
+        </section>
       )}
 
       {isOwner && pending.length > 0 && (
-        <div>
-          <div className="mb-2 font-semibold">ממתינים לאישור</div>
-          <div className="flex flex-col gap-2">
+        <section>
+          <h3 className={sectionTitle}>ממתינים לאישור ({pending.length})</h3>
+          <InsetGroup>
             {pending.map((m) => (
-              <div key={m.id} className="flex items-center gap-2 rounded-2xl border border-border p-3">
+              <div key={m.id} className="flex items-center gap-3 py-2 ps-4 pe-2">
+                <Avatar name={m.display_name || "משתמש"} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{m.display_name || "משתמש"}</div>
-                  <div className="text-xs text-muted-foreground">מבקש להצטרף כ{ROLE_LABELS[m.role]}</div>
+                  <div className="type-headline truncate [unicode-bidi:plaintext]">{m.display_name || "משתמש"}</div>
+                  <div className="type-footnote text-muted-foreground">מבקש להצטרף כ{ROLE_LABELS[m.role]}</div>
                 </div>
-                <Button size="sm" onClick={() => updateMember(m, { status: "active" }, "אושר ✓")} aria-label="אישור">
-                  <Check className="size-4" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => removeMember(m, "הבקשה נדחתה")} aria-label="דחייה">
-                  <X className="size-4" />
-                </Button>
+                <button
+                  type="button"
+                  onClick={() => updateMember(m, { status: "active" }, "אושר ✓")}
+                  aria-label={`אישור ${m.display_name || "משתמש"}`}
+                  className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95"
+                >
+                  <Check className="size-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeMember(m, "הבקשה נדחתה")}
+                  aria-label={`דחיית ${m.display_name || "משתמש"}`}
+                  className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-foreground/5"
+                >
+                  <X className="size-5" />
+                </button>
               </div>
             ))}
-          </div>
-        </div>
+          </InsetGroup>
+        </section>
       )}
 
-      <div>
-        <div className="mb-2 font-semibold">חברי הטיול</div>
+      <section>
+        <h3 className={sectionTitle}>חברי הטיול{active.length > 0 ? ` (${active.length})` : ""}</h3>
         {active.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="type-footnote rounded-2xl bg-muted p-4 text-muted-foreground">
             {isOwner ? "עדיין אין חברים. שלחו קישור הזמנה כדי שהמשפחה או הלקוח יראו את כל הטיול." : "רק אתה ובעל הטיול."}
           </p>
         ) : (
-          <div className="flex flex-col gap-2">
+          <InsetGroup>
             {active.map((m) => (
-              <div key={m.id} className="flex items-center gap-2 rounded-2xl border border-border p-3">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">
-                    {m.display_name || "משתמש"}
-                    {m.user_id === user?.id && " (את/ה)"}
-                  </div>
+              <div key={m.id} className="flex min-h-14 items-center gap-3 py-2 ps-4 pe-2">
+                <Avatar name={m.display_name || "משתמש"} />
+                <div className="type-headline min-w-0 flex-1 truncate [unicode-bidi:plaintext]">
+                  {m.display_name || "משתמש"}
+                  {m.user_id === user?.id && <span className="text-muted-foreground"> (את/ה)</span>}
                 </div>
                 {isOwner ? (
                   <>
                     <select
                       value={m.role}
                       onChange={(e) => updateMember(m, { role: e.target.value as MemberRole }, "התפקיד עודכן")}
-                      className="h-9 rounded-xl border border-input bg-card px-2 text-sm"
-                      aria-label="תפקיד"
+                      className="type-footnote h-11 shrink-0 rounded-xl border border-input bg-card px-2"
+                      aria-label={`התפקיד של ${m.display_name || "משתמש"}`}
                     >
                       {MEMBER_ROLES.map((r) => (
                         <option key={r} value={r}>
@@ -251,27 +315,27 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
                       ))}
                     </select>
                     <button
+                      type="button"
                       onClick={() => removeMember(m, "הוסר מהטיול")}
-                      className="grid size-9 place-items-center text-destructive"
-                      aria-label="הסרה מהטיול"
+                      className="grid size-11 shrink-0 place-items-center rounded-full text-destructive transition-colors active:bg-foreground/5"
+                      aria-label={`הסרת ${m.display_name || "משתמש"} מהטיול`}
                     >
-                      <UserMinus className="size-4" />
+                      <UserMinus className="size-5" />
                     </button>
                   </>
                 ) : (
-                  <Badge tone="muted">{ROLE_LABELS[m.role]}</Badge>
+                  <span className="type-footnote shrink-0 pe-2 text-muted-foreground">{ROLE_LABELS[m.role]}</span>
                 )}
               </div>
             ))}
-          </div>
+          </InsetGroup>
         )}
-      </div>
+      </section>
 
       {!isOwner && (
-        <Button variant="ghost" className="text-destructive" onClick={leave}>
-          <LogOut className="size-4" />
-          עזיבת הטיול
-        </Button>
+        <InsetGroup>
+          <ActionRow icon={<LogOut className="size-5" />} label="עזיבת הטיול" destructive onClick={leave} />
+        </InsetGroup>
       )}
     </div>
   );

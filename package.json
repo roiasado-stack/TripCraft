@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:db": "node scripts/test-db.mjs",
     "check": "npm run typecheck && npm run lint && npm run rules && npm run test && npm run build",
-    "evals": "node --env-file=.env evals/run.ts"
+    "evals": "node --env-file=.env evals/run.ts",
+    "probe:photos": "node scripts/probe-destination-photos.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

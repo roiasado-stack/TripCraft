@@ -1,21 +1,23 @@
 import { useEffect, useState } from "react";
-import { Car, CircleAlert, Luggage, Pencil, Phone, Plane, Plus, Radar, Ticket, Trash2 } from "lucide-react";
+import { Car, CircleAlert, ExternalLink, MapPin, MoreHorizontal, Navigation, Pencil, Phone, Plane, Plus, Radar, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import type { Flight, Stay, Transfer } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { can } from "@/lib/permissions";
-import { TripHeader, ScreenTitle } from "@/components/TripHeader";
-import { Button, Card, Field, FullSpinner, Input, Modal, Segmented } from "@/components/ui";
-import { DirectionsLink, LinkChip, MapLink } from "@/components/MapLink";
+import { TripHeader } from "@/components/TripHeader";
+import { Button, Field, FullSpinner, GroupedList, Input, ListRow, Modal, Segmented, SheetRow } from "@/components/ui";
 import {
   airportMapUrl,
   carRentalSearchUrl,
+  directionsUrl,
   flightStatusUrl,
+  isSafeHttpUrl,
   resolveMapUrl,
   taxiSearchUrl,
 } from "@/lib/maps";
 import { formatDateTimeHeb, formatHeb, formatTimeHeb } from "@/lib/trip-options";
+import { dateRangeHeb } from "@/lib/trip-dates";
 
 // A native datetime-local input's hour format follows the OS/browser locale,
 // not the page's lang="he" — on a Windows box set to English that renders an
@@ -154,6 +156,20 @@ function duration(from?: string | null, to?: string | null): string | null {
   return h ? `${h}ש${m ? ` ${m}ד` : ""}` : `${m}ד`;
 }
 
+type SheetAction = {
+  icon: JSX.Element;
+  label: string;
+  href?: string;
+  onClick?: () => void;
+  destructive?: boolean;
+};
+
+/** A phone number as a tel: link (digits and a leading + only), or null. */
+function telHref(phone?: string | null): string | null {
+  const digits = (phone ?? "").replace(/[^\d+]/g, "");
+  return digits.length >= 6 ? `tel:${digits}` : null;
+}
+
 export default function TransportTab() {
   const { trip, role } = useTrip();
   const canEdit = can(role, "edit");
@@ -164,6 +180,7 @@ export default function TransportTab() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<FlightDraft | null>(null);
   const [saving, setSaving] = useState(false);
+  const [sheet, setSheet] = useState<{ title: string; actions: SheetAction[] } | null>(null);
 
   const reload = async () => {
     const [f, s, t] = await Promise.all([
@@ -227,238 +244,308 @@ export default function TransportTab() {
 
   const arrivalAirport = flights.find((f) => f.direction === "outbound")?.to_airport ?? null;
 
+  const now = new Date();
+  const openSheet = (title: string, actions: (SheetAction | null | false | "" | undefined)[]) =>
+    setSheet({ title, actions: actions.filter((a): a is SheetAction => !!a) });
+
   return (
     <div className="px-4">
       <TripHeader trip={trip} subtitle="טיסות, לינה ותחבורה" />
-      <ScreenTitle title="נסיעה" />
 
-      {/* Flights */}
-      <section className="mb-6">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="font-bold">✈️ טיסות</h3>
-          {canEdit && (
-            <Button size="sm" variant="outline" onClick={() => setEditing({ ...blankFlight })} aria-label="הוספת טיסה">
-              <Plus className="size-4" />
-            </Button>
-          )}
-        </div>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="type-title">טיסות ולינה</h2>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => setEditing({ ...blankFlight })}
+            aria-label="הוספת טיסה"
+            className="grid size-11 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95"
+          >
+            <Plus className="size-5" />
+          </button>
+        )}
+      </div>
+
+      {/* Flights — the boarding-pass layout stays: at the airport this is what people need. */}
+      <GroupedList title="טיסות">
         {flights.length === 0 ? (
-          <Card className="p-4 text-center text-sm text-muted-foreground">לא הוזנו טיסות.</Card>
+          <p className="type-footnote px-4 py-3 text-muted-foreground">לא הוזנו טיסות.</p>
         ) : (
-          <div className="flex flex-col gap-3">
-            {flights.map((f) => (
-              <Card key={f.id} className="p-4">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="shrink-0 rounded-full bg-primary-soft px-2.5 py-1 text-xs font-bold text-secondary-foreground">
-                      {f.direction === "inbound" ? "חזור" : "הלוך"}
-                    </span>
-                    <span className="truncate text-sm font-bold">
-                      {f.airline} {f.flight_number}
-                    </span>
-                  </div>
-                  {canEdit && (
-                  <div className="flex shrink-0 gap-2">
-                    <button
-                      onClick={() => setEditing(flightToDraft(f))}
-                      className="text-muted-foreground"
-                      aria-label="עריכת טיסה"
-                    >
-                      <Pencil className="size-4" />
-                    </button>
-                    <button onClick={() => removeFlight(f)} className="text-destructive" aria-label="מחיקת טיסה">
-                      <Trash2 className="size-4" />
-                    </button>
-                  </div>
+          flights.map((f) => {
+            const dur = duration(f.depart_at, f.arrive_at);
+            return (
+              <div key={f.id} className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="type-footnote shrink-0 rounded-full bg-primary-soft px-2.5 py-0.5 font-semibold text-primary">
+                    {f.direction === "inbound" ? "חזור" : "הלוך"}
+                  </span>
+                  {/* Sized to its text (not flex-1) so an English name sits next to the chip and truncates at its own end. */}
+                  <span dir="auto" className="type-footnote min-w-0 truncate font-semibold">
+                    {[f.airline, f.flight_number].filter(Boolean).join(" ")}
+                  </span>
+                  {(canEdit || flightStatusUrl(f.airline, f.flight_number) || airportMapUrl(f.from_airport) || airportMapUrl(f.to_airport)) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openSheet([f.airline, f.flight_number].filter(Boolean).join(" ") || "טיסה", [
+                        flightStatusUrl(f.airline, f.flight_number) && {
+                          icon: <Radar className="size-5" />,
+                          label: "סטטוס טיסה",
+                          href: flightStatusUrl(f.airline, f.flight_number)!,
+                        },
+                        airportMapUrl(f.from_airport) && {
+                          icon: <MapPin className="size-5" />,
+                          label: `שדה ${f.from_airport}`,
+                          href: airportMapUrl(f.from_airport)!,
+                        },
+                        airportMapUrl(f.to_airport) && {
+                          icon: <MapPin className="size-5" />,
+                          label: `שדה ${f.to_airport}`,
+                          href: airportMapUrl(f.to_airport)!,
+                        },
+                        canEdit && { icon: <Pencil className="size-5" />, label: "עריכה", onClick: () => setEditing(flightToDraft(f)) },
+                        canEdit && { icon: <Trash2 className="size-5" />, label: "מחיקה", destructive: true, onClick: () => removeFlight(f) },
+                      ])
+                    }
+                    aria-label="אפשרויות לטיסה"
+                    className="-me-3 ms-auto grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                  >
+                    <MoreHorizontal className="size-5" />
+                  </button>
                   )}
                 </div>
 
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-center">
-                    <div className="text-2xl font-extrabold">{f.from_airport || "—"}</div>
-                    <div className="text-xs font-semibold">{formatTimeHeb(f.depart_at)}</div>
-                    <div className="text-[11px] text-muted-foreground">{formatHeb(f.depart_at)}</div>
+                {/* Route: always left-to-right, each airport isolated (Hebrew names keep their order). */}
+                <div dir="ltr" className="mt-2 flex items-start gap-2">
+                  <div className="min-w-0 flex-1 text-start">
+                    <div className="type-title line-clamp-2 [overflow-wrap:anywhere]">
+                      <bdi>{f.from_airport || "—"}</bdi>
+                    </div>
+                    <div className="type-footnote font-semibold tabular-nums">{formatTimeHeb(f.depart_at)}</div>
+                    {/* A Hebrew date inside the left-to-right route keeps its own direction. */}
+                    <div className="type-footnote text-muted-foreground">
+                      <bdi dir="rtl">{formatHeb(f.depart_at)}</bdi>
+                    </div>
                     {f.from_terminal && (
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">טרמינל {f.from_terminal}</div>
+                      <div className="type-footnote text-muted-foreground">
+                        <bdi dir="rtl">טרמינל {f.from_terminal}</bdi>
+                      </div>
                     )}
                   </div>
-
-                  <div className="flex flex-1 flex-col items-center pt-2">
-                    <Plane className="size-4 -scale-x-100 text-muted-foreground" />
+                  <div className="flex w-16 shrink-0 flex-col items-center pt-2 text-muted-foreground">
+                    <Plane className="size-4" />
                     <div className="my-1 h-px w-full bg-border" />
-                    {duration(f.depart_at, f.arrive_at) && (
-                      <span className="text-[11px] font-medium text-muted-foreground">
-                        {duration(f.depart_at, f.arrive_at)}
-                      </span>
-                    )}
+                    {dur && <span className="type-footnote" dir="rtl">{dur}</span>}
                   </div>
-
-                  <div className="text-center">
-                    <div className="text-2xl font-extrabold">{f.to_airport || "—"}</div>
-                    <div className="text-xs font-semibold">{formatTimeHeb(f.arrive_at)}</div>
-                    <div className="text-[11px] text-muted-foreground">{formatHeb(f.arrive_at)}</div>
+                  <div className="min-w-0 flex-1 text-end">
+                    <div className="type-title line-clamp-2 [overflow-wrap:anywhere]">
+                      <bdi>{f.to_airport || "—"}</bdi>
+                    </div>
+                    <div className="type-footnote font-semibold tabular-nums">{formatTimeHeb(f.arrive_at)}</div>
+                    <div className="type-footnote text-muted-foreground">
+                      <bdi dir="rtl">{formatHeb(f.arrive_at)}</bdi>
+                    </div>
                     {f.to_terminal && (
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">טרמינל {f.to_terminal}</div>
+                      <div className="type-footnote text-muted-foreground">
+                        <bdi dir="rtl">טרמינל {f.to_terminal}</bdi>
+                      </div>
                     )}
                   </div>
                 </div>
 
                 {(f.booking_ref || f.seats || f.baggage) && (
-                  <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border pt-3 text-center text-xs">
+                  <div className="type-footnote mt-2 flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
                     {f.booking_ref && (
-                      <div>
-                        <Ticket className="mx-auto size-4 text-muted-foreground" />
-                        <div className="mt-0.5 font-bold">{f.booking_ref}</div>
-                        <div className="text-[10px] text-muted-foreground">אסמכתה</div>
-                      </div>
+                      <span>
+                        אסמכתה{" "}
+                        <bdi className="font-semibold tracking-wide text-foreground">{f.booking_ref}</bdi>
+                      </span>
                     )}
                     {f.seats && (
-                      <div>
-                        <div className="mx-auto text-sm">💺</div>
-                        <div className="mt-0.5 font-bold">{f.seats}</div>
-                        <div className="text-[10px] text-muted-foreground">מושבים</div>
-                      </div>
+                      <span>
+                        מושבים <bdi className="font-semibold text-foreground">{f.seats}</bdi>
+                      </span>
                     )}
                     {f.baggage && (
-                      <div>
-                        <Luggage className="mx-auto size-4 text-muted-foreground" />
-                        <div className="mt-0.5 font-bold">{f.baggage}</div>
-                        <div className="text-[10px] text-muted-foreground">כבודה</div>
-                      </div>
+                      <span>
+                        כבודה <bdi className="font-semibold text-foreground">{f.baggage}</bdi>
+                      </span>
                     )}
                   </div>
                 )}
-
-                {f.notes && <p className="mt-2 text-xs text-muted-foreground">{f.notes}</p>}
-
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  <LinkChip
-                    url={flightStatusUrl(f.airline, f.flight_number)}
-                    label="סטטוס טיסה"
-                    icon={<Radar className="size-3.5" />}
-                  />
-                  <MapLink url={airportMapUrl(f.from_airport)} label={`שדה ${f.from_airport ?? ""}`} />
-                  <MapLink url={airportMapUrl(f.to_airport)} label={`שדה ${f.to_airport ?? ""}`} />
-                </div>
-              </Card>
-            ))}
-          </div>
+                {f.notes && <p className="type-footnote mt-1 text-muted-foreground [overflow-wrap:anywhere]">{f.notes}</p>}
+              </div>
+            );
+          })
         )}
-      </section>
+      </GroupedList>
 
-      {/* Stays */}
-      <section className="mb-6">
-        <h3 className="mb-2 font-bold">🏨 לינה</h3>
+      <GroupedList title="לינה" className="mt-6">
         {stays.length === 0 ? (
-          <Card className="p-4 text-center text-sm text-muted-foreground">לא הוזנה לינה.</Card>
+          <p className="type-footnote px-4 py-3 text-muted-foreground">לא הוזנה לינה.</p>
         ) : (
-          <div className="flex flex-col gap-3">
-            {stays.map((s) => (
-              <Card key={s.id} className="p-4">
-                <div className="font-bold">{s.hotel_name}</div>
-                {s.address && <div className="text-sm text-muted-foreground">{s.address}</div>}
-                <div className="mt-1 text-xs text-muted-foreground">
-                  צ'ק אין {formatHeb(s.check_in)} · צ'ק אאוט {formatHeb(s.check_out)}
-                </div>
-                {s.booking_ref && (
-                  <div className="mt-1 text-xs">
-                    אסמכתה: <span className="font-bold">{s.booking_ref}</span>
+          stays.map((st) => {
+            const place = st.address || st.hotel_name;
+            const mapUrl = resolveMapUrl(st.map_url, place, trip.destination);
+            return (
+              <div key={st.id} className="flex items-start gap-3 py-3 ps-4 pe-1">
+                <div className="min-w-0 flex-1">
+                  <div className="type-headline [overflow-wrap:anywhere]">
+                    <bdi>{st.hotel_name}</bdi>
                   </div>
-                )}
-                {s.notes && <p className="mt-1 text-xs text-muted-foreground">{s.notes}</p>}
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  <MapLink url={resolveMapUrl(s.map_url, s.address || s.hotel_name, trip.destination)} />
-                  <DirectionsLink place={s.address || s.hotel_name} near={trip.destination} />
-                  {s.phone && (
-                    <a
-                      href={`tel:${s.phone}`}
-                      className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs font-semibold"
-                    >
-                      <Phone className="size-3.5" /> {s.phone}
-                    </a>
+                  {st.address && (
+                    <div className="type-footnote text-muted-foreground">
+                      <bdi>{st.address}</bdi>
+                    </div>
                   )}
-                  <LinkChip url={s.url} label="אתר המלון" />
+                  {(st.check_in || st.check_out) && (
+                    <div className="type-footnote mt-0.5 text-muted-foreground">{dateRangeHeb(st.check_in ?? st.check_out, st.check_out, now)}</div>
+                  )}
+                  {st.booking_ref && (
+                    <div className="type-footnote text-muted-foreground">
+                      אסמכתה <bdi className="font-semibold tracking-wide text-foreground">{st.booking_ref}</bdi>
+                    </div>
+                  )}
+                  {st.notes && <p className="type-footnote mt-0.5 text-muted-foreground [overflow-wrap:anywhere]">{st.notes}</p>}
                 </div>
-              </Card>
-            ))}
-          </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    openSheet(st.hotel_name, [
+                      mapUrl && isSafeHttpUrl(mapUrl) && { icon: <MapPin className="size-5" />, label: "פתיחה במפה", href: mapUrl },
+                      directionsUrl(place, trip.destination) && {
+                        icon: <Navigation className="size-5" />,
+                        label: "ניווט",
+                        href: directionsUrl(place, trip.destination)!,
+                      },
+                      telHref(st.phone) && { icon: <Phone className="size-5" />, label: `התקשרות \u2066${st.phone}\u2069`, href: telHref(st.phone)! },
+                      st.url && isSafeHttpUrl(st.url) && { icon: <ExternalLink className="size-5" />, label: "אתר המלון", href: st.url },
+                    ])
+                  }
+                  aria-label={`אפשרויות ל${st.hotel_name}`}
+                  className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                >
+                  <MoreHorizontal className="size-5" />
+                </button>
+              </div>
+            );
+          })
         )}
-      </section>
+      </GroupedList>
 
-      {/* Transfers & car */}
-      <section className="mb-6">
-        <h3 className="mb-2 font-bold">🚗 העברות ורכב</h3>
+      <GroupedList title="העברות ורכב" className="mt-6">
         {transfers.length === 0 ? (
-          <Card className="p-4 text-center text-sm text-muted-foreground">לא הוזנו העברות.</Card>
+          <p className="type-footnote px-4 py-3 text-muted-foreground">לא הוזנו העברות.</p>
         ) : (
-          <div className="flex flex-col gap-3">
-            {transfers.map((t) => (
-              <Card key={t.id} className="p-4">
-                <div className="flex items-center gap-2">
-                  <Car className="size-4 text-primary" />
-                  <span className="font-bold">{t.kind === "car_rental" ? "רכב שכור" : "העברה"}</span>
-                  {t.provider && <span className="text-sm text-muted-foreground">· {t.provider}</span>}
-                </div>
-                {t.pickup_location && (
-                  <div className="mt-1 text-sm">
-                    איסוף: {t.pickup_location}
-                    {t.pickup_at && ` · ${formatDateTimeHeb(t.pickup_at)}`}
+          transfers.map((t) => {
+            const pickupMap = resolveMapUrl(null, t.pickup_location, trip.destination);
+            return (
+              <div key={t.id} className="flex items-start gap-3 py-3 ps-4 pe-1">
+                <Car className="mt-0.5 size-5 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <div className="type-headline">
+                    {t.kind === "car_rental" ? "רכב שכור" : "העברה"}
+                    {t.provider && <span className="font-normal text-muted-foreground"> · {t.provider}</span>}
                   </div>
-                )}
-                {t.dropoff_location && <div className="text-sm">החזרה: {t.dropoff_location}</div>}
-                {t.return_at && (
-                  <div className="text-xs text-muted-foreground">מועד החזרה: {formatDateTimeHeb(t.return_at)}</div>
-                )}
-                {t.booking_ref && (
-                  <div className="mt-1 text-xs">
-                    אסמכתה: <span className="font-bold">{t.booking_ref}</span>
-                  </div>
-                )}
-                {t.notes && <p className="mt-1 text-xs text-muted-foreground">{t.notes}</p>}
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  <MapLink url={resolveMapUrl(null, t.pickup_location, trip.destination)} label="נקודת איסוף" />
-                  <DirectionsLink place={t.pickup_location} near={trip.destination} />
-                  {t.phone && (
-                    <a
-                      href={`tel:${t.phone}`}
-                      className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs font-semibold"
-                    >
-                      <Phone className="size-3.5" /> {t.phone}
-                    </a>
+                  {t.pickup_location && (
+                    <div className="type-footnote text-muted-foreground [overflow-wrap:anywhere]">
+                      {/* The place is often English: isolate it so the Hebrew line keeps its order. */}
+                      איסוף: <bdi>{t.pickup_location}</bdi>
+                      {t.pickup_at && <> · <bdi>{formatDateTimeHeb(t.pickup_at)}</bdi></>}
+                    </div>
                   )}
-                  <LinkChip url={t.url} label="פרטי ההזמנה" />
+                  {t.dropoff_location && (
+                    <div className="type-footnote text-muted-foreground [overflow-wrap:anywhere]">
+                      החזרה: <bdi>{t.dropoff_location}</bdi>
+                    </div>
+                  )}
+                  {t.return_at && <div className="type-footnote text-muted-foreground">מועד החזרה: {formatDateTimeHeb(t.return_at)}</div>}
+                  {t.booking_ref && (
+                    <div className="type-footnote text-muted-foreground">
+                      אסמכתה <bdi className="font-semibold tracking-wide text-foreground">{t.booking_ref}</bdi>
+                    </div>
+                  )}
+                  {t.notes && <p className="type-footnote mt-0.5 text-muted-foreground [overflow-wrap:anywhere]">{t.notes}</p>}
                 </div>
-              </Card>
+                <button
+                  type="button"
+                  onClick={() =>
+                    openSheet(t.kind === "car_rental" ? "רכב שכור" : "העברה", [
+                      pickupMap && isSafeHttpUrl(pickupMap) && { icon: <MapPin className="size-5" />, label: "נקודת איסוף במפה", href: pickupMap },
+                      directionsUrl(t.pickup_location, trip.destination) && {
+                        icon: <Navigation className="size-5" />,
+                        label: "ניווט לנקודת האיסוף",
+                        href: directionsUrl(t.pickup_location, trip.destination)!,
+                      },
+                      telHref(t.phone) && { icon: <Phone className="size-5" />, label: `התקשרות \u2066${t.phone}\u2069`, href: telHref(t.phone)! },
+                      t.url && isSafeHttpUrl(t.url) && { icon: <ExternalLink className="size-5" />, label: "פרטי ההזמנה", href: t.url },
+                    ])
+                  }
+                  aria-label="אפשרויות להעברה"
+                  className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                >
+                  <MoreHorizontal className="size-5" />
+                </button>
+              </div>
+            );
+          })
+        )}
+      </GroupedList>
+
+      {/* Live searches at the destination */}
+      <GroupedList title="תחבורה ביעד" className="mt-6">
+        {[
+          { href: taxiSearchUrl(trip.destination), label: "מוניות ביעד", icon: <Car className="size-5" /> },
+          {
+            href: carRentalSearchUrl(arrivalAirport ? `${arrivalAirport} airport` : trip.destination),
+            label: "השכרת רכב",
+            icon: <Car className="size-5" />,
+          },
+          { href: airportMapUrl(arrivalAirport), label: "שדה התעופה", icon: <MapPin className="size-5" /> },
+        ]
+          .filter((l): l is { href: string; label: string; icon: JSX.Element } => !!l.href && isSafeHttpUrl(l.href))
+          .map((l) => (
+            <a
+              key={l.label}
+              href={l.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-12 items-center gap-3 px-4 py-3 transition-colors active:bg-muted/70"
+            >
+              <span className="text-primary">{l.icon}</span>
+              <span className="type-headline flex-1">{l.label}</span>
+              <ExternalLink className="size-4 text-muted-foreground" />
+            </a>
+          ))}
+      </GroupedList>
+      <p className="type-footnote mt-2 flex items-start gap-1.5 px-4 text-muted-foreground">
+        <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
+        <span>חיפוש חי במפות, תמיד מעודכן. אפליקציות הסעות משתנות ממדינה למדינה (Uber, Bolt, Grab ועוד), כדאי לבדוק מה פעיל ביעד לפני הנסיעה.</span>
+      </p>
+
+      <Modal open={!!sheet} onClose={() => setSheet(null)} title={sheet?.title ?? ""}>
+        {sheet && (
+          <div className="flex flex-col gap-2">
+            {sheet.actions.map((a, i) => (
+              <SheetRow
+                key={`${i}-${a.label}`}
+                icon={a.icon}
+                label={a.label}
+                href={a.href}
+                destructive={a.destructive}
+                onClick={
+                  a.onClick
+                    ? () => {
+                        setSheet(null);
+                        a.onClick!();
+                      }
+                    : undefined
+                }
+              />
             ))}
           </div>
         )}
-      </section>
-
-      {/* Live search helpers */}
-      <section className="mb-4">
-        <h3 className="mb-2 font-bold">🔎 תחבורה ביעד</h3>
-        <Card className="flex flex-col gap-2 p-4">
-          <p className="text-xs text-muted-foreground">
-            חיפוש חי במפות — תמיד מעודכן, גם אם ספקים משתנים.
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            <LinkChip url={taxiSearchUrl(trip.destination)} label="מוניות ביעד" icon={<Car className="size-3.5" />} />
-            <LinkChip
-              url={carRentalSearchUrl(arrivalAirport ? `${arrivalAirport} airport` : trip.destination)}
-              label="השכרת רכב"
-              icon={<Car className="size-3.5" />}
-            />
-            <MapLink url={airportMapUrl(arrivalAirport)} label="שדה התעופה" />
-          </div>
-          <div className="mt-1 flex items-start gap-1.5 rounded-2xl bg-muted p-2.5 text-[11px] text-muted-foreground">
-            <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
-            <span>
-              אפליקציות הסעות משתנות ממדינה למדינה (Uber, Bolt, Grab ועוד). כדאי לבדוק מה פעיל ביעד
-              לפני הנסיעה.
-            </span>
-          </div>
-        </Card>
-      </section>
+      </Modal>
 
       <Modal
         open={!!editing}
