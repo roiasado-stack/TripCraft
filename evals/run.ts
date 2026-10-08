@@ -33,10 +33,10 @@ import {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-// claude-haiku-4-5 pricing (Anthropic API, as of this eval's baseline run).
+// claude-haiku-5-5 pricing (Anthropic API, prompts up to 100k tokens).
 // Update this constant, not the numbers in the report, when pricing changes.
-const PRICE_PER_MTOK_INPUT_USD = 1.0;
-const PRICE_PER_MTOK_OUTPUT_USD = 5.0;
+const PRICE_PER_MTOK_INPUT_USD = 0.1;
+const PRICE_PER_MTOK_OUTPUT_USD = 0.5;
 
 // Pre-defined pass/fail gate for the regression script's exit code.
 // Initial guesses — revisit once the baseline run exists and again after the

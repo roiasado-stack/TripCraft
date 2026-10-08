@@ -7,7 +7,7 @@
  * function that actually ships — a copy-pasted prompt would drift silently.
  */
 
-export const MODEL = "claude-haiku-4-5";
+export const MODEL = "claude-haiku-5-5";
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
 export type Participant = {
