@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, LinkIcon, Lock, ScanLine, Trash2, Upload, Users } from "lucide-react";
+import { Download, ExternalLink, LinkIcon, Lock, MoreHorizontal, Plus, ScanLine, Trash2, Upload, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import type { DocumentRow } from "@/lib/types";
 import { useTrip } from "./TripLayout";
-import { TripHeader, ScreenTitle } from "@/components/TripHeader";
-import { Button, Card, Chip, EmptyState, Field, Input, Modal, Segmented, Spinner } from "@/components/ui";
+import { TripHeader } from "@/components/TripHeader";
+import { Button, Chip, EmptyState, Field, GroupedList, Input, Label, Modal, Segmented, SheetRow, Spinner } from "@/components/ui";
 import { can } from "@/lib/permissions";
 import { useToast } from "@/hooks/use-toast";
 import { DOC_CATEGORIES, docCategoryLabel } from "@/lib/trip-options";
@@ -41,6 +41,8 @@ export default function DocumentsTab() {
   const [participantId, setParticipantId] = useState<string>("");
   const [linkModal, setLinkModal] = useState<{ name: string; url: string } | null>(null);
   const [voucherOpen, setVoucherOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [actionsFor, setActionsFor] = useState<DocumentRow | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -184,7 +186,7 @@ export default function DocumentsTab() {
       toast.error("הקישור צריך להתחיל ב-https://");
       return;
     }
-    await supabase.from("documents").insert({
+    const { error } = await supabase.from("documents").insert({
       trip_id: trip.id,
       name: linkModal.name.trim(),
       category,
@@ -192,6 +194,10 @@ export default function DocumentsTab() {
       external_url: linkModal.url.trim(),
       visibility,
     });
+    if (error) {
+      toast.error("שמירת הקישור נכשלה");
+      return;
+    }
     setLinkModal(null);
     toast.success("הקישור נשמר 🔗");
     load();
@@ -219,138 +225,245 @@ export default function DocumentsTab() {
   const remove = async (doc: DocumentRow) => {
     setDocs((x) => x.filter((d) => d.id !== doc.id));
     if (doc.storage_path) await supabase.storage.from(BUCKET).remove([doc.storage_path]);
-    await supabase.from("documents").delete().eq("id", doc.id);
+    const { error } = await supabase.from("documents").delete().eq("id", doc.id);
+    if (error) {
+      toast.error("המחיקה נכשלה");
+      load();
+      return;
+    }
+    toast.success("המסמך נמחק");
   };
 
-  const filtered = docs.filter((d) => filter === "all" || d.category === filter);
+  // A category this build doesn't know shows under "אחר".
+  const groupOf = (category: string) => (DOC_CATEGORIES.some((c) => c.value === category) ? category : "other");
+  const filtered = docs.filter((d) => filter === "all" || groupOf(d.category) === filter);
   const participantName = (id: string | null) => participants.find((p) => p.id === id)?.name;
 
   return (
     <div className="px-4">
       <TripHeader trip={trip} subtitle="מסמכים וקבצים" />
-      <ScreenTitle title="מסמכים" />
-
-      {/* upload controls */}
-      {canParticipate && (
-      <Card className="mb-4 flex flex-col gap-3 p-4">
-        <div>
-          <div className="mb-1.5 text-sm font-semibold">מי יראה את המסמך</div>
-          <Segmented
-            value={visibility}
-            onChange={setVisibility}
-            options={[
-              { value: "private", label: "רק אני", emoji: "🔒" },
-              { value: "members", label: "כל חברי הטיול", emoji: "👥" },
-            ]}
-          />
-        </div>
-        <div>
-          <div className="mb-1.5 text-sm font-semibold">קטגוריה</div>
-          <div className="flex flex-wrap gap-1.5">
-            {DOC_CATEGORIES.map((c) => (
-              <Chip key={c.value} active={category === c.value} onClick={() => setCategory(c.value)}>
-                {c.emoji} {c.label}
-              </Chip>
-            ))}
-          </div>
-        </div>
-        {participants.length > 0 && (
-          <div>
-            <div className="mb-1.5 text-sm font-semibold">שייך לנוסע (לא חובה)</div>
-            <select
-              value={participantId}
-              onChange={(e) => setParticipantId(e.target.value)}
-              className="h-11 w-full rounded-2xl border border-input bg-card px-3 text-sm"
-            >
-              <option value="">כללי / כל הטיול</option>
-              {participants.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="type-title">מסמכים</h2>
+        {canParticipate && (
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            aria-label="הוספת מסמך"
+            className="grid size-11 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95"
+          >
+            {uploading ? <Spinner className="size-5" /> : <Plus className="size-5" />}
+          </button>
         )}
-        <div className="flex gap-2">
-          {!isAnonymous && (
-            <Button className="flex-1" loading={uploading} onClick={() => fileRef.current?.click()}>
-              <Upload className="size-4" /> העלאת קובץ
-            </Button>
-          )}
-          <Button variant="outline" className="flex-1" onClick={() => setLinkModal({ name: "", url: "" })}>
-            <LinkIcon className="size-4" /> קישור חיצוני
-          </Button>
-        </div>
-        {/* No `capture` attribute: that forces iOS straight into the camera,
-            skipping its native picker sheet (Photo Library / Take Photo /
-            Browse…) — "Browse" is also how Files-provider apps like Google
-            Drive show up as an upload source, so this covers both. */}
-        <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={onPickFile} />
-        {canScan && (
-          <Button variant="soft" onClick={() => setVoucherOpen(true)}>
-            <ScanLine className="size-4" /> סריקת שובר הזמנה
-          </Button>
-        )}
-      </Card>
-      )}
-
-      {/* filter */}
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        <Chip active={filter === "all"} onClick={() => setFilter("all")}>
-          הכל
-        </Chip>
-        {DOC_CATEGORIES.map((c) => (
-          <Chip key={c.value} active={filter === c.value} onClick={() => setFilter(c.value)}>
-            {c.emoji} {c.label}
-          </Chip>
-        ))}
       </div>
+      {/* No `capture` attribute: that forces iOS straight into the camera,
+          skipping its native picker sheet (Photo Library / Take Photo /
+          Browse…) — "Browse" is also how Files-provider apps like Google
+          Drive show up as an upload source, so this covers both. */}
+      <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={onPickFile} />
+
+      {/* filter — one scrolling row */}
+      {docs.length > 0 && (
+        <div className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&>*]:shrink-0 [&>*]:whitespace-nowrap">
+          <Chip active={filter === "all"} onClick={() => setFilter("all")}>
+            הכל
+          </Chip>
+          {DOC_CATEGORIES.filter((c) => docs.some((d) => groupOf(d.category) === c.value)).map((c) => (
+            <Chip key={c.value} active={filter === c.value} onClick={() => setFilter(c.value)}>
+              {c.emoji} {c.label}
+            </Chip>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-10">
           <Spinner />
         </div>
       ) : filtered.length === 0 ? (
-        <EmptyState emoji="📁" title="אין עדיין מסמכים" description="העלה כרטיסי טיסה, אישורי מלון, ביטוח ודרכונים — או הדבק קישור חיצוני." />
+        <EmptyState
+          emoji="📁"
+          title="אין עדיין מסמכים"
+          description="העלה כרטיסי טיסה, אישורי מלון, ביטוח ודרכונים — או הדבק קישור חיצוני."
+          action={
+            canParticipate && (
+              <Button onClick={() => setAddOpen(true)}>
+                <Plus className="size-4" /> הוספת מסמך
+              </Button>
+            )
+          }
+        />
       ) : (
-        <div className="flex flex-col gap-2">
-          {filtered.map((doc) => (
-            <Card key={doc.id} className="flex items-center gap-3 p-3">
-              <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary-soft text-xl">
-                {DOC_CATEGORIES.find((c) => c.value === doc.category)?.emoji ?? "📄"}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold">{doc.name}</div>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span>{docCategoryLabel(doc.category)}</span>
-                  {doc.participant_id && <span>· {participantName(doc.participant_id)}</span>}
-                  {doc.external_url && <ExternalLink className="size-3" />}
-                </div>
-              </div>
-              {doc.uploaded_by === user?.id ? (
-                <button
-                  onClick={() => toggleVisibility(doc)}
-                  className="grid size-9 place-items-center rounded-xl border border-border text-muted-foreground"
-                  aria-label={doc.visibility === "members" ? "גלוי לכל חברי הטיול — להפוך לפרטי" : "גלוי רק לי — לשתף עם חברי הטיול"}
-                  title={doc.visibility === "members" ? "גלוי לכל חברי הטיול" : "גלוי רק לי"}
-                >
-                  {doc.visibility === "members" ? <Users className="size-4" /> : <Lock className="size-4" />}
-                </button>
-              ) : (
-                <Users className="size-4 shrink-0 text-muted-foreground" aria-label="שותף איתך" />
-              )}
-              <button onClick={() => open(doc)} className="grid size-9 place-items-center rounded-xl border border-border text-primary" aria-label="פתיחה">
-                {doc.external_url ? <ExternalLink className="size-4" /> : <Download className="size-4" />}
-              </button>
-              {doc.uploaded_by === user?.id && (
-                <button onClick={() => remove(doc)} className="text-destructive" aria-label="מחיקה">
-                  <Trash2 className="size-4" />
-                </button>
-              )}
-            </Card>
-          ))}
+        <div className="flex flex-col gap-6">
+          {DOC_CATEGORIES.map((c) => ({ c, list: filtered.filter((d) => groupOf(d.category) === c.value) }))
+            .filter((g) => g.list.length > 0)
+            .map(({ c, list }) => (
+              <GroupedList key={c.value} title={`${c.label} · ${list.length}`}>
+                {list.map((doc) => {
+                  const mine = doc.uploaded_by === user?.id;
+                  return (
+                    <div key={doc.id} className="flex items-center gap-1 pe-1">
+                      <button
+                        type="button"
+                        onClick={() => open(doc)}
+                        className="flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2.5 ps-4 text-start transition-colors active:bg-muted/70"
+                      >
+                        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-lg" aria-hidden>
+                          {c.emoji}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          {/* dir=auto so an English name clamps at its own end; match-parent keeps it right-aligned. */}
+                          <span dir="auto" className="type-headline line-clamp-2 [overflow-wrap:anywhere] [text-align:match-parent]">
+                            {doc.name}
+                          </span>
+                          <span className="type-footnote flex items-center gap-1 text-muted-foreground">
+                            {doc.visibility === "members" ? <Users className="size-3 shrink-0" /> : <Lock className="size-3 shrink-0" />}
+                            <span className="truncate">
+                              {mine ? (doc.visibility === "members" ? "כל חברי הטיול" : "רק אני") : "שותף איתך"}
+                              {doc.participant_id && participantName(doc.participant_id) && (
+                                <>
+                                  {" · "}
+                                  <bdi>{participantName(doc.participant_id)}</bdi>
+                                </>
+                              )}
+                            </span>
+                          </span>
+                        </span>
+                        {doc.external_url ? (
+                          <ExternalLink className="size-4 shrink-0 text-muted-foreground" aria-label="קישור חיצוני" />
+                        ) : (
+                          <Download className="size-4 shrink-0 text-muted-foreground" aria-label="קובץ" />
+                        )}
+                      </button>
+                      {mine && (
+                        <button
+                          type="button"
+                          onClick={() => setActionsFor(doc)}
+                          aria-label={`אפשרויות עבור ${doc.name}`}
+                          className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                        >
+                          <MoreHorizontal className="size-5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </GroupedList>
+            ))}
         </div>
       )}
+
+      {/* Add: who sees it, category, traveller — then how */}
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="הוספת מסמך">
+        <div className="flex flex-col gap-4">
+          <div>
+            <Label>מי יראה את המסמך</Label>
+            <Segmented
+              value={visibility}
+              onChange={setVisibility}
+              options={[
+                { value: "private", label: "רק אני", emoji: "🔒" },
+                { value: "members", label: "כל חברי הטיול", emoji: "👥" },
+              ]}
+            />
+          </div>
+          <div>
+            <Label>קטגוריה</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {DOC_CATEGORIES.map((c) => (
+                <Chip key={c.value} active={category === c.value} onClick={() => setCategory(c.value)}>
+                  {c.emoji} {c.label}
+                </Chip>
+              ))}
+            </div>
+          </div>
+          {participants.length > 0 && (
+            <div>
+              <Label>שייך לנוסע (לא חובה)</Label>
+              <select
+                value={participantId}
+                onChange={(e) => setParticipantId(e.target.value)}
+                className="h-11 w-full rounded-2xl border border-input bg-card px-3 text-sm"
+              >
+                <option value="">כללי / כל הטיול</option>
+                {participants.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="flex flex-col gap-2">
+            {!isAnonymous && (
+              <SheetRow
+                icon={<Upload className="size-5" />}
+                label="העלאת קובץ"
+                hint="תמונה או PDF, עד 20MB"
+                onClick={() => {
+                  setAddOpen(false);
+                  fileRef.current?.click();
+                }}
+              />
+            )}
+            <SheetRow
+              icon={<LinkIcon className="size-5" />}
+              label="קישור חיצוני"
+              hint="Drive / Dropbox / OneDrive"
+              onClick={() => {
+                setAddOpen(false);
+                setLinkModal({ name: "", url: "" });
+              }}
+            />
+            {canScan && (
+              <SheetRow
+                icon={<ScanLine className="size-5" />}
+                label="סריקת שובר הזמנה"
+                hint="טיסה, מלון או רכב — הפרטים נכנסים לטיול"
+                onClick={() => {
+                  setAddOpen(false);
+                  setVoucherOpen(true);
+                }}
+              />
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* The uploader's actions on one document */}
+      <Modal open={!!actionsFor} onClose={() => setActionsFor(null)} title={actionsFor?.name ?? ""}>
+        {actionsFor && (
+          <div className="flex flex-col gap-2">
+            <SheetRow
+              icon={actionsFor.external_url ? <ExternalLink className="size-5" /> : <Download className="size-5" />}
+              label="פתיחה"
+              onClick={() => {
+                const d = actionsFor;
+                setActionsFor(null);
+                open(d);
+              }}
+            />
+            <SheetRow
+              icon={actionsFor.visibility === "members" ? <Lock className="size-5" /> : <Users className="size-5" />}
+              label={actionsFor.visibility === "members" ? "להפוך לפרטי (רק אני)" : "לשתף עם כל חברי הטיול"}
+              onClick={() => {
+                const d = actionsFor;
+                setActionsFor(null);
+                toggleVisibility(d);
+              }}
+            />
+            <SheetRow
+              icon={<Trash2 className="size-5" />}
+              label="מחיקה"
+              destructive
+              onClick={() => {
+                const d = actionsFor;
+                setActionsFor(null);
+                remove(d);
+              }}
+            />
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={!!linkModal}

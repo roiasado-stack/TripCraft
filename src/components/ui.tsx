@@ -349,19 +349,27 @@ export function Checkbox({
   checked,
   onChange,
   className,
+  label,
+  disabled,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   className?: string;
+  /** Accessible name — the item it checks off. */
+  label?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "flex size-7 shrink-0 items-center justify-center rounded-xl border-2 transition",
+        // 28px box; the ::before pad makes the tap target 44px.
+        "relative flex size-7 shrink-0 items-center justify-center rounded-xl border-2 transition before:absolute before:-inset-2 before:content-['']",
         checked ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card",
         className,
       )}
