@@ -89,6 +89,9 @@ type Body = {
   tune?: string | null;
   /** For kind: "photo" (free-text place, resolved to a Wikipedia article) or kind: "geocode" (place to look up). */
   query?: string;
+  /** For kind: "photo": "destination" when `query` is a whole trip destination (city, country,
+   *  several places) rather than one venue — the hero photo of the trip screen. */
+  scope?: "place" | "destination";
   trip: {
     destination: string;
     trip_type: string;
@@ -392,6 +395,20 @@ function parseWikipediaTitle(raw: unknown): string | null {
 const WIKIPEDIA_USER_AGENT = "TripCraft/1.0 (https://tripcraft-lac.vercel.app)";
 
 /** Only ever store/show images served from Wikimedia's own upload hosts. */
+// Wikipedia's page image isn't always a photograph (a museum's logo, a country's
+// flag or map, a city's coat of arms). Same pattern as src/lib/photo-url.ts —
+// `npm run rules` fails if the two differ.
+const NOT_A_PHOTO =
+  /\.svg(\.png)?$|(^|[^a-z])(logo|logotype|emblem|coat[ _-]of[ _-]arms|flag[ _-]of|seal[ _-]of|map[ _-]of|(location|locator|relief|topographic)[ _-]?map|wappen|escudo|blason|bandera|karte)([^a-z]|$)/i;
+
+function looksLikePhoto(u: string): boolean {
+  try {
+    return !NOT_A_PHOTO.test(decodeURIComponent(new URL(u).pathname.split("/").pop() ?? ""));
+  } catch {
+    return false;
+  }
+}
+
 function isWikimediaImage(u: unknown): u is string {
   if (typeof u !== "string") return false;
   try {
@@ -424,7 +441,8 @@ async function wikipediaPhoto(title: string): Promise<{ url: string | null; fail
     try {
       const { data } = await db.from("photo_cache").select("url").eq("query_key", cacheKey).maybeSingle();
       const cachedUrl = (data as { url?: string } | null)?.url;
-      if (isWikimediaImage(cachedUrl)) return { url: cachedUrl, cached: true };
+      // A logo cached before the photo filter existed is skipped (and re-looked-up).
+      if (isWikimediaImage(cachedUrl) && looksLikePhoto(cachedUrl)) return { url: cachedUrl, cached: true };
     } catch {
       // Cache is an optimization only — fall through to Wikipedia.
     }
@@ -448,6 +466,7 @@ async function wikipediaPhoto(title: string): Promise<{ url: string | null; fail
     const found = page.thumbnail?.source;
     if (!found) return { url: null, fail: `no_image:${clean.slice(0, 40)}` };
     if (!isWikimediaImage(found)) return { url: null, fail: "bad_host" };
+    if (!looksLikePhoto(found)) return { url: null, fail: `not_a_photo:${clean.slice(0, 40)}` };
     if (db) {
       try {
         // Awaited on purpose: an un-awaited write can be cut off when the function returns.
@@ -1182,12 +1201,16 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
 
     if (body.kind === "photo") {
       const query = (body.query ?? "").trim().slice(0, 300);
-      const photoResponse = (image_url: string | null) =>
-        new Response(JSON.stringify({ ok: true, image_url }), {
+      // `reason` tells the caller whether a null is a definite answer ("none": no article
+      // or no usable photo) or a passing failure ("unavailable": cap, API or network) —
+      // the app remembers only definite misses.
+      const photoResponse = (image_url: string | null, reason: "found" | "none" | "unavailable" = image_url ? "found" : "none") =>
+        new Response(JSON.stringify({ ok: true, image_url, reason }), {
           headers: { ...cors, "Content-Type": "application/json" },
         });
       if (!query) return photoResponse(null);
-      if (await overDailyCap(supabase, isAnonymous)) return photoResponse(null);
+      if (await overDailyCap(supabase, isAnonymous)) return photoResponse(null, "unavailable");
+      const isDestination = body.scope === "destination";
       try {
         const start = Date.now();
         const tRes = await fetch(ANTHROPIC_URL, {
@@ -1199,7 +1222,15 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
             output_config: EXTRACTION_OUTPUT_CONFIG,
             messages: [{
               role: "user",
-              content: `Place (may be in Hebrew, usually followed by the trip destination): "${query}"
+              content: isDestination
+                ? `Trip destination (may be in Hebrew, may list several places): "${query}"
+
+Reply with ONLY the exact title of one English Wikipedia article whose lead image is a photograph that shows this destination — no explanation, no quotes, no URL.
+- A city or town: the city's own article (e.g. "Rome").
+- Several places: the first one.
+- A country, island group or large region: its most iconic landmark or city (e.g. "Mount Fuji" for Japan, "Santorini" for Greece) — never the country's own article, whose lead image is a flag or a map.
+Reply with the single word NONE only if you cannot tell which place this is.`
+                : `Place (may be in Hebrew, usually followed by the trip destination): "${query}"
 
 Reply with ONLY the exact title of the English Wikipedia article about this specific place — no explanation, no quotes, no URL.
 Reply with the single word NONE if you are not confident an English Wikipedia article exists for exactly this place (most restaurants, cafes, shops, hotels, tours and generic activities have none).
@@ -1212,7 +1243,7 @@ Never answer with the article of the surrounding city, region or country — e.g
           const detail = await tRes.text().catch(() => "");
           console.error("Wikipedia title lookup failed", tRes.status);
           await logRun({ kind: "generate_photo_title", tripId: body.trip_id, inputTokens: 0, outputTokens: 0, costUsd: 0, latencyMs: tLatency, status: "error", errorMessage: detail });
-          return photoResponse(null);
+          return photoResponse(null, "unavailable");
         }
         const tPayload = await tRes.json();
         const usage = tPayload?.usage ?? {};
@@ -1233,10 +1264,12 @@ Never answer with the article of the surrounding city, region or country — e.g
           status: "ok",
           errorMessage: `diag: title=${title ?? "NONE"} photo=${photo.url ? (photo.cached ? "cached" : "found") : photo.fail}`,
         });
-        return photoResponse(photo.url);
+        // Wikipedia being down or slow isn't an answer; no article / no usable photo is.
+        const passing = !photo.url && /^(http_|exception)/.test(photo.fail ?? "");
+        return photoResponse(photo.url, photo.url ? "found" : passing ? "unavailable" : "none");
       } catch (e) {
         console.error("Wikipedia title lookup threw", e);
-        return photoResponse(null);
+        return photoResponse(null, "unavailable");
       }
     }
 

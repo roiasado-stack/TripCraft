@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PlacePhoto } from "@/lib/ai";
+import { isPhotoUrl } from "@/lib/photo-url";
 
 /**
  * Credits Google Places requires on its photos: the photographer (linked) and
@@ -58,7 +59,7 @@ export function wikimediaFilePage(url?: string | null): string | null {
  * `illustrative` marks a stand-in ambience photo (see @/lib/photos) so it's
  * never mistaken for the venue itself.
  */
-function ImageCredit({ imageUrl, compact, illustrative }: { imageUrl: string; compact?: boolean; illustrative?: boolean }) {
+export function ImageCredit({ imageUrl, compact, illustrative }: { imageUrl: string; compact?: boolean; illustrative?: boolean }) {
   const page = wikimediaFilePage(imageUrl);
   if (!page) return null;
   const label = illustrative ? "תמונה להמחשה, לא של המקום עצמו. מקור ורישיון" : "מקור התמונה ורישיון (ויקיפדיה)";
@@ -133,15 +134,29 @@ export function CardCoverImage({
   /** Set when imageUrl came from Google Places — shows its required credits. */
   googlePhoto?: PlacePhoto | null;
 }) {
+  // A stored logo/flag/map (Wikipedia's page image isn't always a photo) shows as no photo.
+  if (!isPhotoUrl(imageUrl)) imageUrl = null;
   const hasImage = !!imageUrl;
   return (
     // No photo yet? Keep the fallback compact — a full 16:9 hero of empty
     // gradient just for one centered icon reads as wasted space; a short
     // banner still gives the kind badge room without pretending there's a
     // photo there.
-    <div className={cn("relative w-full overflow-hidden rounded-t-3xl", hasImage ? "aspect-[16/9]" : "h-20", className)}>
+    // Without a photo but with a title over it, the box grows with the title (two
+    // lines at a large text size don't fit the short banner).
+    <div
+      className={cn(
+        "relative w-full overflow-hidden rounded-t-3xl",
+        hasImage ? "aspect-[16/9]" : children ? "min-h-24" : "h-20",
+        className,
+      )}
+    >
       {hasImage ? (
         <img src={imageUrl!} alt={alt} className="size-full object-cover" loading="lazy" />
+      ) : children ? (
+        <div className="absolute inset-0">
+          <Fallback gradient={gradient} icon={icon} />
+        </div>
       ) : (
         <Fallback gradient={gradient} icon={icon} />
       )}
@@ -153,7 +168,9 @@ export function CardCoverImage({
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
       )}
       {cornerSlot && <div className="absolute end-3 top-3">{cornerSlot}</div>}
-      {children && <div className="absolute inset-x-0 bottom-0 p-3 text-white">{children}</div>}
+      {children && (
+        <div className={cn("p-3 text-white", hasImage ? "absolute inset-x-0 bottom-0" : "relative pt-12")}>{children}</div>
+      )}
     </div>
   );
 }
@@ -184,6 +201,7 @@ export function CardThumbnail({
   className?: string;
   illustrative?: boolean;
 }) {
+  if (!isPhotoUrl(imageUrl)) imageUrl = null;
   return (
     <div className={cn("relative shrink-0 overflow-hidden", size, rounded, className)}>
       {imageUrl ? (

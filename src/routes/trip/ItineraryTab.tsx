@@ -17,6 +17,7 @@ import { aiErrorMessage, generateContent, lookupKosher, searchCoordinates, searc
 import { daysBetween, formatDayHeb, ITINERARY_CATEGORIES, itineraryCategory } from "@/lib/trip-options";
 import { TripMap, type TripMapItem } from "@/components/TripMap";
 import { localDateString, parseLocalDate } from "@/lib/trip-dates";
+import { isPhotoUrl } from "@/lib/photo-url";
 
 /**
  * Departure-day flights leave from the origin airport, so scoping them to the
@@ -225,7 +226,7 @@ export default function ItineraryTab() {
         <FillPhotos
           tripId={trip.id}
           destination={trip.destination}
-          missing={items.filter((i) => i.category === "activity" && !i.image_url).length}
+          missing={items.filter((i) => i.category === "activity" && !isPhotoUrl(i.image_url)).length}
           onDone={load}
         />
       )}
@@ -305,8 +306,8 @@ export default function ItineraryTab() {
                   return (
                     <Card key={it.id} className="flex items-start gap-3 p-3">
                       <CardThumbnail
-                        imageUrl={it.image_url ?? ambientPhoto(it.category === "food", it.title)}
-                        illustrative={!it.image_url && it.category === "food"}
+                        imageUrl={(isPhotoUrl(it.image_url) ? it.image_url : null) ?? ambientPhoto(it.category === "food", it.title)}
+                        illustrative={!isPhotoUrl(it.image_url) && it.category === "food"}
                         alt={it.title}
                         gradient="sunset"
                         size="size-10"

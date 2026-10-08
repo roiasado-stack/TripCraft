@@ -22,6 +22,8 @@ VALUES ('b4ea0000-0000-4000-8000-000000000001', :'uid', 'חופשה ברומא',
         current_date + 40, current_date + 45, '🇮🇹');
 -- Shared, so the public brochure can be checked at /share/breakui-demo.
 UPDATE trips SET is_shared = true, share_slug = 'breakui-demo' WHERE id = 'b4ea0000-0000-4000-8000-000000000001';
+-- The destination photo the app would look up for Rome (Wikipedia's page image).
+UPDATE trips SET image_url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Trevi_Fountain%2C_Rome%2C_Italy_2_-_May_2007.jpg/960px-Trevi_Fountain%2C_Rome%2C_Italy_2_-_May_2007.jpg' WHERE id = 'b4ea0000-0000-4000-8000-000000000001';
 INSERT INTO participants (trip_id, name) SELECT 'b4ea0000-0000-4000-8000-000000000001', n
   FROM unnest(ARRAY['רועי', 'מיכל', 'נועה', 'איתי']) n;
 INSERT INTO flights (trip_id, direction, airline, flight_number, from_airport, to_airport, depart_at) VALUES

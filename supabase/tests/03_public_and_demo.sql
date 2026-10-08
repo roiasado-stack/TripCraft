@@ -32,6 +32,37 @@ SELECT pg_temp.check('anon: cannot read AI spend totals',
   pg_temp.try('SELECT public.app_agent_daily_cost_usd()') = -1);
 RESET ROLE;
 
+-- Destination photo on the brochure (021): a Wikimedia image only -------------------
+UPDATE public.trips SET image_url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/de/Colosseo_2020.jpg/960px-Colosseo_2020.jpg'
+WHERE id = pg_temp.id('trip');
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: the brochure includes the trip''s Wikimedia photo',
+  public.get_shared_trip('test-slug-0123456789') -> 'trip' ->> 'image_url' LIKE 'https://upload.wikimedia.org/%');
+RESET ROLE;
+-- Written straight through the API, any URL could sit here — e.g. a pixel that logs every visitor's IP.
+UPDATE public.trips SET image_url = 'https://tracker.example/pixel.gif' WHERE id = pg_temp.id('trip');
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: a non-Wikimedia image_url never reaches the brochure',
+  public.get_shared_trip('test-slug-0123456789') -> 'trip' ->> 'image_url' IS NULL);
+RESET ROLE;
+-- Lookalike hosts and plain http never pass the brochure's Wikimedia filter.
+UPDATE public.trips SET image_url = 'https://upload.wikimedia.org.evil.com/p.gif' WHERE id = pg_temp.id('trip');
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: a lookalike host (wikimedia.org.evil.com) never reaches the brochure',
+  public.get_shared_trip('test-slug-0123456789') -> 'trip' ->> 'image_url' IS NULL);
+RESET ROLE;
+UPDATE public.trips SET image_url = 'https://upload.wikimedia.org@evil.com/p.gif' WHERE id = pg_temp.id('trip');
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: a userinfo trick (wikimedia.org@evil.com) never reaches the brochure',
+  public.get_shared_trip('test-slug-0123456789') -> 'trip' ->> 'image_url' IS NULL);
+RESET ROLE;
+UPDATE public.trips SET image_url = 'http://upload.wikimedia.org/x.jpg' WHERE id = pg_temp.id('trip');
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: a plain-http Wikimedia URL never reaches the brochure',
+  public.get_shared_trip('test-slug-0123456789') -> 'trip' ->> 'image_url' IS NULL);
+RESET ROLE;
+UPDATE public.trips SET image_url = NULL WHERE id = pg_temp.id('trip');
+
 -- Unshared trip is invisible even with the old slug -----------------------------------
 UPDATE public.trips SET is_shared = false WHERE id = pg_temp.id('trip');
 SELECT pg_temp.login_anon();

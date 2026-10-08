@@ -132,3 +132,25 @@ SELECT pg_temp.check('owner: cannot create a trip in someone else''s name',
 SELECT pg_temp.check('owner: cannot write AI spend rows directly',
   pg_temp.try(format('INSERT INTO agent_runs (user_id, cost_usd) VALUES (%L, -100)', pg_temp.id('owner'))) = -1);
 RESET ROLE;
+
+-- Destination photo (trips.image_url): an editor-level trip detail -------------------
+SELECT pg_temp.login(pg_temp.id('viewer'));
+SELECT pg_temp.check('viewer: cannot set the trip photo',
+  pg_temp.try(format('UPDATE trips SET image_url = %L WHERE id = %L', 'https://upload.wikimedia.org/x.jpg', pg_temp.id('trip'))) = 0);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('participant'));
+SELECT pg_temp.check('participant: cannot set the trip photo',
+  pg_temp.try(format('UPDATE trips SET image_url = %L WHERE id = %L', 'https://upload.wikimedia.org/x.jpg', pg_temp.id('trip'))) = 0);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('pending'));
+SELECT pg_temp.check('pending: cannot set the trip photo',
+  pg_temp.try(format('UPDATE trips SET image_url = %L WHERE id = %L', 'https://upload.wikimedia.org/x.jpg', pg_temp.id('trip'))) = 0);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('editor: can set the trip photo',
+  pg_temp.try(format('UPDATE trips SET image_url = %L WHERE id = %L', 'https://upload.wikimedia.org/x.jpg', pg_temp.id('trip'))) = 1);
+RESET ROLE;
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: cannot set the trip photo',
+  pg_temp.try(format('UPDATE trips SET image_url = %L WHERE id = %L', 'https://upload.wikimedia.org/x.jpg', pg_temp.id('trip'))) IN (0, -1));
+RESET ROLE;

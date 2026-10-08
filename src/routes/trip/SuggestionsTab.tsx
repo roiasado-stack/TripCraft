@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarPlus, Compass, Heart, MessageCircle, Plus, Sparkles, Trash2 } from "lucide-react";
+import { CalendarPlus, Compass, Heart, List, Map as MapIcon, MapPin, MessageCircle, MoreHorizontal, Navigation, PenLine, Plus, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Suggestion } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { can } from "@/lib/permissions";
-import { TripHeader, ScreenTitle } from "@/components/TripHeader";
-import { Button, Card, Chip, EmptyState, Field, Input, Modal, Segmented, Spinner, Textarea } from "@/components/ui";
+import { TripHeader } from "@/components/TripHeader";
+import { Button, Card, Chip, EmptyState, Field, GroupedList, Input, Modal, Spinner, Textarea } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
 import { useSuggestionPhoto } from "@/lib/photos";
 import { FillPhotos } from "@/components/FillPhotos";
@@ -14,12 +14,13 @@ import { aiErrorMessage, generateContent, searchCoordinates, searchPhoto, type T
 import { cn } from "@/lib/utils";
 import { SUGGESTION_KINDS } from "@/lib/trip-options";
 import { destinationPicks, pickToRow } from "@/lib/destinations";
-import { DirectionsLink, LinkChip, MapLink } from "@/components/MapLink";
-import { resolveMapUrl, vegetarianSearchUrl } from "@/lib/maps";
+import { LinkChip } from "@/components/MapLink";
+import { directionsUrl, isSafeHttpUrl, resolveMapUrl, vegetarianSearchUrl } from "@/lib/maps";
 import { KosherPanel } from "@/components/KosherPanel";
 import { CardCoverImage } from "@/components/MediaCard";
 import { TripMap, type TripMapItem } from "@/components/TripMap";
 import { localDateString } from "@/lib/trip-dates";
+import { isPhotoUrl } from "@/lib/photo-url";
 
 const TUNE: { value: TuneOption; label: string }[] = [
   { value: "more_kids", label: "יותר ידידותי לילדים" },
@@ -44,9 +45,14 @@ export default function SuggestionsTab() {
   const [manual, setManual] = useState<{ kind: string; title: string; description: string } | null>(null);
   const [picking, setPicking] = useState(false);
   const [view, setView] = useState<"list" | "map">("list");
+  const [addOpen, setAddOpen] = useState(false);
+  const [actionsFor, setActionsFor] = useState<Suggestion | null>(null);
 
   /** Curated + generic highlights for the destination, matched to the group. */
   const addDestinationPicks = async () => {
+    // Already running (the sheet closes at once, so a second tap is easy): two runs
+    // would both check the same old list and insert every pick twice.
+    if (picking) return;
     setPicking(true);
     try {
       const ages = participants
@@ -163,40 +169,66 @@ export default function SuggestionsTab() {
     load();
   };
 
+  // Places with a photo (attractions, restaurants) read best as photo cards; tips and
+  // gear have no photo and read best as a quiet list.
+  const placeKinds = new Set(["attraction", "restaurant"]);
+  const places = filtered.filter((i) => placeKinds.has(i.kind));
+  const notes = filtered.filter((i) => !placeKinds.has(i.kind));
+  const actionsMapUrl = actionsFor
+    ? resolveMapUrl(actionsFor.map_url, actionsFor.location ?? actionsFor.title, trip.destination)
+    : null;
+  const actionsDirections = actionsFor ? directionsUrl(actionsFor.location ?? actionsFor.title, trip.destination) : null;
+
   return (
     <div className="px-4">
       <TripHeader trip={trip} subtitle="אטרקציות ומסעדות" />
-      <ScreenTitle
-        title="מומלצים"
-        action={
-          canParticipate && (
-          // Four buttons don't fit beside the title on a 390px phone; in RTL the
-          // row then spills off the left edge and the browser zooms the whole
-          // page out. Labels hide below 420px (icons + aria-labels stay) and the
-          // row may wrap as a last resort.
-          <div className="flex flex-wrap justify-end gap-1.5">
-            <Button size="sm" variant="outline" onClick={() => setManual({ kind: "attraction", title: "", description: "" })} aria-label="הוספת המלצה">
-              <Plus className="size-4" />
-            </Button>
-            <Button size="sm" variant="outline" loading={picking} onClick={addDestinationPicks} aria-label="המקומות המובילים ביעד">
-              <Compass className="size-4" /> <span className="max-[420px]:hidden">מובילים</span>
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => navigate("../ask")} aria-label="שאל את הסוכן">
-              <MessageCircle className="size-4" /> <span className="max-[420px]:hidden">שאל</span>
-            </Button>
-            <Button size="sm" variant="soft" onClick={() => setShowGen(true)}>
-              <Sparkles className="size-4" /> AI
-            </Button>
-          </div>
-          )
-        }
-      />
+
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="type-title">מומלצים</h2>
+        <div className="flex items-center gap-1">
+          {!loading && filtered.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setView(view === "list" ? "map" : "list")}
+              aria-label={view === "list" ? "תצוגת מפה" : "תצוגת רשימה"}
+              className="grid size-11 place-items-center rounded-full text-primary transition-colors active:bg-muted/70"
+            >
+              {view === "list" ? <MapIcon className="size-5" /> : <List className="size-5" />}
+            </button>
+          )}
+          {canParticipate && (
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              aria-label="הוספת המלצות"
+              className="grid size-11 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95"
+            >
+              <Plus className="size-5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* One row of filters, scrolling sideways instead of wrapping onto a second line. */}
+      <div className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&>*]:shrink-0 [&>*]:whitespace-nowrap">
+        <Chip active={filter === "all" && !onlyLiked} onClick={() => { setFilter("all"); setOnlyLiked(false); }}>
+          הכל
+        </Chip>
+        {SUGGESTION_KINDS.map((k) => (
+          <Chip key={k.value} active={filter === k.value} onClick={() => setFilter(filter === k.value ? "all" : k.value)}>
+            {k.emoji} {k.label}
+          </Chip>
+        ))}
+        <Chip active={onlyLiked} onClick={() => setOnlyLiked((v) => !v)}>
+          <Heart className={cn("size-3.5", onlyLiked && "fill-current")} /> אהבתי
+        </Chip>
+      </div>
 
       {canEdit && (
         <FillPhotos
           tripId={trip.id}
           destination={trip.destination}
-          missing={items.filter((i) => i.kind === "attraction" && !i.image_url).length}
+          missing={items.filter((i) => i.kind === "attraction" && !isPhotoUrl(i.image_url)).length}
           onDone={load}
         />
       )}
@@ -213,39 +245,6 @@ export default function SuggestionsTab() {
           </div>
           <p className="mt-1.5 text-[11px] text-muted-foreground">חיפוש חי — תמיד מעודכן.</p>
         </Card>
-      )}
-
-      {/* filters */}
-      <div className="mb-3 flex flex-wrap gap-1.5">
-        <Chip active={filter === "all"} onClick={() => setFilter("all")}>
-          הכל
-        </Chip>
-        {SUGGESTION_KINDS.map((k) => (
-          <Chip key={k.value} active={filter === k.value} onClick={() => setFilter(k.value)}>
-            {k.emoji} {k.label}
-          </Chip>
-        ))}
-        <button
-          onClick={() => setOnlyLiked((v) => !v)}
-          className={cn(
-            "ms-auto flex items-center gap-1 rounded-full border px-3 py-2 text-sm font-semibold",
-            onlyLiked ? "border-accent bg-accent-soft text-accent" : "border-border",
-          )}
-        >
-          <Heart className={cn("size-4", onlyLiked && "fill-current")} /> אהבתי
-        </button>
-      </div>
-
-      {!loading && filtered.length > 0 && (
-        <Segmented
-          className="mb-3"
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "list", label: "רשימה", emoji: "📋" },
-            { value: "map", label: "מפה", emoji: "🗺️" },
-          ]}
-        />
       )}
 
       {loading ? (
@@ -272,11 +271,11 @@ export default function SuggestionsTab() {
           <TripMap items={mapItems} />
         )
       ) : (
-        <div className="flex flex-col gap-3">
-          {filtered.map((s) => {
+        <div className="flex flex-col gap-4">
+          {places.map((s) => {
             const kind = SUGGESTION_KINDS.find((k) => k.value === s.kind);
             return (
-              <Card key={s.id} className="overflow-hidden p-0">
+              <article key={s.id} className="overflow-hidden rounded-3xl bg-card text-card-foreground">
                 <SuggestionCover
                   s={s}
                   tripId={trip.id}
@@ -284,54 +283,174 @@ export default function SuggestionsTab() {
                   canResolve={canEdit}
                   icon={<span className="text-4xl">{kind?.emoji ?? "📍"}</span>}
                   cornerSlot={
-                    <span className="inline-flex items-center gap-1 rounded-full bg-card/90 px-2.5 py-1 text-xs font-semibold text-foreground shadow-soft backdrop-blur">
-                      {kind?.emoji ?? "📍"} {kind?.label}
-                    </span>
+                    canParticipate ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleLike(s)}
+                        aria-label={s.liked ? "הסרה מאהבתי" : "אהבתי"}
+                        aria-pressed={s.liked}
+                        className="grid size-10 place-items-center rounded-full bg-black/45 text-white backdrop-blur transition-transform active:scale-90"
+                      >
+                        <Heart className={cn("size-5", s.liked && "fill-current text-accent")} />
+                      </button>
+                    ) : null
                   }
-                />
-                <div className="p-4">
-                  <div className="font-bold">{s.title}</div>
-                  {s.description && <p className="mt-0.5 text-sm text-muted-foreground">{s.description}</p>}
-                  {s.tags?.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {s.tags.map((t) => (
-                        <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                          {t}
-                          {/* A saved suggestion is never a kosher source — say so next to the claim. */}
-                          {/כשר|kosher/i.test(t) && " · לא מאומת"}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {(s.map_url || s.location) && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <MapLink url={resolveMapUrl(s.map_url, s.location ?? s.title, trip.destination)} />
-                      <DirectionsLink place={s.location ?? s.title} near={trip.destination} />
-                    </div>
-                  )}
-                  {canParticipate && (
-                  <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-                    <button onClick={() => toggleLike(s)} className={cn("flex items-center gap-1 text-sm font-semibold", s.liked ? "text-accent" : "text-muted-foreground")}>
-                      <Heart className={cn("size-4", s.liked && "fill-current")} /> אהבתי
-                    </button>
-                    {canEdit && (
-                      <>
-                        <button onClick={() => addToItinerary(s)} className="flex items-center gap-1 text-sm font-semibold text-primary">
-                          <CalendarPlus className="size-4" /> למסלול
-                        </button>
-                        <button onClick={() => remove(s.id)} className="ms-auto text-destructive" aria-label="מחיקה">
-                          <Trash2 className="size-4" />
-                        </button>
-                      </>
-                    )}
+                >
+                  <div className="type-footnote font-semibold text-white">
+                    {kind?.emoji} {kind?.label}
                   </div>
+                  <div className="type-title line-clamp-2 text-white [overflow-wrap:anywhere] [unicode-bidi:plaintext]">{s.title}</div>
+                </SuggestionCover>
+                {(s.description || s.tags?.length > 0) && (
+                  <div className="px-4 pt-3">
+                    {s.description && <p className="type-footnote line-clamp-3 text-muted-foreground">{s.description}</p>}
+                    <SuggestionTags tags={s.tags} />
+                  </div>
+                )}
+                <div className="flex items-center gap-2 px-2 py-2">
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => addToItinerary(s)}
+                      className="type-headline flex min-h-11 items-center gap-1.5 rounded-full px-3 text-primary transition-colors active:bg-muted/70"
+                    >
+                      <CalendarPlus className="size-5" /> למסלול
+                    </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setActionsFor(s)}
+                    aria-label={`אפשרויות ל${s.title}`}
+                    className="ms-auto grid size-11 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                  >
+                    <MoreHorizontal className="size-5" />
+                  </button>
                 </div>
-              </Card>
+              </article>
             );
           })}
+
+          {notes.length > 0 && (
+            <GroupedList title={filter === "all" ? "טיפים וציוד" : undefined}>
+              {notes.map((s) => {
+                const kind = SUGGESTION_KINDS.find((k) => k.value === s.kind);
+                return (
+                  <div key={s.id} className="flex items-start gap-3 py-3 ps-4 pe-1">
+                    <span className="mt-0.5 text-xl" aria-hidden>
+                      {kind?.emoji ?? "💡"}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="type-headline [overflow-wrap:anywhere] [unicode-bidi:plaintext]">{s.title}</div>
+                      {s.description && (
+                        <p className="type-footnote mt-0.5 text-muted-foreground [overflow-wrap:anywhere]">{s.description}</p>
+                      )}
+                      <SuggestionTags tags={s.tags} />
+                    </div>
+                    {canParticipate && (
+                      <button
+                        type="button"
+                        onClick={() => toggleLike(s)}
+                        aria-label={s.liked ? "הסרה מאהבתי" : "אהבתי"}
+                        aria-pressed={s.liked}
+                        className={cn(
+                          "grid size-11 shrink-0 place-items-center rounded-full transition-colors active:bg-muted/70",
+                          s.liked ? "text-accent" : "text-muted-foreground",
+                        )}
+                      >
+                        <Heart className={cn("size-5", s.liked && "fill-current")} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActionsFor(s)}
+                      aria-label={`אפשרויות ל${s.title}`}
+                      className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                    >
+                      <MoreHorizontal className="size-5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </GroupedList>
+          )}
         </div>
       )}
+
+      {/* Every way to add, behind one "+" */}
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="הוספת המלצות">
+        <div className="flex flex-col gap-2">
+          <SheetRow
+            icon={<Sparkles className="size-5" />}
+            label="יצירה עם AI"
+            hint="מותאם לגילאים ולהעדפות של המשתתפים"
+            onClick={() => {
+              setAddOpen(false);
+              setShowGen(true);
+            }}
+          />
+          <SheetRow
+            icon={<Compass className="size-5" />}
+            label="המקומות המובילים ביעד"
+            hint={picking ? "מוסיף…" : undefined}
+            onClick={() => {
+              setAddOpen(false);
+              addDestinationPicks();
+            }}
+          />
+          <SheetRow
+            icon={<PenLine className="size-5" />}
+            label="הוספה ידנית"
+            onClick={() => {
+              setAddOpen(false);
+              setManual({ kind: "attraction", title: "", description: "" });
+            }}
+          />
+          <SheetRow
+            icon={<MessageCircle className="size-5" />}
+            label="שאל את הסוכן"
+            onClick={() => {
+              setAddOpen(false);
+              navigate("../ask");
+            }}
+          />
+        </div>
+      </Modal>
+
+      {/* One suggestion's secondary actions */}
+      <Modal open={!!actionsFor} onClose={() => setActionsFor(null)} title={actionsFor?.title ?? ""}>
+        {actionsFor && (
+          <div className="flex flex-col gap-2">
+            {actionsMapUrl && isSafeHttpUrl(actionsMapUrl) && (
+              <SheetRow icon={<MapPin className="size-5" />} label="פתיחה במפה" href={actionsMapUrl} />
+            )}
+            {actionsDirections && <SheetRow icon={<Navigation className="size-5" />} label="ניווט" href={actionsDirections} />}
+            {/* Place cards show "למסלול" on the card itself; tips and gear keep it here. */}
+            {canEdit && !placeKinds.has(actionsFor.kind) && (
+              <SheetRow
+                icon={<CalendarPlus className="size-5" />}
+                label="הוספה למסלול"
+                onClick={() => {
+                  const item = actionsFor;
+                  setActionsFor(null);
+                  addToItinerary(item);
+                }}
+              />
+            )}
+            {canEdit && (
+              <SheetRow
+                icon={<Trash2 className="size-5" />}
+                label="מחיקה"
+                destructive
+                onClick={() => {
+                  const id = actionsFor.id;
+                  setActionsFor(null);
+                  remove(id);
+                }}
+              />
+            )}
+          </div>
+        )}
+      </Modal>
 
       {/* generate modal */}
       <Modal
@@ -407,6 +526,7 @@ function SuggestionCover({
   canResolve,
   icon,
   cornerSlot,
+  children,
 }: {
   s: Suggestion;
   tripId: string;
@@ -414,6 +534,7 @@ function SuggestionCover({
   canResolve: boolean;
   icon: React.ReactNode;
   cornerSlot: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   const photo = useSuggestionPhoto({
     tripId,
@@ -436,6 +557,64 @@ function SuggestionCover({
       gradient="sea"
       icon={icon}
       cornerSlot={cornerSlot}
-    />
+      className="rounded-t-none"
+    >
+      {children}
+    </CardCoverImage>
+  );
+}
+
+/** A full-width action in a bottom sheet: a button, or a link that opens outside. */
+function SheetRow({
+  icon,
+  label,
+  hint,
+  href,
+  onClick,
+  destructive,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  hint?: string;
+  href?: string;
+  onClick?: () => void;
+  destructive?: boolean;
+}) {
+  const cls = cn(
+    "flex min-h-14 w-full items-center gap-3 rounded-2xl bg-muted px-4 py-3 text-start transition-colors active:bg-muted/60",
+    destructive ? "text-destructive" : "text-foreground",
+  );
+  const body = (
+    <>
+      <span className={destructive ? "text-destructive" : "text-primary"}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="type-headline block">{label}</span>
+        {hint && <span className="type-footnote block text-muted-foreground">{hint}</span>}
+      </span>
+    </>
+  );
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+      {body}
+    </a>
+  ) : (
+    <button type="button" onClick={onClick} className={cls}>
+      {body}
+    </button>
+  );
+}
+
+/** A suggestion's tags. A saved suggestion is never a kosher source — say so next to the claim. */
+function SuggestionTags({ tags }: { tags?: string[] | null }) {
+  if (!tags?.length) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1">
+      {tags.map((t) => (
+        <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+          {t}
+          {/כשר|kosher/i.test(t) && " · לא מאומת"}
+        </span>
+      ))}
+    </div>
   );
 }

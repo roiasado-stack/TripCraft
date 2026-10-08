@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { CalendarDays, CheckSquare, FileText, Home, MapPinned } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -15,6 +15,8 @@ export type TripContext = {
   role: TripRole;
   participants: Participant[];
   reloadParticipants: () => Promise<void>;
+  /** Re-read the trip row after writing to it (e.g. the hero photo). */
+  reloadTrip: () => Promise<void>;
   openShare: () => void;
 };
 
@@ -39,6 +41,17 @@ export default function TripLayout() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "notfound">("loading");
   const [shareOpen, setShareOpen] = useState(false);
+
+  // The trip currently on screen. A reload that finishes after the user moved to
+  // another trip (e.g. right after "duplicate") must not swap the old one back in.
+  const currentTripId = useRef(tripId);
+  currentTripId.current = tripId;
+  const reloadTrip = async () => {
+    const id = tripId;
+    if (!id) return;
+    const { data } = await supabase.from("trips").select("*").eq("id", id).maybeSingle();
+    if (data && currentTripId.current === id) setTrip(data as Trip);
+  };
 
   const reloadParticipants = async () => {
     if (!tripId) return;
@@ -83,6 +96,7 @@ export default function TripLayout() {
     role,
     participants,
     reloadParticipants,
+    reloadTrip,
     openShare: () => setShareOpen(true),
   };
 

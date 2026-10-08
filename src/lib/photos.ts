@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import { fetchPlacePhoto, resolvePlaceId, searchPhoto, type PlacePhoto } from "./ai";
+import { isPhotoUrl } from "./photo-url";
 
 /**
  * Photos for places that have no photo of their own.
@@ -57,12 +58,13 @@ export function ambientPhoto(isFood: boolean, title: string): string | null {
  */
 export async function fillMissingPhotos(tripId: string, destination: string): Promise<number> {
   const [{ data: sugs }, { data: items }] = await Promise.all([
-    supabase.from("suggestions").select("id, title").eq("trip_id", tripId).eq("kind", "attraction").is("image_url", null),
-    supabase.from("itinerary_items").select("id, title").eq("trip_id", tripId).eq("category", "activity").is("image_url", null),
+    supabase.from("suggestions").select("id, title, image_url").eq("trip_id", tripId).eq("kind", "attraction"),
+    supabase.from("itinerary_items").select("id, title, image_url").eq("trip_id", tripId).eq("category", "activity"),
   ]);
   const jobs = [
-    ...((sugs as { id: string; title: string }[]) ?? []).map((r) => ({ ...r, table: "suggestions" })),
-    ...((items as { id: string; title: string }[]) ?? []).map((r) => ({ ...r, table: "itinerary_items" })),
+    // Missing = no image or a stored non-photo (logo, flag…).
+    ...((sugs as { id: string; title: string; image_url: string | null }[]) ?? []).filter((r) => !isPhotoUrl(r.image_url)).map((r) => ({ ...r, table: "suggestions" })),
+    ...((items as { id: string; title: string; image_url: string | null }[]) ?? []).filter((r) => !isPhotoUrl(r.image_url)).map((r) => ({ ...r, table: "itinerary_items" })),
   ];
   let filled = 0;
   for (const job of jobs) {
@@ -102,7 +104,7 @@ export function useSuggestionPhoto(opts: {
   canResolve: boolean;
 }): { url: string | null; illustrative: boolean; google: PlacePhoto | null } {
   const isFood = opts.kind === "restaurant";
-  const wantsGoogle = !opts.imageUrl && (isFood || opts.kind === "attraction");
+  const wantsGoogle = !isPhotoUrl(opts.imageUrl) && (isFood || opts.kind === "attraction");
   const [google, setGoogle] = useState<PlacePhoto | null>(null);
 
   useEffect(() => {
@@ -138,7 +140,7 @@ export function useSuggestionPhoto(opts: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opts.id, opts.placeId, wantsGoogle]);
 
-  if (opts.imageUrl) return { url: opts.imageUrl, illustrative: false, google: null };
+  if (isPhotoUrl(opts.imageUrl)) return { url: opts.imageUrl!, illustrative: false, google: null };
   if (google) return { url: google.url, illustrative: false, google };
   const ambient = ambientPhoto(isFood, opts.title);
   return { url: ambient, illustrative: !!ambient, google: null };

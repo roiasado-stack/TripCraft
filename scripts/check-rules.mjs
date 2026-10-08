@@ -90,6 +90,21 @@ for (const file of src) {
   });
 }
 
+// The "is this a photo?" filter exists twice — in the app and in the generate
+// Edge Function (Deno can't import from src/). They must stay the same pattern.
+{
+  const pattern = (rel) => {
+    const text = readFileSync(join(ROOT, rel), "utf8");
+    const m = text.match(/const NOT_A_PHOTO =\s*(\/.*\/[a-z]*);/);
+    return m ? m[1] : null;
+  };
+  const app = pattern("src/lib/photo-url.ts");
+  const fn = pattern("supabase/functions/generate/index.ts");
+  if (!app || !fn) fail(join(ROOT, "src/lib/photo-url.ts"), 0, "photo-filter-sync", "NOT_A_PHOTO not found in one of the two files");
+  else if (app !== fn)
+    fail(join(ROOT, "supabase/functions/generate/index.ts"), 0, "photo-filter-sync", "NOT_A_PHOTO differs from src/lib/photo-url.ts — keep the two identical");
+}
+
 // 2. package.json ------------------------------------------------------------------
 {
   const file = join(ROOT, "package.json");
@@ -215,6 +230,14 @@ for (const f of migs) {
       const r = ratio(f.rgb, b.rgb);
       const bgName = typeof bg === "object" ? `${bg.tint}/${bg.alpha * 100} over ${bg.over}` : bg;
       if (r < min) fail(file, 0, "contrast", `${mode}: ${fg} on ${bgName} is ${r.toFixed(2)}:1 (needs ${min}:1)`);
+    }
+    // A hero photo can be anything, so judge its scrim against the worst case: a
+    // pure-white pixel. Stops in the text zone (bottom 55%) must keep white text readable.
+    for (const [, color, pos] of (vars["--hero-scrim"] ?? "").matchAll(/(oklch\([^)]*\))\s+([\d.]+)%/g)) {
+      if (+pos > 55) continue;
+      const c = linear(color);
+      const r = ratio(white, over(c.rgb, c.alpha, white));
+      if (r < 4.5) fail(file, 0, "contrast", `${mode}: white text on --hero-scrim at ${pos}% over a white photo is ${r.toFixed(2)}:1 (needs 4.5:1)`);
     }
     for (const stop of vars["--gradient-sea"]?.match(/oklch\([^)]*\)/g) ?? []) {
       const r = ratio(white, linear(stop).rgb);
