@@ -84,7 +84,11 @@ export interface SharedTripPayload {
   trip: Pick<
     Trip,
     "id" | "title" | "destination" | "start_date" | "end_date" | "cover_emoji" | "guide_name" | "guide_phone" | "photos_album_url"
-  > & { is_showcase?: boolean };
+  > & {
+    is_showcase?: boolean;
+    /** The destination photo — a Wikimedia URL or null (021 filters anything else out). */
+    image_url?: string | null;
+  };
   agency: { name: string | null; color: string | null } | null;
   flights: Pick<Flight, "id" | "from_airport" | "to_airport" | "airline" | "flight_number" | "depart_at">[];
   stays: Pick<Stay, "id" | "hotel_name" | "address" | "check_in" | "check_out" | "map_url">[];

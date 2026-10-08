@@ -11,6 +11,9 @@ import { PhotoAlbumCard } from "@/components/PhotoAlbumCard";
 import { GuideCard } from "@/components/GuideCard";
 import { MapLink } from "@/components/MapLink";
 import { Flag } from "@/components/Flag";
+import { ImageCredit } from "@/components/MediaCard";
+import { isPhotoUrl } from "@/lib/photo-url";
+import { cn } from "@/lib/utils";
 import { resolveMapUrl } from "@/lib/maps";
 import { LegalLinks } from "@/routes/LegalPages";
 import {
@@ -81,6 +84,7 @@ export default function SharePage() {
   const { trip, agency, flights, stays, itinerary, suggestions, updates } = shared;
   const accent = agency?.color || undefined;
   const duration = tripDuration(trip.start_date, trip.end_date);
+  const heroPhoto = isPhotoUrl(trip.image_url) ? trip.image_url : null;
   const days = new Set<string>();
   if (trip.start_date && trip.end_date) daysBetween(trip.start_date, trip.end_date).forEach((d) => days.add(d));
   itinerary.forEach((i) => days.add(i.day_date));
@@ -96,7 +100,21 @@ export default function SharePage() {
       )}
 
       {/* hero */}
-      <div className="mt-4 overflow-hidden rounded-4xl bg-gradient-sea p-6 text-white shadow-pop" style={accent ? { background: accent } : undefined}>
+      <div
+        className={cn(
+          "relative mt-4 overflow-hidden rounded-4xl text-white shadow-pop",
+          heroPhoto ? "flex min-h-72 flex-col justify-end" : "bg-gradient-sea",
+        )}
+        style={!heroPhoto && accent ? { background: accent } : undefined}
+      >
+        {heroPhoto && (
+          <>
+            <img src={heroPhoto} alt={trip.destination} className="absolute inset-0 size-full object-cover" />
+            <div className="hero-scrim pointer-events-none absolute inset-0" />
+            <ImageCredit imageUrl={heroPhoto} />
+          </>
+        )}
+        <div className="relative p-6">
         <div className="text-4xl">
           <Flag destination={trip.destination} fallback={trip.cover_emoji} className="w-12" />
         </div>
@@ -107,6 +125,7 @@ export default function SharePage() {
             {formatHeb(trip.start_date)} – {formatHeb(trip.end_date)} {duration ? `· ${duration} ימים` : ""}
           </p>
         )}
+        </div>
       </div>
 
       {trip.is_showcase && (
