@@ -66,11 +66,12 @@ const MAX_HISTORY = 12;
  *  couple of times, but the loop must not run indefinitely. */
 const MAX_TOOL_ITERATIONS = 4;
 
-// claude-haiku-4-5 pricing (Anthropic API). Update alongside evals/run.ts's
-// copy of the same numbers if pricing changes — they're two different
-// runtimes (Deno vs Node) so this isn't shared as one constant.
-const PRICE_PER_MTOK_INPUT_USD = 1.0;
-const PRICE_PER_MTOK_OUTPUT_USD = 5.0;
+// claude-haiku-5-5 pricing (Anthropic API, prompts up to 100k tokens — ours are
+// far below). Update alongside evals/run.ts's copy of the same numbers if
+// pricing changes — they're two different runtimes (Deno vs Node) so this
+// isn't shared as one constant.
+const PRICE_PER_MTOK_INPUT_USD = 0.1;
+const PRICE_PER_MTOK_OUTPUT_USD = 0.5;
 
 // Per-user, per-day. Protects the single shared ANTHROPIC_API_KEY from a
 // runaway bug or one user's abuse — this is the guard the double-send bug
