@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Pencil, Plus, Trash2, Users } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Trash2, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import type { Participant } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { can } from "@/lib/permissions";
-import { TripHeader, ScreenTitle } from "@/components/TripHeader";
+import { TripHeader } from "@/components/TripHeader";
 import { ImportParticipants } from "@/components/ImportParticipants";
-import { Button, Card, Chip, EmptyState, Field, Input, Label, Modal, Segmented } from "@/components/ui";
+import { Button, Chip, EmptyState, Field, GroupedList, Input, Label, Modal, Segmented, SheetRow } from "@/components/ui";
 import { AGE_RANGES, PREFERENCES, prefEmoji, prefLabel } from "@/lib/trip-options";
 
 type Draft = {
@@ -28,6 +28,8 @@ export default function PeopleTab() {
   const [editing, setEditing] = useState<Draft | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [actionsFor, setActionsFor] = useState<Participant | null>(null);
 
   const save = async () => {
     if (!editing) return;
@@ -57,7 +59,11 @@ export default function PeopleTab() {
   };
 
   const remove = async (p: Participant) => {
-    await supabase.from("participants").delete().eq("id", p.id);
+    const { error } = await supabase.from("participants").delete().eq("id", p.id);
+    if (error) {
+      toast.error("המחיקה נכשלה");
+      return;
+    }
     toast.success(`${p.name} הוסר`);
     reloadParticipants();
   };
@@ -88,74 +94,123 @@ export default function PeopleTab() {
   return (
     <div className="px-4">
       <TripHeader trip={trip} subtitle="משתתפים" />
-      <ScreenTitle
-        title={`משתתפים (${participants.length})`}
-        action={
-          canEdit && (
-            <Button size="sm" variant="outline" onClick={() => setEditing({ ...blank })} aria-label="הוספת משתתף">
-              <Plus className="size-4" />
-            </Button>
-          )
-        }
-      />
-
-      {canEdit && (
-      <button
-        onClick={() => setBulkOpen(true)}
-        className="mb-4 flex w-full items-center gap-3 rounded-3xl border-2 border-dashed border-primary bg-primary-soft/50 p-4 text-right transition active:scale-[0.99]"
-      >
-        <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground">
-          <Users className="size-5" />
-        </div>
-        <div className="flex-1">
-          <div className="font-bold">הוספת קבוצה בבת אחת</div>
-          <div className="text-xs text-muted-foreground">רשימת שמות, Excel, או סריקת דרכונים</div>
-        </div>
-      </button>
-      )}
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="type-title">
+          משתתפים
+          {participants.length > 0 && <span className="type-headline ms-2 text-muted-foreground">{participants.length}</span>}
+        </h2>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            aria-label="הוספת משתתפים"
+            className="grid size-11 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95"
+          >
+            <Plus className="size-5" />
+          </button>
+        )}
+      </div>
 
       {participants.length === 0 ? (
         <EmptyState
           emoji="👥"
           title="אין עדיין משתתפים"
           description="הוסף את הנוסעים כדי לקבל המלצות מותאמות לגילאים ולהעדפות שלהם."
+          action={
+            canEdit && (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button onClick={() => setEditing({ ...blank })}>
+                  <Plus className="size-4" /> הוספת משתתף
+                </Button>
+                <Button variant="outline" onClick={() => setBulkOpen(true)}>
+                  <Users className="size-4" /> קבוצה בבת אחת
+                </Button>
+              </div>
+            )
+          }
         />
       ) : (
-        <div className="flex flex-col gap-2">
+        <GroupedList>
           {participants.map((p) => (
-            <Card key={p.id} className="flex items-start gap-3 p-3">
-              <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-sunset text-lg font-bold text-white">
-                {p.name.slice(0, 1)}
+            <div key={p.id} className="flex items-start gap-3 py-3 ps-4 pe-1">
+              <div className="grid size-11 shrink-0 place-items-center rounded-full bg-gradient-sunset text-lg font-bold text-white">
+                {Array.from(p.name.trim())[0] ?? "?"}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-bold">{p.name}</div>
-                <div className="text-xs text-muted-foreground">
+                <div className="type-headline [overflow-wrap:anywhere]">
+                  <bdi>{p.name}</bdi>
+                </div>
+                <div className="type-footnote text-muted-foreground">
                   {p.age != null ? `גיל ${p.age}` : p.age_range ? `גילאי ${p.age_range}` : "גיל לא צוין"}
                 </div>
                 {p.preferences?.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {p.preferences.map((pref) => (
-                      <span key={pref} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
-                        {prefEmoji(pref)} {prefLabel(pref)}
-                      </span>
-                    ))}
+                  <div className="type-footnote mt-0.5 text-muted-foreground">
+                    {p.preferences.map((pref) => `${prefEmoji(pref)} ${prefLabel(pref)}`).join(" · ")}
                   </div>
                 )}
               </div>
               {canEdit && (
-              <div className="flex shrink-0 flex-col gap-1.5">
-                <button onClick={() => setEditing(toEdit(p))} className="text-muted-foreground" aria-label="עריכה">
-                  <Pencil className="size-4" />
+                <button
+                  type="button"
+                  onClick={() => setActionsFor(p)}
+                  aria-label={`אפשרויות ל${p.name}`}
+                  className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                >
+                  <MoreHorizontal className="size-5" />
                 </button>
-                <button onClick={() => remove(p)} className="text-destructive" aria-label="מחיקה">
-                  <Trash2 className="size-4" />
-                </button>
-              </div>
               )}
-            </Card>
+            </div>
           ))}
-        </div>
+        </GroupedList>
       )}
+
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="הוספת משתתפים">
+        <div className="flex flex-col gap-2">
+          <SheetRow
+            icon={<Plus className="size-5" />}
+            label="משתתף אחד"
+            onClick={() => {
+              setAddOpen(false);
+              setEditing({ ...blank });
+            }}
+          />
+          <SheetRow
+            icon={<Users className="size-5" />}
+            label="קבוצה בבת אחת"
+            hint="רשימת שמות, Excel, או סריקת דרכונים"
+            onClick={() => {
+              setAddOpen(false);
+              setBulkOpen(true);
+            }}
+          />
+        </div>
+      </Modal>
+
+      <Modal open={!!actionsFor} onClose={() => setActionsFor(null)} title={actionsFor?.name ?? ""}>
+        {actionsFor && (
+          <div className="flex flex-col gap-2">
+            <SheetRow
+              icon={<Pencil className="size-5" />}
+              label="עריכה"
+              onClick={() => {
+                const p = actionsFor;
+                setActionsFor(null);
+                setEditing(toEdit(p));
+              }}
+            />
+            <SheetRow
+              icon={<Trash2 className="size-5" />}
+              label="מחיקה"
+              destructive
+              onClick={() => {
+                const p = actionsFor;
+                setActionsFor(null);
+                remove(p);
+              }}
+            />
+          </div>
+        )}
+      </Modal>
 
       <ImportParticipants
         open={bulkOpen}

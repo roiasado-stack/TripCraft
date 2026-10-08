@@ -279,8 +279,9 @@ export default function TransportTab() {
                   <span className="type-footnote shrink-0 rounded-full bg-primary-soft px-2.5 py-0.5 font-semibold text-primary">
                     {f.direction === "inbound" ? "חזור" : "הלוך"}
                   </span>
-                  <span className="type-footnote min-w-0 flex-1 truncate font-semibold">
-                    <bdi>{[f.airline, f.flight_number].filter(Boolean).join(" ")}</bdi>
+                  {/* Sized to its text (not flex-1) so an English name sits next to the chip and truncates at its own end. */}
+                  <span dir="auto" className="type-footnote min-w-0 truncate font-semibold">
+                    {[f.airline, f.flight_number].filter(Boolean).join(" ")}
                   </span>
                   {(canEdit || flightStatusUrl(f.airline, f.flight_number) || airportMapUrl(f.from_airport) || airportMapUrl(f.to_airport)) && (
                   <button
@@ -307,7 +308,7 @@ export default function TransportTab() {
                       ])
                     }
                     aria-label="אפשרויות לטיסה"
-                    className="-me-3 grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                    className="-me-3 ms-auto grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
                   >
                     <MoreHorizontal className="size-5" />
                   </button>

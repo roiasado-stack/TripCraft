@@ -181,6 +181,46 @@ export function SheetRow({
   );
 }
 
+/** A grouped list inside a sheet (the sheet is already bg-card, so the group sits on muted). */
+export function InsetGroup({ className, children }: { className?: string; children: React.ReactNode }) {
+  return <div className={cn("divide-y divide-separator overflow-hidden rounded-2xl bg-muted", className)}>{children}</div>;
+}
+
+/** iOS-style on/off switch. In RTL the knob sits at the end (left) when on. */
+export function Switch({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onChange}
+      className={cn(
+        "relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors disabled:opacity-60",
+        checked ? "bg-primary" : "bg-foreground/20",
+      )}
+    >
+      <span
+        className={cn(
+          "absolute top-0.5 size-[27px] rounded-full bg-white shadow transition-all",
+          checked ? "end-0.5" : "start-0.5",
+        )}
+      />
+    </button>
+  );
+}
+
 /* ---------------------------------- Inputs --------------------------------- */
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...props }, ref) {

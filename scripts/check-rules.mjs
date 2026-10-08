@@ -209,9 +209,9 @@ for (const f of migs) {
     ["--foreground", "--background"], ["--foreground", "--card"], ["--card-foreground", "--card"],
     ["--popover-foreground", "--popover"], ["--muted-foreground", "--card"], ["--muted-foreground", "--background"],
     ["--muted-foreground", "--muted"], ["--secondary-foreground", "--secondary"],
-    ["--primary", "--card"], ["--primary", "--background"], ["--primary", "--primary-soft"], ["--primary-foreground", "--primary"],
+    ["--primary", "--card"], ["--primary", "--background"], ["--primary", "--primary-soft"], ["--primary", "--muted"], ["--foreground", "--muted"], ["--primary-foreground", "--primary"],
     ["--accent", "--card"], ["--accent", "--background"], ["--accent", "--accent-soft"], ["--accent-foreground", "--accent"],
-    ["--destructive", "--card"], ["--destructive-foreground", "--destructive"], ["--sun-foreground", "--sun"],
+    ["--destructive", "--card"], ["--destructive", "--muted"], ["--destructive-foreground", "--destructive"], ["--sun-foreground", "--sun"],
     ["--tile-foreground", "--tile", 3], ["--tile-accent-foreground", "--tile-accent", 3],
     // Error boxes: text-destructive on bg-destructive/10 (import dialogs, the agent).
     ["--destructive", { tint: "--destructive", alpha: 0.1, over: "--card" }],
