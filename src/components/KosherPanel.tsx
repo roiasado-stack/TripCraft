@@ -87,7 +87,7 @@ function PlaceRow({ place }: { place: KosherPlace }) {
           {place.osm_diet === "yes" && " · מסומן במפה עם אפשרויות כשרות"}
           {place.checked_on && ` · נבדק במפה ${place.checked_on}`}
         </div>
-        <MapLink url={place.maps_url} className="mt-1" />
+        <MapLink url={place.maps_url} className="mt-2.5" />
       </div>
     </li>
   );

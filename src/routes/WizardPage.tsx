@@ -508,7 +508,7 @@ export default function WizardPage() {
         {STEPS.map((s, i) => (
           <div key={s} className="flex-1">
             <div className={`h-1 rounded-full transition-colors ${i <= step ? "bg-primary" : "bg-muted"}`} />
-            <div className={`type-footnote mt-1 text-center ${i === step ? "font-semibold text-primary" : "text-muted-foreground"}`}>
+            <div className={`type-footnote mt-1 min-w-0 truncate text-center ${i === step ? "font-semibold text-primary" : "text-muted-foreground"}`}>
               {s}
             </div>
           </div>
