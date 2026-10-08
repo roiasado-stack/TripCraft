@@ -50,6 +50,9 @@ export default function SuggestionsTab() {
 
   /** Curated + generic highlights for the destination, matched to the group. */
   const addDestinationPicks = async () => {
+    // Already running (the sheet closes at once, so a second tap is easy): two runs
+    // would both check the same old list and insert every pick twice.
+    if (picking) return;
     setPicking(true);
     try {
       const ages = participants
@@ -301,17 +304,7 @@ export default function SuggestionsTab() {
                 {(s.description || s.tags?.length > 0) && (
                   <div className="px-4 pt-3">
                     {s.description && <p className="type-footnote line-clamp-3 text-muted-foreground">{s.description}</p>}
-                    {s.tags?.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {s.tags.map((t) => (
-                          <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                            {t}
-                            {/* A saved suggestion is never a kosher source — say so next to the claim. */}
-                            {/כשר|kosher/i.test(t) && " · לא מאומת"}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <SuggestionTags tags={s.tags} />
                   </div>
                 )}
                 <div className="flex items-center gap-2 px-2 py-2">
@@ -351,6 +344,7 @@ export default function SuggestionsTab() {
                       {s.description && (
                         <p className="type-footnote mt-0.5 text-muted-foreground [overflow-wrap:anywhere]">{s.description}</p>
                       )}
+                      <SuggestionTags tags={s.tags} />
                     </div>
                     {canParticipate && (
                       <button
@@ -366,16 +360,14 @@ export default function SuggestionsTab() {
                         <Heart className={cn("size-5", s.liked && "fill-current")} />
                       </button>
                     )}
-                    {canEdit && (
-                      <button
-                        type="button"
-                        onClick={() => setActionsFor(s)}
-                        aria-label={`אפשרויות ל${s.title}`}
-                        className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
-                      >
-                        <MoreHorizontal className="size-5" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActionsFor(s)}
+                      aria-label={`אפשרויות ל${s.title}`}
+                      className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
+                    >
+                      <MoreHorizontal className="size-5" />
+                    </button>
                   </div>
                 );
               })}
@@ -432,6 +424,18 @@ export default function SuggestionsTab() {
               <SheetRow icon={<MapPin className="size-5" />} label="פתיחה במפה" href={actionsMapUrl} />
             )}
             {actionsDirections && <SheetRow icon={<Navigation className="size-5" />} label="ניווט" href={actionsDirections} />}
+            {/* Place cards show "למסלול" on the card itself; tips and gear keep it here. */}
+            {canEdit && !placeKinds.has(actionsFor.kind) && (
+              <SheetRow
+                icon={<CalendarPlus className="size-5" />}
+                label="הוספה למסלול"
+                onClick={() => {
+                  const item = actionsFor;
+                  setActionsFor(null);
+                  addToItinerary(item);
+                }}
+              />
+            )}
             {canEdit && (
               <SheetRow
                 icon={<Trash2 className="size-5" />}
@@ -597,5 +601,20 @@ function SheetRow({
     <button type="button" onClick={onClick} className={cls}>
       {body}
     </button>
+  );
+}
+
+/** A suggestion's tags. A saved suggestion is never a kosher source — say so next to the claim. */
+function SuggestionTags({ tags }: { tags?: string[] | null }) {
+  if (!tags?.length) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1">
+      {tags.map((t) => (
+        <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+          {t}
+          {/כשר|kosher/i.test(t) && " · לא מאומת"}
+        </span>
+      ))}
+    </div>
   );
 }
