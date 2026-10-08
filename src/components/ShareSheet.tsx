@@ -105,7 +105,7 @@ export function ShareSheet({
               </div>
               {trip.is_shared && url && (
                 <>
-                  <div dir="ltr" className="truncate px-4 py-3 font-mono text-xs text-muted-foreground">
+                  <div dir="ltr" className="overflow-x-auto whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
                     {url}
                   </div>
                   <button type="button" onClick={copy} className={actionRow}>

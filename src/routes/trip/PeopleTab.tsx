@@ -153,7 +153,7 @@ export default function PeopleTab() {
                 <button
                   type="button"
                   onClick={() => setActionsFor(p)}
-                  aria-label={`אפשרויות ל${p.name}`}
+                  aria-label={`אפשרויות עבור ${p.name}`}
                   className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
                 >
                   <MoreHorizontal className="size-5" />

@@ -358,7 +358,7 @@ export default function ItineraryTab() {
                           <button
                             type="button"
                             onClick={() => setActionsFor(it)}
-                            aria-label={`אפשרויות ל${it.title}`}
+                            aria-label={`אפשרויות עבור ${it.title}`}
                             className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
                           >
                             <MoreHorizontal className="size-5" />

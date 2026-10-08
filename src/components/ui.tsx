@@ -207,7 +207,8 @@ export function Switch({
       disabled={disabled}
       onClick={onChange}
       className={cn(
-        "relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors disabled:opacity-60",
+        // The visible switch is 31px; the ::before pad makes the tap target 47px.
+        "relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors before:absolute before:-inset-2 before:content-[''] disabled:opacity-60",
         checked ? "bg-primary" : "bg-foreground/20",
       )}
     >

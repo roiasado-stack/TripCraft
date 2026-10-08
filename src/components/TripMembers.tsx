@@ -115,11 +115,13 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
   };
 
   const toggleApproval = async () => {
-    if (!invite) return;
+    if (!invite || busy) return;
+    setBusy(true);
     const { error } = await supabase
       .from("trip_invites")
       .update({ requires_approval: !invite.requires_approval })
       .eq("id", invite.id);
+    setBusy(false);
     if (error) {
       toast.error("העדכון נכשל");
       return;
@@ -207,7 +209,7 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
 
           {invite ? (
             <InsetGroup>
-              <div dir="ltr" className="truncate px-4 py-3 font-mono text-xs text-muted-foreground">
+              <div dir="ltr" className="overflow-x-auto whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
                 {inviteUrl}
               </div>
               <ActionRow
@@ -226,6 +228,7 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
                   checked={invite.requires_approval}
                   onChange={toggleApproval}
                   label="כל מצטרף חדש צריך את האישור שלי"
+                  disabled={busy}
                 />
               </div>
               <ActionRow
