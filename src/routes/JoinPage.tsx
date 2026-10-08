@@ -9,7 +9,7 @@ import { ROLE_HINTS, ROLE_LABELS } from "@/lib/permissions";
 import { formatHeb } from "@/lib/trip-options";
 import { Flag } from "@/components/Flag";
 import { BrandLogo } from "@/components/BrandLogo";
-import { Button, Card, FullSpinner } from "@/components/ui";
+import { Button, FullSpinner } from "@/components/ui";
 
 type Preview = {
   title: string;
@@ -70,36 +70,42 @@ export default function JoinPage() {
       <BrandLogo />
       <div className="mt-8">
         {!preview ? (
-          <Card className="p-6 text-center">
+          <div className="rounded-3xl bg-card p-6 text-center text-card-foreground">
             <div className="text-5xl">🔒</div>
-            <h1 className="mt-3 text-lg font-bold">ההזמנה לא בתוקף</h1>
-            <p className="mt-1 text-sm text-muted-foreground">ייתכן שהקישור בוטל. בקשו מבעל הטיול קישור חדש.</p>
-            <Link to="/" className="mt-4 inline-block font-semibold text-primary">
+            <h1 className="type-title mt-3">ההזמנה לא בתוקף</h1>
+            <p className="type-footnote mt-1 text-muted-foreground">ייתכן שהקישור בוטל. בקשו מבעל הטיול קישור חדש.</p>
+            <Link to="/" className="type-headline mt-4 inline-flex min-h-11 items-center text-primary">
               לטיולים שלי
             </Link>
-          </Card>
+          </div>
         ) : (
-          <Card className="p-6">
+          <div className="rounded-3xl bg-card p-6 text-card-foreground">
             <div className="text-center">
               <div className="flex justify-center text-5xl">
                 <Flag destination={preview.destination} fallback={preview.cover_emoji} className="w-16" />
               </div>
-              <p className="mt-3 text-sm text-muted-foreground">הוזמנת להצטרף לטיול</p>
-              <h1 className="mt-1 font-display text-2xl font-extrabold">{preview.title}</h1>
-              <p className="text-muted-foreground">{preview.destination}</p>
+              <p className="type-footnote mt-3 text-muted-foreground">הוזמנת להצטרף לטיול</p>
+              <h1 className="type-title mt-1 [overflow-wrap:anywhere]">
+                <bdi>{preview.title}</bdi>
+              </h1>
+              <p className="type-body text-muted-foreground">
+                <bdi>{preview.destination}</bdi>
+              </p>
               {preview.start_date && (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {formatHeb(preview.start_date)} – {formatHeb(preview.end_date)}
+                <p className="type-footnote mt-1 text-muted-foreground">
+                  {formatHeb(preview.start_date)}
+                  {preview.end_date ? ` – ${formatHeb(preview.end_date)}` : ""}
                 </p>
               )}
-              <div className="mt-4 rounded-2xl bg-primary-soft p-3 text-sm">
-                <span className="font-bold">{ROLE_LABELS[preview.role]}</span>: {ROLE_HINTS[preview.role]}
+              <div className="type-footnote mt-4 rounded-2xl bg-primary-soft p-3 text-start">
+                <span className="font-semibold text-primary">{ROLE_LABELS[preview.role]}</span>
+                <span className="block text-foreground">{ROLE_HINTS[preview.role]}</span>
               </div>
             </div>
 
             <div className="mt-5">
               {pending ? (
-                <div className="flex items-center gap-3 rounded-2xl bg-muted p-3 text-sm">
+                <div className="type-footnote flex items-center gap-3 rounded-2xl bg-muted p-3">
                   <Clock className="size-5 shrink-0 text-primary" />
                   הבקשה נשלחה. הטיול יופיע ברשימת הטיולים שלך אחרי שבעל הטיול יאשר.
                 </div>
@@ -109,7 +115,7 @@ export default function JoinPage() {
                 </Button>
               ) : (
                 <div className="flex flex-col gap-2">
-                  <p className="text-center text-sm text-muted-foreground">
+                  <p className="type-footnote text-center text-muted-foreground">
                     {isAnonymous ? "אתם במצב דמו. כדי להצטרף צריך חשבון אמיתי." : "כדי להצטרף צריך להתחבר. זה לוקח רגע."}
                   </p>
                   <Button
@@ -136,7 +142,7 @@ export default function JoinPage() {
                 </div>
               )}
             </div>
-          </Card>
+          </div>
         )}
       </div>
     </div>

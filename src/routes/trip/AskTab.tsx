@@ -250,15 +250,15 @@ export default function AskTab() {
               <div key={m.id} className={cn("flex", mine ? "justify-start" : "justify-end")}>
                 <div className={cn("max-w-[85%]", !mine && "w-full")}>
                   <div
-                    // Answers are Hebrew and often open a line with a place name, so they stay
-                    // RTL; the traveller's own message may be in any language.
-                    dir={mine ? "auto" : undefined}
                     className={cn(
                       "type-body whitespace-pre-wrap rounded-3xl px-4 py-2.5 [overflow-wrap:anywhere]",
                       mine ? "rounded-es-lg bg-primary text-primary-foreground" : "rounded-ee-lg bg-card text-card-foreground",
                     )}
                   >
-                    {richText(m.content)}
+                    {/* Answers are Hebrew and often open a line with a place name, so they stay RTL;
+                        the traveller's own message may be in any language. dir sits on the inner
+                        span so the bubble's tail corner keeps following the page direction. */}
+                    {mine ? <span dir="auto" className="block">{richText(m.content)}</span> : richText(m.content)}
                   </div>
 
                   {m.cards?.length > 0 && (
@@ -279,7 +279,7 @@ export default function AskTab() {
                             {card.description && (
                               <p className="type-footnote px-4 pb-3 text-muted-foreground [overflow-wrap:anywhere]">{card.description}</p>
                             )}
-                            <div className="flex divide-x divide-separator border-t border-separator rtl:divide-x-reverse">
+                            <div className="flex divide-x divide-separator border-t border-separator">
                               <button
                                 type="button"
                                 disabled={added[key]}
@@ -337,7 +337,7 @@ export default function AskTab() {
                                 </p>
                               )}
                             </div>
-                            <div className="flex divide-x divide-separator border-t border-separator rtl:divide-x-reverse">
+                            <div className="flex divide-x divide-separator border-t border-separator">
                               <button
                                 type="button"
                                 disabled={!!state}
@@ -372,6 +372,7 @@ export default function AskTab() {
                 aria-label="הסוכן חושב…"
                 className="flex items-center gap-1 rounded-3xl rounded-ee-lg bg-card px-4 py-3.5"
               >
+                <span className="sr-only">הסוכן חושב…</span>
                 {[0, 1, 2].map((i) => (
                   <span
                     key={i}

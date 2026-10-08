@@ -152,5 +152,6 @@ INSERT INTO trip_chat_messages (trip_id, role, content, cards, pending_actions, 
   ('b4ea0000-0000-4000-8000-000000000001', 'assistant',
    E'ליד הקולוסיאום כדאי לנסות את Trattoria Luzzi, מקום משפחתי עם מחירים סבירים.\nVia di San Giovanni in Laterano 88 — כדאי להגיע לפני 19:30.',
    '[{"kind":"restaurant","title":"Trattoria Luzzi","description":"טרטוריה משפחתית, פסטה ביתית ופיצה, 5 דקות הליכה מהקולוסיאום.","tags":["פסטה","משפחות"],"price_level":"€€","location":"Via di San Giovanni in Laterano 88, Roma"}]',
-   '[{"tool":"add_to_itinerary","id":"breakui-pa-1","input":{"title":"ארוחת ערב ב-Trattoria Luzzi","day_date":"2026-11-18","start_time":"19:30"}}]',
+   jsonb_build_array(jsonb_build_object('tool', 'add_to_itinerary', 'id', 'breakui-pa-1', 'input',
+     jsonb_build_object('title', 'ארוחת ערב ב-Trattoria Luzzi', 'day_date', to_char(current_date + 41, 'YYYY-MM-DD'), 'start_time', '19:30'))),
    :'uid', now() - interval '2 minutes');
