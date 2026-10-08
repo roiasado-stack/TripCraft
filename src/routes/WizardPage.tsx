@@ -18,6 +18,7 @@ import { generateContent } from "@/lib/ai";
 import { uploadTripDocument } from "@/lib/documents";
 import { Flag } from "@/components/Flag";
 import type { Participant, Trip } from "@/lib/types";
+import { localDateString } from "@/lib/trip-dates";
 import {
   AGE_RANGES,
   BUDGET_LEVELS,
@@ -681,7 +682,7 @@ function StepBasics(p: {
           <Input
             type="date"
             value={p.startDate}
-            min={new Date().toISOString().slice(0, 10)}
+            min={localDateString(new Date())}
             onChange={(e) => p.setStartDate(e.target.value)}
           />
         </Field>

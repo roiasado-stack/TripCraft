@@ -55,6 +55,9 @@ there are the business team; they never touch code.
   Chip, Badge, EmptyState, Spinner…). Reuse them; don't pull in a component library.
 - Colors come from the CSS variables in `src/styles.css` — use the semantic Tailwind names
   (`bg-primary`, `text-muted-foreground`, `bg-sun`, `border-border`). Never hardcode a hex.
+  The palette comes from the logo (sky blue tint, sun amber for "now", night blue dark mode) and
+  every text pair is WCAG AA in both modes — `npm run rules` measures the tokens and fails below
+  4.5:1, so when you add a token pair, add it to `PAIRS` in `scripts/check-rules.mjs`.
 - Icons: `lucide-react` only. Merge classes with `cn()` from `@/lib/utils`.
 - Screens are phone-width: `mx-auto max-w-lg` inside `TripLayout`.
 
@@ -72,6 +75,10 @@ there are the business team; they never touch code.
   it mirrors the RLS policies, which are the real authority. Never filter trips by `user_id` to
   mean "can see it" — RLS already returns exactly what the caller may read.
 - Feedback on writes goes through `useToast()` — Hebrew message on both success and failure.
+- Trip dates (`start_date`, `check_in`, `day_date`…) are the traveller's calendar day: parse and
+  format them only through `@/lib/trip-dates` (`parseLocalDate`, `localDateString`, `daysFrom`…).
+  `new Date("2026-11-15")` is UTC midnight and `toISOString().slice(0, 10)` is the UTC day — both
+  were real bugs, and `npm run rules` now rejects them.
 
 ## Supabase schema
 

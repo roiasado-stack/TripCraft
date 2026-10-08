@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import { mapsUrl } from "./maps";
 import { fillMissingPhotos } from "./photos";
+import { localDateString } from "@/lib/trip-dates";
 
 /**
  * Creates a fully populated example trip so every screen can be reviewed with
@@ -29,7 +30,7 @@ export async function createDemoTrip(userId: string): Promise<string> {
   const end = new Date(start);
   end.setDate(end.getDate() + 5);
 
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const iso = localDateString;
   const dayN = (n: number) => {
     const d = new Date(start);
     d.setDate(d.getDate() + n);

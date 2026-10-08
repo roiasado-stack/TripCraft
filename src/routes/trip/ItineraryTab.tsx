@@ -16,6 +16,7 @@ import { FillPhotos } from "@/components/FillPhotos";
 import { aiErrorMessage, generateContent, lookupKosher, searchCoordinates, searchPhoto } from "@/lib/ai";
 import { daysBetween, formatDayHeb, ITINERARY_CATEGORIES, itineraryCategory } from "@/lib/trip-options";
 import { TripMap, type TripMapItem } from "@/components/TripMap";
+import { localDateString, parseLocalDate } from "@/lib/trip-dates";
 
 /**
  * Departure-day flights leave from the origin airport, so scoping them to the
@@ -41,9 +42,10 @@ function shabbatConflict(day: ShabbatDay | undefined, startTime: string | null):
 
 /** The yom tov that starts this evening, if tomorrow is one (for erev labels). */
 function nextDayHoliday(byDate: Map<string, ShabbatDay>, date: string): string | null {
-  const next = new Date(`${date}T00:00:00Z`);
-  next.setUTCDate(next.getUTCDate() + 1);
-  return byDate.get(next.toISOString().slice(0, 10))?.holiday ?? null;
+  const next = parseLocalDate(date);
+  if (!next) return null;
+  next.setDate(next.getDate() + 1);
+  return byDate.get(localDateString(next))?.holiday ?? null;
 }
 
 type Draft = {
@@ -141,7 +143,7 @@ export default function ItineraryTab() {
     [items],
   );
 
-  const defaultDay = trip.start_date ?? new Date().toISOString().slice(0, 10);
+  const defaultDay = trip.start_date ?? localDateString(new Date());
 
   const save = async () => {
     if (!editing) return;
