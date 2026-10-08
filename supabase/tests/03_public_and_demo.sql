@@ -45,6 +45,22 @@ SELECT pg_temp.login_anon();
 SELECT pg_temp.check('anon: a non-Wikimedia image_url never reaches the brochure',
   public.get_shared_trip('test-slug-0123456789') -> 'trip' ->> 'image_url' IS NULL);
 RESET ROLE;
+-- Lookalike hosts and plain http never pass the brochure's Wikimedia filter.
+UPDATE public.trips SET image_url = 'https://upload.wikimedia.org.evil.com/p.gif' WHERE id = pg_temp.id('trip');
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: a lookalike host (wikimedia.org.evil.com) never reaches the brochure',
+  public.get_shared_trip('test-slug-0123456789') -> 'trip' ->> 'image_url' IS NULL);
+RESET ROLE;
+UPDATE public.trips SET image_url = 'https://upload.wikimedia.org@evil.com/p.gif' WHERE id = pg_temp.id('trip');
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: a userinfo trick (wikimedia.org@evil.com) never reaches the brochure',
+  public.get_shared_trip('test-slug-0123456789') -> 'trip' ->> 'image_url' IS NULL);
+RESET ROLE;
+UPDATE public.trips SET image_url = 'http://upload.wikimedia.org/x.jpg' WHERE id = pg_temp.id('trip');
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: a plain-http Wikimedia URL never reaches the brochure',
+  public.get_shared_trip('test-slug-0123456789') -> 'trip' ->> 'image_url' IS NULL);
+RESET ROLE;
 UPDATE public.trips SET image_url = NULL WHERE id = pg_temp.id('trip');
 
 -- Unshared trip is invisible even with the old slug -----------------------------------

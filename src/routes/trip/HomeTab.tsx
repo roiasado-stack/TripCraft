@@ -24,7 +24,7 @@ import {
 } from "@/lib/trip-dates";
 import { cn } from "@/lib/utils";
 import { searchDestinationPhoto } from "@/lib/ai";
-import { isPhotoUrl } from "@/lib/photo-url";
+import { isPhotoUrl, isTripPhotoUrl } from "@/lib/photo-url";
 import { ImageCredit } from "@/components/MediaCard";
 
 export default function HomeTab() {
@@ -119,7 +119,7 @@ export default function HomeTab() {
 
   // The destination photo: looked up once by someone who can edit the trip (viewers
   // and demo visitors never spend an AI call), saved on the trip, then shown to all.
-  const heroPhoto = isPhotoUrl(trip.image_url) ? trip.image_url : null;
+  const heroPhoto = isTripPhotoUrl(trip.image_url) ? trip.image_url : null;
   const canEdit = can(role, "edit");
   useEffect(() => {
     if (heroPhoto || !canEdit || isAnonymous || !trip.destination.trim()) return;
@@ -129,7 +129,7 @@ export default function HomeTab() {
       const { url, definite } = await searchDestinationPhoto(trip.id, trip.destination);
       // Only a definite "no photo" is remembered for a week; a passing failure
       // (daily cap, network) is retried next session.
-      if (!url || !isPhotoUrl(url)) return definite ? rememberMiss(trip.id) : undefined;
+      if (!url || !isTripPhotoUrl(url)) return definite ? rememberMiss(trip.id) : undefined;
       const { error } = await supabase.from("trips").update({ image_url: url }).eq("id", trip.id);
       if (!error) await reloadTrip();
     })();

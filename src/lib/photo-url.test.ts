@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPhotoUrl } from "./photo-url";
+import { isPhotoUrl, isTripPhotoUrl } from "./photo-url";
 
 const thumb = (file: string) =>
   `https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/${encodeURIComponent(file)}/960px-${encodeURIComponent(file)}`;
@@ -33,5 +33,16 @@ describe("isPhotoUrl", () => {
     expect(isPhotoUrl("")).toBe(false);
     expect(isPhotoUrl(null)).toBe(false);
     expect(isPhotoUrl("not a url")).toBe(false);
+  });
+});
+
+describe("isTripPhotoUrl", () => {
+  it("accepts only https photos on Wikimedia's own hosts", () => {
+    expect(isTripPhotoUrl(thumb("Colosseo_2020.jpg"))).toBe(true);
+    expect(isTripPhotoUrl("https://tracker.example/pixel.gif")).toBe(false);
+    expect(isTripPhotoUrl("https://upload.wikimedia.org.evil.com/x.jpg")).toBe(false);
+    expect(isTripPhotoUrl("https://evilwikimedia.org/x.jpg")).toBe(false);
+    expect(isTripPhotoUrl("http://upload.wikimedia.org/x.jpg")).toBe(false);
+    expect(isTripPhotoUrl(thumb("Flag_of_Italy.svg") + ".png")).toBe(false);
   });
 });

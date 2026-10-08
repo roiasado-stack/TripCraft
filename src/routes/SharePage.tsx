@@ -12,7 +12,7 @@ import { GuideCard } from "@/components/GuideCard";
 import { MapLink } from "@/components/MapLink";
 import { Flag } from "@/components/Flag";
 import { ImageCredit } from "@/components/MediaCard";
-import { isPhotoUrl } from "@/lib/photo-url";
+import { isTripPhotoUrl } from "@/lib/photo-url";
 import { cn } from "@/lib/utils";
 import { resolveMapUrl } from "@/lib/maps";
 import { LegalLinks } from "@/routes/LegalPages";
@@ -84,7 +84,7 @@ export default function SharePage() {
   const { trip, agency, flights, stays, itinerary, suggestions, updates } = shared;
   const accent = agency?.color || undefined;
   const duration = tripDuration(trip.start_date, trip.end_date);
-  const heroPhoto = isPhotoUrl(trip.image_url) ? trip.image_url : null;
+  const heroPhoto = isTripPhotoUrl(trip.image_url) ? trip.image_url : null;
   const days = new Set<string>();
   if (trip.start_date && trip.end_date) daysBetween(trip.start_date, trip.end_date).forEach((d) => days.add(d));
   itinerary.forEach((i) => days.add(i.day_date));
