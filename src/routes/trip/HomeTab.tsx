@@ -23,7 +23,7 @@ import {
   tripPhase,
 } from "@/lib/trip-dates";
 import { cn } from "@/lib/utils";
-import { searchPhoto } from "@/lib/ai";
+import { searchDestinationPhoto } from "@/lib/ai";
 import { isPhotoUrl } from "@/lib/photo-url";
 import { ImageCredit } from "@/components/MediaCard";
 
@@ -126,8 +126,10 @@ export default function HomeTab() {
     if (photoLookups.has(trip.id) || recentMiss(trip.id)) return;
     photoLookups.add(trip.id);
     (async () => {
-      const url = await searchPhoto(trip.id, trip.destination);
-      if (!url || !isPhotoUrl(url)) return rememberMiss(trip.id);
+      const { url, definite } = await searchDestinationPhoto(trip.id, trip.destination);
+      // Only a definite "no photo" is remembered for a week; a passing failure
+      // (daily cap, network) is retried next session.
+      if (!url || !isPhotoUrl(url)) return definite ? rememberMiss(trip.id) : undefined;
       const { error } = await supabase.from("trips").update({ image_url: url }).eq("id", trip.id);
       if (!error) await reloadTrip();
     })();

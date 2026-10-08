@@ -118,6 +118,28 @@ export async function generateContent(
  * never surfaces an error toast — a missing photo isn't a failure, it's just
  * `null`, which MediaCard already renders as its brand-gradient fallback.
  */
+/**
+ * The trip's destination photo (whole destination: city, country, several places).
+ * `definite` is true when the answer is final — a photo, or "there is none" — and
+ * false for a passing failure (daily cap, API, network), which is worth retrying.
+ */
+export async function searchDestinationPhoto(
+  tripId: string,
+  destination: string,
+): Promise<{ url: string | null; definite: boolean }> {
+  try {
+    const { data, error } = await supabase.functions.invoke("generate", {
+      body: { trip_id: tripId, kind: "photo", scope: "destination", query: destination },
+    });
+    if (error) return { url: null, definite: false };
+    const res = data as { ok?: boolean; image_url?: string | null; reason?: string };
+    if (!res?.ok) return { url: null, definite: false };
+    return { url: res.image_url ?? null, definite: !!res.image_url || res.reason === "none" };
+  } catch {
+    return { url: null, definite: false };
+  }
+}
+
 export async function searchPhoto(tripId: string, query: string): Promise<string | null> {
   try {
     const { data, error } = await supabase.functions.invoke("generate", {
