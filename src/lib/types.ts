@@ -41,6 +41,15 @@ export interface Trip {
   updated_at: string;
 }
 
+/** A travel agent's customer for a trip (migration 022, `trip_clients`). Trip owner only —
+ *  members never see it, and it's never on the public brochure. */
+export interface TripClient {
+  trip_id: string;
+  client_name: string | null;
+  client_phone: string | null;
+  updated_at: string;
+}
+
 /** Caller's relationship to a trip, from the trip_role() RPC (migration 015). */
 export type TripRole = "owner" | "editor" | "participant" | "viewer";
 export type MemberRole = Exclude<TripRole, "owner">;
@@ -259,6 +268,60 @@ export interface AgentRun {
   status: string; // ok | error
   error_message: string | null;
   created_at: string;
+}
+
+/** A travel agent's access request and limits (migration 022). The caller's own row,
+ *  or every row for an admin; written only through the request/admin RPCs. */
+export type AgentStatus = "pending" | "active" | "suspended";
+export interface AgentAccount {
+  user_id: string;
+  status: AgentStatus;
+  agency_name: string;
+  phone: string | null;
+  ai_daily_usd: number;
+  ai_monthly_usd: number;
+  google_daily: number;
+  max_active_trips: number;
+  requested_at: string;
+  decided_at: string | null;
+  decided_by: string | null;
+}
+
+/** One row from `admin_list_agents()` — an account plus its usage. Admin only. */
+export interface AgentAccountUsage extends Omit<AgentAccount, "decided_by"> {
+  email: string | null;
+  ai_today_usd: number;
+  ai_month_usd: number;
+  google_searches_today: number;
+  google_photos_today: number;
+  active_trips: number;
+}
+
+export type AgentAttentionFlag = "missing_passports" | "not_joined" | "pending_members" | "no_dates" | "departing_soon";
+
+/** One row from `agent_trip_board()` — a trip the calling agent owns, with its counts. */
+export interface AgentTripBoardRow {
+  id: string;
+  title: string;
+  destination: string;
+  start_date: string | null;
+  end_date: string | null;
+  client_name: string | null;
+  client_phone: string | null;
+  is_shared: boolean;
+  share_slug: string | null;
+  image_url: string | null;
+  participants_count: number;
+  /** Active trip members (joined through an invite link). */
+  members_joined: number;
+  members_pending: number;
+  /** Travellers with at least one 'passport' document (members' private uploads included). */
+  passports_count: number;
+  documents_count: number;
+  /** Flights + stays + transfers. */
+  bookings_count: number;
+  /** Empty once the trip is over. */
+  needs_attention: AgentAttentionFlag[];
 }
 
 /** One row from `stale_knowledge_chunks()` — a curated fact overdue for

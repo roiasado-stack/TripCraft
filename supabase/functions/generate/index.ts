@@ -49,13 +49,23 @@ const DEMO_APP_DAILY_CAP_USD = 1.0;
 /** True once the caller, the demo pool (for anonymous callers) or the whole app has hit today's cap. */
 // deno-lint-ignore no-explicit-any
 async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<boolean> {
-  const [mine, app, demo] = await Promise.all([
+  const [mine, app, demo, agent] = await Promise.all([
     supabase.rpc("my_agent_daily_cost_usd"),
     supabase.rpc("app_agent_daily_cost_usd"),
     isAnonymous ? supabase.rpc("anon_agent_daily_cost_usd") : Promise.resolve({ data: 0 }),
+    // An active travel agent (migration 022): their own day and month caps, or NULL.
+    isAnonymous ? Promise.resolve({ data: null }) : supabase.rpc("my_agent_limits"),
   ]);
-  if ((app.data ?? 0) >= APP_DAILY_CAP_USD) return true;
+  // The app-wide cap is the last line of defence: an unreadable total counts as reached.
+  if (app.error || (app.data ?? 0) >= APP_DAILY_CAP_USD) return true;
   if (isAnonymous) return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD;
+  // Can't tell whether the caller is an agent, or can't read an agent's spend: fail closed.
+  if (agent.error) return true;
+  if (agent.data) {
+    if (mine.error) return true;
+    return !(Number(agent.data.ai_daily_usd) > (mine.data ?? 0)) ||
+      !(Number(agent.data.ai_monthly_usd) > Number(agent.data.month_cost_usd));
+  }
   return (mine.data ?? 0) >= DAILY_CAP_USD;
 }
 
@@ -1158,13 +1168,23 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       if (db) {
         const dayStart = new Date();
         dayStart.setUTCHours(0, 0, 0, 0);
-        const { count } = await db
-          .from("agent_runs")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", auth.user.id)
-          .eq("kind", "google_place_photo")
-          .gte("created_at", dayStart.toISOString());
-        if ((count ?? 0) >= PLACE_PHOTOS_PER_USER_PER_DAY) return none({ url: null });
+        // An active travel agent (migration 022) has their own daily Google limit.
+        const [{ count, error }, agent] = await Promise.all([
+          db
+            .from("agent_runs")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", auth.user.id)
+            .eq("kind", "google_place_photo")
+            .gte("created_at", dayStart.toISOString()),
+          db.rpc("agent_limits", { _user_id: auth.user.id }),
+        ]);
+        // A failed lookup counts as "over": the cap must fail closed.
+        if (error || agent.error) return none({ url: null });
+        // Approval never lowers an agent below a regular user's photo allowance.
+        const perDay = agent.data
+          ? Math.max(Number((agent.data as { google_daily: number }).google_daily), PLACE_PHOTOS_PER_USER_PER_DAY)
+          : PLACE_PHOTOS_PER_USER_PER_DAY;
+        if (!(perDay > (count ?? 0))) return none({ url: null });
         await db.from("agent_runs").insert({ trip_id: body.trip_id ?? null, user_id: auth.user.id, kind: "google_place_photo", cost_usd: 0, status: "ok" });
       }
       try {
