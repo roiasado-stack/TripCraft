@@ -26,9 +26,9 @@ CREATE TABLE IF NOT EXISTS public.agent_accounts (
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'suspended')),
   agency_name TEXT NOT NULL CHECK (length(agency_name) BETWEEN 1 AND 120),
   phone TEXT CHECK (phone IS NULL OR length(phone) <= 40),
-  ai_daily_usd NUMERIC(10,2) NOT NULL DEFAULT 3 CHECK (ai_daily_usd BETWEEN 0 AND 50),
+  ai_daily_usd NUMERIC(10,2) NOT NULL DEFAULT 3 CHECK (ai_daily_usd BETWEEN 0 AND 15),
   ai_monthly_usd NUMERIC(10,2) NOT NULL DEFAULT 15 CHECK (ai_monthly_usd BETWEEN 0 AND 500),
-  google_daily INT NOT NULL DEFAULT 20 CHECK (google_daily BETWEEN 0 AND 200),
+  google_daily INT NOT NULL DEFAULT 20 CHECK (google_daily BETWEEN 0 AND 100),
   max_active_trips INT NOT NULL DEFAULT 30 CHECK (max_active_trips BETWEEN 0 AND 500),
   requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   decided_at TIMESTAMPTZ,
@@ -223,6 +223,8 @@ BEGIN
     RETURN NEW;  -- already counted
   END IF;
   SELECT (public.agent_limits(NEW.user_id) ->> 'max_active_trips')::int INTO lim;
+  -- Serialise one agent's concurrent inserts, or N parallel requests would all see the same count.
+  PERFORM pg_advisory_xact_lock(hashtext(NEW.user_id::text));
   IF lim IS NULL THEN RETURN NEW; END IF;
   SELECT count(*) INTO used FROM public.trips t
   WHERE t.user_id = NEW.user_id AND t.id <> NEW.id

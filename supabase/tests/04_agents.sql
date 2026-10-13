@@ -103,9 +103,9 @@ SELECT pg_temp.check('admin: approval grants the agent role and records the deci
 SELECT pg_temp.check('admin: negative limits are rejected',
   pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, -1, 15, 20, 30)', pg_temp.id('stranger'))) = -1);
 SELECT pg_temp.check('admin: limits above the ceilings are rejected',
-  pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 51, 15, 20, 30)', pg_temp.id('stranger'))) = -1
+  pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 16, 15, 20, 30)', pg_temp.id('stranger'))) = -1
   AND pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 3, 501, 20, 30)', pg_temp.id('stranger'))) = -1
-  AND pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 3, 15, 201, 30)', pg_temp.id('stranger'))) = -1
+  AND pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 3, 15, 101, 30)', pg_temp.id('stranger'))) = -1
   AND pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 3, 15, 20, 501)', pg_temp.id('stranger'))) = -1);
 SELECT public.admin_set_agent_limits(pg_temp.id('stranger'), 5, 25, 40, 2);
 SELECT pg_temp.check('admin: can change an agent''s limits',
@@ -317,3 +317,76 @@ SELECT pg_temp.check('editor of an agent trip: cannot read or change the client 
   AND pg_temp.try(format('DELETE FROM trip_clients WHERE trip_id = %L', pg_temp.id('agent_a_trip'))) = 0
   AND pg_temp.try(format('INSERT INTO trip_clients (trip_id, client_name) VALUES (%L, %L)', pg_temp.id('agent_a_trip'), 'x')) = -1);
 RESET ROLE;
+
+-- ==== Re-review additions (022 phase 1 fixes) ======================================
+SELECT set_config('request.jwt.claims', '', true);
+INSERT INTO public.trip_members (trip_id, user_id, role, status) VALUES
+  (pg_temp.id('agent_a_trip'), pg_temp.id('participant'), 'participant', 'active'),
+  (pg_temp.id('agent_a_trip'), pg_temp.id('removed'),     'editor',      'removed');
+DO $$ DECLARE k TEXT; BEGIN
+  FOREACH k IN ARRAY ARRAY['editor', 'participant', 'viewer', 'pending', 'removed', 'stranger', 'agent_b', 'demo'] LOOP
+    PERFORM pg_temp.login(pg_temp.id(k), k = 'demo');
+    PERFORM pg_temp.check(k || ': no read/write/upsert of an agent trip''s client, no passport count',
+      (SELECT count(*) FROM trip_clients WHERE trip_id = pg_temp.id('agent_a_trip')) = 0
+      AND pg_temp.try(format('UPDATE trip_clients SET client_phone = %L WHERE trip_id = %L', 'x', pg_temp.id('agent_a_trip'))) = 0
+      AND pg_temp.try(format('DELETE FROM trip_clients WHERE trip_id = %L', pg_temp.id('agent_a_trip'))) = 0
+      AND pg_temp.try(format('INSERT INTO trip_clients (trip_id, client_name) VALUES (%L, %L) ON CONFLICT (trip_id) DO UPDATE SET client_name = excluded.client_name',
+            pg_temp.id('agent_a_trip'), 'x')) = -1
+      AND public.trip_passport_count(pg_temp.id('agent_a_trip')) IS NULL);
+    RESET ROLE;
+    PERFORM set_config('request.jwt.claims', '', true);
+  END LOOP;
+END $$;
+
+SELECT pg_temp.login(pg_temp.id('agent_a'));
+SELECT pg_temp.check('agent: cannot move their client row onto another trip',
+  pg_temp.try(format('UPDATE trip_clients SET trip_id = %L WHERE trip_id = %L', pg_temp.id('agent_b_trip'), pg_temp.id('agent_a_trip'))) = -1
+  AND pg_temp.try(format('UPDATE trip_clients SET trip_id = %L WHERE trip_id = %L', gen_random_uuid(), pg_temp.id('agent_a_trip'))) = -1);
+SELECT pg_temp.check('trip_passport_count: unknown or NULL trip gives NULL (no existence oracle)',
+  public.trip_passport_count(gen_random_uuid()) IS NULL AND public.trip_passport_count(NULL) IS NULL);
+SELECT pg_temp.check('agent at the trip limit: reopening with end_date NULL or today is blocked',
+  pg_temp.try($$UPDATE trips SET end_date = NULL WHERE id = '30000000-0000-0000-0000-0000000000a2'$$) = -1
+  AND pg_temp.try($$UPDATE trips SET end_date = current_date WHERE id = '30000000-0000-0000-0000-0000000000a2'$$) = -1);
+SELECT pg_temp.check('agent at the trip limit: a multi-row insert is blocked',
+  pg_temp.try($$INSERT INTO trips (user_id, title, destination) SELECT auth.uid(), 'n' || g, 'x' FROM generate_series(1, 2) g$$) = -1);
+RESET ROLE;
+
+-- An editor of the agent's trip can't reopen it past the agent's limit either
+SELECT set_config('request.jwt.claims', '', true);
+INSERT INTO public.trip_members (trip_id, user_id, role, status) VALUES
+  ('30000000-0000-0000-0000-0000000000a2', pg_temp.id('editor'), 'editor', 'active');
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('editor: reopening an agent''s ended trip counts against the agent''s limit',
+  pg_temp.try($$UPDATE trips SET end_date = current_date + 9 WHERE id = '30000000-0000-0000-0000-0000000000a2'$$) = -1);
+RESET ROLE;
+
+-- A passport document pointing at another trip's traveller is not counted
+SELECT set_config('request.jwt.claims', '', true);
+INSERT INTO public.documents (trip_id, participant_id, category, name, storage_path, uploaded_by, visibility) VALUES
+  (pg_temp.id('agent_a_trip'), '20000000-0000-0000-0000-0000000000b1', 'passport', 'x',
+   pg_temp.id('agent_a') || '/x.pdf', pg_temp.id('agent_a'), 'private');
+SELECT pg_temp.login(pg_temp.id('agent_a'));
+SELECT pg_temp.check('trip_passport_count ignores travellers of another trip',
+  public.trip_passport_count(pg_temp.id('agent_a_trip')) = 2);
+RESET ROLE;
+
+-- NaN limits
+SELECT pg_temp.login(pg_temp.id('admin'));
+SELECT pg_temp.check('admin: NaN limits are rejected',
+  pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, %L, 15, 20, 1)', pg_temp.id('agent_a'), 'NaN')) = -1
+  AND pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 3, %L, 20, 1)', pg_temp.id('agent_a'), 'NaN')) = -1);
+RESET ROLE;
+
+-- Showcase clone: blocked at the agent limit, never copies the client
+SELECT set_config('request.jwt.claims', '', true);
+UPDATE public.trips SET is_showcase = true WHERE id = pg_temp.id('trip');  -- already has a trip_clients row (above)
+SELECT pg_temp.login(pg_temp.id('agent_a'));
+SELECT pg_temp.check('agent at the trip limit: cloning a showcase is blocked',
+  pg_temp.try($$SELECT public.clone_showcase_trip('test-slug-0123456789')$$) = -1);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('participant'));
+SELECT public.clone_showcase_trip('test-slug-0123456789');
+RESET ROLE;
+SELECT pg_temp.check('clone_showcase_trip never copies trip_clients',
+  EXISTS (SELECT 1 FROM trips WHERE demo_source_id = pg_temp.id('trip') AND user_id = pg_temp.id('participant'))
+  AND NOT EXISTS (SELECT 1 FROM trips t JOIN trip_clients c ON c.trip_id = t.id WHERE t.demo_source_id = pg_temp.id('trip')));

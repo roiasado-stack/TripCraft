@@ -58,11 +58,12 @@ async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<boolea
   ]);
   // The app-wide cap is the last line of defence: an unreadable total counts as reached.
   if (app.error || (app.data ?? 0) >= APP_DAILY_CAP_USD) return true;
+  // An unreadable personal spend counts as reached too, for every kind of caller.
+  if (mine.error) return true;
   if (isAnonymous) return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD;
   // Can't tell whether the caller is an agent, or can't read an agent's spend: fail closed.
   if (agent.error) return true;
   if (agent.data) {
-    if (mine.error) return true;
     return !(Number(agent.data.ai_daily_usd) > (mine.data ?? 0)) ||
       !(Number(agent.data.ai_monthly_usd) > Number(agent.data.month_cost_usd));
   }
