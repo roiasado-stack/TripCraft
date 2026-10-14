@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_STATUS_LABEL,
   agentTripStatus,
   attentionNotes,
   boardCounters,
@@ -49,6 +50,16 @@ describe("agentTripStatus", () => {
     expect(
       agentTripStatus(row({ is_shared: false, members_joined: 0, members_pending: 0, needs_attention: ["not_joined"] }), TODAY),
     ).toBe("draft");
+  });
+
+  it("a new trip is 'טיוטה' until the agent sends it, then 'נשלח' (sending turns sharing on)", () => {
+    // What a trip from /agent/new looks like after opening /agent/send but before tapping send:
+    // opening the send screen changes nothing (not shared, no invite, nobody joined).
+    const fresh = row({ is_shared: false, members_joined: 0, members_pending: 0, needs_attention: ["not_joined"] });
+    expect(AGENT_STATUS_LABEL[agentTripStatus(fresh, TODAY)]).toBe("טיוטה");
+    // Tapping "שליחה בוואטסאפ" / "העתק" sets is_shared = true and creates the participant link.
+    const sent = { ...fresh, is_shared: true };
+    expect(AGENT_STATUS_LABEL[agentTripStatus(sent, TODAY)]).toBe("נשלח");
   });
 
   it("a draft stays a draft even with missing passports — it hasn't been sent yet", () => {

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import type { AppRole, Profile } from "@/lib/types";
@@ -13,6 +13,8 @@ type AuthState = {
    *  as soon as the session is known, a beat before the roles arrive — so a
    *  role gate (AgentRoute) must wait for this, or it bounces a real agent. */
   rolesReady: boolean;
+  /** The roles query failed twice; `rolesReady` stays false. Retry with refreshProfile(). */
+  rolesError: boolean;
   isAgent: boolean;
   isAdmin: boolean;
   /** A "try it yourself" demo session (anonymous sign-in, migration 016). */
@@ -63,16 +65,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [rolesReady, setRolesReady] = useState(false);
+  const [rolesError, setRolesError] = useState(false);
+  // Whose profile/roles the state holds (or is loading). A different user's
+  // session must never see the previous user's roles, even for a beat.
+  const loadedFor = useRef<string | null>(null);
 
-  const loadProfileAndRoles = async (userId: string) => {
-    const [{ data: prof }, { data: roleRows }] = await Promise.all([
-      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
-      supabase.from("user_roles").select("role").eq("user_id", userId),
-    ]);
-    setProfile((prof as Profile | null) ?? null);
-    setRoles(((roleRows as { role: AppRole }[]) ?? []).map((r) => r.role));
-    setRolesReady(true);
-  };
+  const clearProfileAndRoles = useCallback(() => {
+    loadedFor.current = null;
+    setProfile(null);
+    setRoles([]);
+    setRolesReady(false);
+    setRolesError(false);
+  }, []);
+
+  /** Synchronously forget the previous user's profile/roles when the session belongs to someone else. */
+  const switchTo = useCallback(
+    (userId: string) => {
+      if (loadedFor.current === userId) return;
+      clearProfileAndRoles();
+      loadedFor.current = userId;
+    },
+    [clearProfileAndRoles],
+  );
+
+  const loadProfileAndRoles = useCallback(async (userId: string) => {
+    switchTo(userId);
+    setRolesError(false);
+    // One retry: a failed roles query must not read as "not an agent".
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const [{ data: prof, error: profError }, { data: roleRows, error }] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+        supabase.from("user_roles").select("role").eq("user_id", userId),
+      ]);
+      if (loadedFor.current !== userId) return; // someone else signed in meanwhile
+      if (!profError) setProfile((prof as Profile | null) ?? null);
+      if (!error) {
+        setRoles(((roleRows as { role: AppRole }[]) ?? []).map((r) => r.role));
+        setRolesReady(true);
+        return;
+      }
+      console.error(error);
+    }
+    setRolesError(true);
+  }, [switchTo]);
 
   useEffect(() => {
     let active = true;
@@ -81,12 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!active) return;
       setSession(next);
       if (next?.user) {
+        // Same render as the new session: no beat where user B carries user A's roles.
+        switchTo(next.user.id);
         // defer to avoid deadlocks inside the auth callback
         setTimeout(() => loadProfileAndRoles(next.user.id), 0);
       } else {
-        setProfile(null);
-        setRoles([]);
-        setRolesReady(false);
+        clearProfileAndRoles();
       }
       setLoading(false);
     });
@@ -102,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       active = false;
       data.subscription.unsubscribe();
     };
-  }, []);
+  }, [clearProfileAndRoles, loadProfileAndRoles, switchTo]);
 
   const value: AuthState = {
     session,
@@ -111,6 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     roles,
     loading,
     rolesReady,
+    rolesError,
     isAgent: roles.includes("agent") || roles.includes("admin"),
     isAdmin: roles.includes("admin"),
     isAnonymous: session?.user?.is_anonymous === true,
@@ -154,8 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     signOut: async () => {
       await supabase.auth.signOut();
-      setProfile(null);
-      setRoles([]);
+      clearProfileAndRoles();
     },
   };
 

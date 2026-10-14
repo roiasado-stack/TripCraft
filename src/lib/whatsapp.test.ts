@@ -67,6 +67,13 @@ describe("clientMessage", () => {
     expect(m.trim().endsWith("טיולי גשר")).toBe(true);
   });
 
+  it("doesn't promise vouchers or documents (the agent's source files stay private)", () => {
+    const m = clientMessage({ clientName: "דנה", destination: "רומא", shareUrl, joinUrl });
+    expect(m).not.toContain("שוברים");
+    expect(m).not.toContain("מסמכים");
+    expect(m).toContain(`להצטרפות לטיול ולקבלת עדכונים לאורך הדרך: ${joinUrl}`);
+  });
+
   it("reads naturally without a name, destination, join link or agency", () => {
     const m = clientMessage({ shareUrl });
     expect(m.startsWith("היי!")).toBe(true);

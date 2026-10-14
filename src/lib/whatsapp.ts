@@ -32,7 +32,11 @@ export function waMeUrl(phone: string | null | undefined, text: string): string 
   return `https://wa.me/${digits ?? ""}?text=${encodeURIComponent(text)}`;
 }
 
-/** The Hebrew message an agent sends a client: the public trip page, plus the join link for the full trip. */
+/**
+ * The Hebrew message an agent sends a client: the public trip page, plus the
+ * join link (the trip plan and updates). It never promises vouchers or
+ * documents — the agent's source files stay private to the agent.
+ */
 export function clientMessage(p: {
   clientName?: string | null;
   destination?: string | null;
@@ -48,7 +52,7 @@ export function clientMessage(p: {
     "",
     `לצפייה בטיול (בלי הרשמה): ${p.shareUrl}`,
   ];
-  if (p.joinUrl) lines.push("", `להצטרפות לטיול, עם השוברים והמסמכים האישיים: ${p.joinUrl}`);
+  if (p.joinUrl) lines.push("", `להצטרפות לטיול ולקבלת עדכונים לאורך הדרך: ${p.joinUrl}`);
   const agency = p.agencyName?.trim();
   if (agency) lines.push("", agency);
   return lines.join("\n");
