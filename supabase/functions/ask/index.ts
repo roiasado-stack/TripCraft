@@ -122,9 +122,13 @@ async function reserveGoogleCall(userId: string, tripId: string): Promise<boolea
   return !error;
 }
 
-/** True once the caller, the demo pool (for anonymous callers) or the whole app has hit today's cap. */
+/**
+ * Which cap the caller, the demo pool (for anonymous callers) or the whole app
+ * has hit: "month" for an agent's own monthly budget, "day" for every other
+ * (and every unreadable) case, null when the call may go ahead. Truthy = stop.
+ */
 // deno-lint-ignore no-explicit-any
-async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<boolean> {
+async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<"day" | "month" | null> {
   const [mine, app, demo, agent] = await Promise.all([
     supabase.rpc("my_agent_daily_cost_usd"),
     supabase.rpc("app_agent_daily_cost_usd"),
@@ -133,17 +137,20 @@ async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<boolea
     isAnonymous ? Promise.resolve({ data: null }) : supabase.rpc("my_agent_limits"),
   ]);
   // The app-wide cap is the last line of defence: an unreadable total counts as reached.
-  if (app.error || (app.data ?? 0) >= APP_DAILY_CAP_USD) return true;
+  if (app.error || (app.data ?? 0) >= APP_DAILY_CAP_USD) return "day";
   // An unreadable personal spend counts as reached too, for every kind of caller.
-  if (mine.error) return true;
-  if (isAnonymous) return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD;
-  // Can't tell whether the caller is an agent, or can't read an agent's spend: fail closed.
-  if (agent.error) return true;
-  if (agent.data) {
-    return !(Number(agent.data.ai_daily_usd) > (mine.data ?? 0)) ||
-      !(Number(agent.data.ai_monthly_usd) > Number(agent.data.month_cost_usd));
+  if (mine.error) return "day";
+  if (isAnonymous) {
+    return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD ? "day" : null;
   }
-  return (mine.data ?? 0) >= DAILY_CAP_USD;
+  // Can't tell whether the caller is an agent, or can't read an agent's spend: fail closed.
+  if (agent.error) return "day";
+  if (agent.data) {
+    // The month goes first: it won't clear tomorrow, and the message has to say so.
+    if (!(Number(agent.data.ai_monthly_usd) > Number(agent.data.month_cost_usd))) return "month";
+    return !(Number(agent.data.ai_daily_usd) > (mine.data ?? 0)) ? "day" : null;
+  }
+  return (mine.data ?? 0) >= DAILY_CAP_USD ? "day" : null;
 }
 
 // Service-role client for agent_runs writes, which users can't do themselves (018).
@@ -674,8 +681,9 @@ Deno.serve(async (req) => {
     const message = (body.message ?? "").trim();
     if (!message) return json({ error: "empty_message" }, 400);
 
-    if (await overDailyCap(supabase, isAnonymous)) {
-      return json({ error: "daily_cap_reached" }, 429);
+    const cap = await overDailyCap(supabase, isAnonymous);
+    if (cap) {
+      return json({ error: cap === "month" ? "monthly_cap_reached" : "daily_cap_reached" }, 429);
     }
     // Held estimate (about 4x the measured average question) until the real cost is logged.
     const { data: held } = (await adminDb()

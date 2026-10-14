@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS public.agent_accounts (
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'suspended')),
   agency_name TEXT NOT NULL CHECK (length(agency_name) BETWEEN 1 AND 120),
   phone TEXT CHECK (phone IS NULL OR length(phone) <= 40),
-  ai_daily_usd NUMERIC(10,2) NOT NULL DEFAULT 3 CHECK (ai_daily_usd BETWEEN 0 AND 15),
+  -- The AI day stays below the $15/day app-wide cap in the Edge Functions (APP_DAILY_CAP_USD),
+  -- so one agent can never use up the whole app's day.
+  ai_daily_usd NUMERIC(10,2) NOT NULL DEFAULT 3 CHECK (ai_daily_usd BETWEEN 0 AND 10),
   ai_monthly_usd NUMERIC(10,2) NOT NULL DEFAULT 15 CHECK (ai_monthly_usd BETWEEN 0 AND 500),
   google_daily INT NOT NULL DEFAULT 20 CHECK (google_daily BETWEEN 0 AND 100),
   max_active_trips INT NOT NULL DEFAULT 30 CHECK (max_active_trips BETWEEN 0 AND 500),

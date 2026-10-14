@@ -15,14 +15,40 @@ import type { AgentAccount } from "@/lib/types";
 const DELETE_CONFIRM_WORD = "מחיקה";
 
 export default function SettingsPage() {
-  const { user, profile, roles, isAgent, isAdmin, isAnonymous, refreshProfile, signOut } = useAuth();
+  const { user, profile, roles, rolesReady, isAgent, isAdmin, isAnonymous, refreshProfile, signOut } = useAuth();
   const { theme, toggle } = useTheme();
   const toast = useToast();
   const navigate = useNavigate();
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
-  const [agencyName, setAgencyName] = useState(profile?.agency_name ?? "");
   const [agencyColor, setAgencyColor] = useState(profile?.agency_color ?? "#12b3b0");
+  // The brochure shows the name the admin approved (agent_accounts, migration 023), read-only here.
+  const [approvedAgency, setApprovedAgency] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // On a reload the profile arrives after the first render: fill the fields once it
+  // (or another user's profile) is there, or saving would wipe what's stored.
+  useEffect(() => {
+    if (!profile) return;
+    setFullName(profile.full_name ?? "");
+    setAgencyColor(profile.agency_color ?? "#12b3b0");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
+
+  useEffect(() => {
+    if (!user || !isAgent) return;
+    let cancelled = false;
+    supabase
+      .from("agent_accounts")
+      .select("agency_name")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setApprovedAgency((data as { agency_name: string } | null)?.agency_name ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, isAgent]);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -75,11 +101,13 @@ export default function SettingsPage() {
   };
 
   const saveProfile = async () => {
-    if (!user) return;
+    // Until the profile has loaded the fields hold defaults, not what's stored.
+    if (!user || !rolesReady) return;
     setSaving(true);
+    // Only the fields this form edits. agency_name isn't one: the brochure uses the approved name.
     const { error } = await supabase
       .from("profiles")
-      .update({ full_name: fullName || null, agency_name: agencyName || null, agency_color: agencyColor })
+      .update(isAgent ? { full_name: fullName.trim() || null, agency_color: agencyColor } : { full_name: fullName.trim() || null })
       .eq("id", user.id);
     if (error) {
       setSaving(false);
@@ -135,10 +163,15 @@ export default function SettingsPage() {
         {/* agent branding */}
         {isAgent && (
           <GroupedList title="מיתוג סוכנות">
-            <label className={fieldRow}>
+            <div className={fieldRow}>
               <span className="type-body w-24 shrink-0">שם הסוכנות</span>
-              <input value={agencyName} onChange={(e) => setAgencyName(e.target.value)} placeholder="לא חובה" className={fieldInput} />
-            </label>
+              <div className="min-w-0 flex-1 py-2.5">
+                <div className="type-body truncate">
+                  <bdi>{approvedAgency ?? "—"}</bdi>
+                </div>
+                <div className="type-footnote text-muted-foreground">השם שאושר. לשינוי השם פנו אלינו</div>
+              </div>
+            </div>
             <label className={fieldRow}>
               <span className="type-body w-24 shrink-0">צבע מותג</span>
               <span dir="ltr" className="type-footnote min-w-0 flex-1 text-end font-mono text-muted-foreground">
@@ -155,10 +188,10 @@ export default function SettingsPage() {
           </GroupedList>
         )}
         {isAgent && (
-          <p className="type-footnote -mt-4 px-4 text-muted-foreground">השם, הצבע והלוגו יופיעו בדף הטיול הציבורי שתשלחו ללקוחות, וכל מי שמחזיק בקישור יראה אותם. הלוגו נשמר מיד, ושם וצבע נשמרים בכפתור "שמירת פרופיל".</p>
+          <p className="type-footnote -mt-4 px-4 text-muted-foreground">השם, הצבע והלוגו יופיעו בדף הטיול הציבורי שתשלחו ללקוחות, וכל מי שמחזיק בקישור יראה אותם. הלוגו נשמר מיד, והצבע נשמר בכפתור "שמירת פרופיל".</p>
         )}
 
-        <Button className="w-full" size="lg" loading={saving} onClick={saveProfile}>
+        <Button className="w-full" size="lg" loading={saving} disabled={!rolesReady} onClick={saveProfile}>
           שמירת פרופיל
         </Button>
 

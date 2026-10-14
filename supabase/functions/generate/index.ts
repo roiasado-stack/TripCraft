@@ -43,12 +43,17 @@ const APP_DAILY_CAP_USD = 15.0;
 // the AI, not a free tier. Same numbers as the ask function.
 const DEMO_DAILY_CAP_USD = 0.1;
 // Google place photos per signed-up user per day (the shared Google quota is about 100/day).
+// Also an agent's floor (max(google_daily, this)); mirrored as AGENT_MIN_PHOTOS_PER_DAY in src/lib/agent-admin.ts.
 const PLACE_PHOTOS_PER_USER_PER_DAY = 30;
 const DEMO_APP_DAILY_CAP_USD = 1.0;
 
-/** True once the caller, the demo pool (for anonymous callers) or the whole app has hit today's cap. */
+/**
+ * Which cap the caller, the demo pool (for anonymous callers) or the whole app
+ * has hit: "month" for an agent's own monthly budget, "day" for every other
+ * (and every unreadable) case, null when the call may go ahead. Truthy = stop.
+ */
 // deno-lint-ignore no-explicit-any
-async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<boolean> {
+async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<"day" | "month" | null> {
   const [mine, app, demo, agent] = await Promise.all([
     supabase.rpc("my_agent_daily_cost_usd"),
     supabase.rpc("app_agent_daily_cost_usd"),
@@ -57,17 +62,20 @@ async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<boolea
     isAnonymous ? Promise.resolve({ data: null }) : supabase.rpc("my_agent_limits"),
   ]);
   // The app-wide cap is the last line of defence: an unreadable total counts as reached.
-  if (app.error || (app.data ?? 0) >= APP_DAILY_CAP_USD) return true;
+  if (app.error || (app.data ?? 0) >= APP_DAILY_CAP_USD) return "day";
   // An unreadable personal spend counts as reached too, for every kind of caller.
-  if (mine.error) return true;
-  if (isAnonymous) return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD;
-  // Can't tell whether the caller is an agent, or can't read an agent's spend: fail closed.
-  if (agent.error) return true;
-  if (agent.data) {
-    return !(Number(agent.data.ai_daily_usd) > (mine.data ?? 0)) ||
-      !(Number(agent.data.ai_monthly_usd) > Number(agent.data.month_cost_usd));
+  if (mine.error) return "day";
+  if (isAnonymous) {
+    return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD ? "day" : null;
   }
-  return (mine.data ?? 0) >= DAILY_CAP_USD;
+  // Can't tell whether the caller is an agent, or can't read an agent's spend: fail closed.
+  if (agent.error) return "day";
+  if (agent.data) {
+    // The month goes first: it won't clear tomorrow, and the message has to say so.
+    if (!(Number(agent.data.ai_monthly_usd) > Number(agent.data.month_cost_usd))) return "month";
+    return !(Number(agent.data.ai_daily_usd) > (mine.data ?? 0)) ? "day" : null;
+  }
+  return (mine.data ?? 0) >= DAILY_CAP_USD ? "day" : null;
 }
 
 const cors = {
@@ -630,8 +638,9 @@ Deno.serve(async (req) => {
     // Google Places kinds spend Google quota, not Anthropic tokens: they're
     // bounded by the daily quota caps set in Google Cloud, not by agent_runs.
     if (body.kind !== "photo" && body.kind !== "geocode" && body.kind !== "place_resolve" && body.kind !== "place_photo") {
-      if (await overDailyCap(supabase, isAnonymous)) {
-        return new Response(JSON.stringify({ error: "daily_cap_reached" }), {
+      const cap = await overDailyCap(supabase, isAnonymous);
+      if (cap) {
+        return new Response(JSON.stringify({ error: cap === "month" ? "monthly_cap_reached" : "daily_cap_reached" }), {
           status: 429,
           headers: { ...cors, "Content-Type": "application/json" },
         });

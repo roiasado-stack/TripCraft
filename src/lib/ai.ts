@@ -52,6 +52,9 @@ export function aiErrorMessage(error: string | undefined, fallback: string): str
   switch (error) {
     case "daily_cap_reached":
       return "מכסת ה-AI להיום נוצלה. אפשר לנסות שוב מחר — כל שאר הטיול עובד כרגיל.";
+    // An agent's own monthly budget (migration 022): "try tomorrow" would be wrong.
+    case "monthly_cap_reached":
+      return "מכסת ה-AI החודשית של החשבון נוצלה. פנו אלינו להגדלה — כל שאר הטיול עובד כרגיל.";
     case "not_deployed":
     case "llm_failed":
       return "ה-AI לא זמין כרגע. כל שאר הטיול עובד כרגיל — נסו שוב מאוחר יותר.";

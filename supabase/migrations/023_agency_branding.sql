@@ -10,7 +10,10 @@
 --
 -- 2. get_shared_trip (last defined in 021) returns the owner's agency name,
 --    colour and logo only when the owner is an ACTIVE agent (agent role +
---    agent_accounts.status = 'active'). Anyone else's brochure gets
+--    agent_accounts.status = 'active'). The name is the one the admin approved
+--    (agent_accounts.agency_name), not the user-writable profiles.agency_name:
+--    an approved agent can't rename themselves into another brand on pages
+--    sent to the public. Anyone else's brochure gets
 --    agency = null — before this, any user's profiles.agency_name/colour
 --    showed up. The colour must be a #rrggbb value, and the logo comes back as
 --    a PATH (`<owner>/<file>`) to an existing PNG/JPEG/WebP of at most 1 MB in
@@ -61,6 +64,8 @@ USING (bucket_id = 'agency-logos' AND (storage.foldername(name))[1] = auth.uid()
 
 -- Branding of a trip owner -------------------------------------------------------------
 -- {name, color, logo_path} when the owner is an active agent, otherwise NULL.
+-- name is the admin-approved agent_accounts.agency_name (changed only by asking
+-- an admin), never profiles.agency_name, which the user can write.
 -- logo_path is the object name `<owner>/<file>`, never a URL: the page builds
 -- the URL from its own Supabase project, so a stored URL on another host can't
 -- reach visitors. profiles.agency_logo_url holds the public URL (settings
@@ -73,7 +78,7 @@ USING (bucket_id = 'agency-logos' AND (storage.foldername(name))[1] = auth.uid()
 CREATE OR REPLACE FUNCTION public.agency_branding(_owner UUID)
 RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT jsonb_build_object(
-    'name', nullif(btrim(p.agency_name), ''),
+    'name', nullif(btrim(a.agency_name), ''),
     'color', CASE WHEN p.agency_color ~ '^#[0-9A-Fa-f]{6}$' THEN p.agency_color END,
     'logo_path', (
       SELECT l.path
@@ -90,9 +95,9 @@ RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $
     )
   )
   FROM public.profiles p
+  JOIN public.agent_accounts a ON a.user_id = p.id AND a.status = 'active'
   WHERE p.id = _owner
     AND public.has_role(_owner, 'agent')
-    AND EXISTS (SELECT 1 FROM public.agent_accounts a WHERE a.user_id = _owner AND a.status = 'active')
 $$;
 REVOKE EXECUTE ON FUNCTION public.agency_branding(uuid) FROM PUBLIC, anon, authenticated;
 
@@ -182,6 +187,10 @@ WHERE pg_get_functiondef('public.get_shared_trip(text)'::regprocedure) NOT LIKE 
 UNION ALL
 SELECT 'agency_branding: not gated on an active agent', '', ''
 WHERE pg_get_functiondef('public.agency_branding(uuid)'::regprocedure) NOT LIKE '%status = ''active''%'
+UNION ALL
+SELECT 'agency_branding: name not the admin-approved agent_accounts.agency_name', '', ''
+WHERE pg_get_functiondef('public.agency_branding(uuid)'::regprocedure) LIKE '%p.agency_name%'
+   OR pg_get_functiondef('public.agency_branding(uuid)'::regprocedure) NOT LIKE '%a.agency_name%'
 UNION ALL
 SELECT 'agency_branding: logo not checked as a stored image of at most 1 MB', '', ''
 WHERE pg_get_functiondef('public.agency_branding(uuid)'::regprocedure) NOT LIKE '%mimetype%'

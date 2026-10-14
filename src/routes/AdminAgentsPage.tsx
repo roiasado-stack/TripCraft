@@ -8,7 +8,9 @@ import { Button, EmptyState, Field, GroupedList, Input, Modal, Spinner } from "@
 import { cn } from "@/lib/utils";
 import {
   AGENT_LIMIT_BOUNDS,
+  AGENT_MIN_PHOTOS_PER_DAY,
   adminAgentErrorHe,
+  agentPhotoLimit,
   agentsCountHe,
   formatUsd,
   groupAgents,
@@ -78,12 +80,17 @@ function AgentIdentity({ a, note }: { a: AgentAccountUsage; note?: string }) {
 }
 
 const LIMIT_FIELDS: { field: AgentLimitField; label: string; hint: string; inputMode: "decimal" | "numeric" }[] = [
-  { field: "ai_daily_usd", label: "AI ליום ($)", hint: `בין 0 ל-${AGENT_LIMIT_BOUNDS.ai_daily_usd.max}`, inputMode: "decimal" },
+  {
+    field: "ai_daily_usd",
+    label: "AI ליום ($)",
+    hint: `בין 0 ל-${AGENT_LIMIT_BOUNDS.ai_daily_usd.max} (מתחת לתקרה היומית של כל האפליקציה)`,
+    inputMode: "decimal",
+  },
   { field: "ai_monthly_usd", label: "AI לחודש ($)", hint: `בין 0 ל-${AGENT_LIMIT_BOUNDS.ai_monthly_usd.max}`, inputMode: "decimal" },
   {
     field: "google_daily",
     label: "קריאות Google ליום",
-    hint: `בין 0 ל-${AGENT_LIMIT_BOUNDS.google_daily.max}, לחיפושים ולתמונות בנפרד`,
+    hint: `בין 0 ל-${AGENT_LIMIT_BOUNDS.google_daily.max}. חיפושים: המספר הזה ליום. תמונות: לפחות ${AGENT_MIN_PHOTOS_PER_DAY} ליום, או המספר הזה אם הוא גבוה יותר`,
     inputMode: "numeric",
   },
   { field: "max_active_trips", label: "טיולים פעילים", hint: `בין 0 ל-${AGENT_LIMIT_BOUNDS.max_active_trips.max}`, inputMode: "numeric" },
@@ -277,8 +284,8 @@ export default function AdminAgentsPage() {
                     <UsageBar
                       label="תמונות Google היום"
                       used={a.google_photos_today}
-                      limit={a.google_daily}
-                      text={`${a.google_photos_today} מתוך ${a.google_daily}`}
+                      limit={agentPhotoLimit(a.google_daily)}
+                      text={`${a.google_photos_today} מתוך ${agentPhotoLimit(a.google_daily)}`}
                     />
                     <UsageBar
                       label="טיולים פעילים"

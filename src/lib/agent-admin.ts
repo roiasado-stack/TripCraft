@@ -14,13 +14,28 @@ export interface AgentLimits {
 
 export type AgentLimitDraft = Record<AgentLimitField, string>;
 
-/** Same ceilings as the agent_accounts CHECK constraints (migration 022). */
+/**
+ * Same ceilings as the agent_accounts CHECK constraints (migration 022). The
+ * AI day stays below the $15/day app-wide cap in the Edge Functions, so one
+ * agent can't use up the whole app's day.
+ */
 export const AGENT_LIMIT_BOUNDS: Record<AgentLimitField, { max: number; integer: boolean }> = {
-  ai_daily_usd: { max: 15, integer: false },
+  ai_daily_usd: { max: 10, integer: false },
   ai_monthly_usd: { max: 500, integer: false },
   google_daily: { max: 100, integer: true },
   max_active_trips: { max: 500, integer: true },
 };
+
+/**
+ * Google place photos per agent per day never go below this: generate allows
+ * max(google_daily, PLACE_PHOTOS_PER_USER_PER_DAY) — keep the two in step.
+ */
+export const AGENT_MIN_PHOTOS_PER_DAY = 30;
+
+/** The photo limit generate actually enforces for an agent with this google_daily. */
+export function agentPhotoLimit(googleDaily: number): number {
+  return Math.max(Number(googleDaily) || 0, AGENT_MIN_PHOTOS_PER_DAY);
+}
 
 export function limitsDraft(a: AgentLimits): AgentLimitDraft {
   return {

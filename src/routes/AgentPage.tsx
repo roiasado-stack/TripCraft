@@ -74,7 +74,8 @@ export default function AgentPage() {
   const attentionCount = rows.filter(needsHandling).length;
   const visible = sortBoard(rows, today).filter((r) => (filter === "all" || needsHandling(r)) && matchesBoardQuery(r, query));
   // The branding name from settings, else the name the agent asked for access with.
-  const agency = profile?.agency_name?.trim() || requestedAgency?.trim();
+  // The admin-approved name first: it is the one the brochure shows (023).
+  const agency = requestedAgency?.trim() || profile?.agency_name?.trim();
 
   return (
     <div className="mx-auto min-h-screen max-w-lg px-4 pb-16 pt-4">

@@ -269,3 +269,19 @@ SELECT pg_temp.login_anon();
 SELECT pg_temp.check('anon: a logo of exactly 1 MB is still shown',
   public.get_shared_trip('brand-slug-0123456789') #>> '{agency,logo_path}' = '00000000-0000-0000-0000-0000000000c5/edge.png');
 RESET ROLE;
+
+-- H. The brochure name is the admin-approved one: renaming in profiles changes nothing.
+SELECT pg_temp.login(pg_temp.id('brand_agent'));
+UPDATE public.profiles SET agency_name = 'El Al Official' WHERE id = pg_temp.id('brand_agent');
+SELECT pg_temp.check('agent: own profiles.agency_name is still writable (harmless)',
+  (SELECT agency_name FROM profiles WHERE id = pg_temp.id('brand_agent')) = 'El Al Official');
+RESET ROLE;
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: after a rename in profiles the brochure still shows the approved ''Brand Travel''',
+  public.get_shared_trip('brand-slug-0123456789') #>> '{agency,name}' = 'Brand Travel');
+RESET ROLE;
+UPDATE public.profiles SET agency_name = NULL WHERE id = pg_temp.id('brand_agent');
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: an empty profiles.agency_name does not hide the approved name',
+  public.get_shared_trip('brand-slug-0123456789') #>> '{agency,name}' = 'Brand Travel');
+RESET ROLE;

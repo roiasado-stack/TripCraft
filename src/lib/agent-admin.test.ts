@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_MIN_PHOTOS_PER_DAY,
   adminAgentErrorHe,
+  agentPhotoLimit,
   agentsCountHe,
   formatUsd,
   groupAgents,
@@ -15,6 +17,15 @@ import type { AgentAccountUsage } from "./types";
 
 const OK = { ai_daily_usd: "3", ai_monthly_usd: "15", google_daily: "20", max_active_trips: "30" };
 
+describe("agentPhotoLimit", () => {
+  it("never goes below the photo floor generate enforces", () => {
+    expect(AGENT_MIN_PHOTOS_PER_DAY).toBe(30);
+    expect(agentPhotoLimit(0)).toBe(30);
+    expect(agentPhotoLimit(20)).toBe(30);
+    expect(agentPhotoLimit(80)).toBe(80);
+  });
+});
+
 describe("validateAgentLimits", () => {
   it("accepts the defaults and parses numbers", () => {
     expect(validateAgentLimits(OK)).toEqual({
@@ -24,8 +35,13 @@ describe("validateAgentLimits", () => {
   });
 
   it("accepts the DB ceilings and zero", () => {
-    const r = validateAgentLimits({ ai_daily_usd: "15", ai_monthly_usd: "500", google_daily: "100", max_active_trips: "0" });
+    const r = validateAgentLimits({ ai_daily_usd: "10", ai_monthly_usd: "500", google_daily: "100", max_active_trips: "0" });
     expect(r.ok).toBe(true);
+  });
+
+  it("keeps an agent's AI day below the $15 app-wide cap", () => {
+    const r = validateAgentLimits({ ...OK, ai_daily_usd: "15" });
+    expect(r).toEqual({ ok: false, errors: { ai_daily_usd: "המקסימום הוא 10" } });
   });
 
   it("accepts decimals with up to two places for dollars, trimmed", () => {
@@ -34,11 +50,11 @@ describe("validateAgentLimits", () => {
   });
 
   it("rejects values above each ceiling", () => {
-    const r = validateAgentLimits({ ai_daily_usd: "15.01", ai_monthly_usd: "501", google_daily: "101", max_active_trips: "501" });
+    const r = validateAgentLimits({ ai_daily_usd: "10.01", ai_monthly_usd: "501", google_daily: "101", max_active_trips: "501" });
     expect(r).toEqual({
       ok: false,
       errors: {
-        ai_daily_usd: "המקסימום הוא 15",
+        ai_daily_usd: "המקסימום הוא 10",
         ai_monthly_usd: "המקסימום הוא 500",
         google_daily: "המקסימום הוא 100",
         max_active_trips: "המקסימום הוא 500",

@@ -120,7 +120,8 @@ export default function AgentSendPage() {
       destination: trip.destination,
       shareUrl: links.shareUrl,
       joinUrl: links.joinUrl,
-      agencyName: profile?.agency_name?.trim() || requestedAgency,
+      // The admin-approved name, as on the brochure (023).
+      agencyName: requestedAgency?.trim() || profile?.agency_name?.trim() || null,
     });
   // The preview never shows a link that doesn't work yet.
   const preview = buildMessage({

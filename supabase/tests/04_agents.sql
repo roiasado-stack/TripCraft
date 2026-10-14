@@ -105,7 +105,8 @@ SELECT pg_temp.check('admin: approval grants the agent role and records the deci
 SELECT pg_temp.check('admin: negative limits are rejected',
   pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, -1, 15, 20, 30)', pg_temp.id('stranger'))) = -1);
 SELECT pg_temp.check('admin: limits above the ceilings are rejected',
-  pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 16, 15, 20, 30)', pg_temp.id('stranger'))) = -1
+  pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 11, 15, 20, 30)', pg_temp.id('stranger'))) = -1
+  AND pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 15, 15, 20, 30)', pg_temp.id('stranger'))) = -1  -- not the whole app's day
   AND pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 3, 501, 20, 30)', pg_temp.id('stranger'))) = -1
   AND pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 3, 15, 101, 30)', pg_temp.id('stranger'))) = -1
   AND pg_temp.try(format('SELECT public.admin_set_agent_limits(%L, 3, 15, 20, 501)', pg_temp.id('stranger'))) = -1);
@@ -405,3 +406,41 @@ RESET ROLE;
 SELECT set_config('request.jwt.claims', '', true);
 SELECT pg_temp.check('no agent role was created for a user without a request',
   NOT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = pg_temp.id('viewer') AND role = 'agent'));
+
+-- Seed-shaped placeholder passports: private, no file.
+SELECT set_config('request.jwt.claims', '', true);
+INSERT INTO public.documents (trip_id, category, name, storage_path, uploaded_by, visibility) VALUES
+  (pg_temp.id('trip'), 'passport', 'placeholder-demo-no-file', NULL, pg_temp.id('owner'), 'private'),
+  (pg_temp.id('trip'), 'passport', 'participant-own-file', pg_temp.id('participant') || '/t/own.pdf', pg_temp.id('participant'), 'private');
+SELECT pg_temp.login(pg_temp.id('participant'));
+SELECT pg_temp.check('participant: cannot see the owner''s placeholder passport rows',
+  (SELECT count(*) FROM documents WHERE name = 'placeholder-demo-no-file') = 0);
+SELECT pg_temp.check('participant: a new document row cannot point into another user''s folder',
+  pg_temp.try(format('INSERT INTO documents (trip_id, category, name, storage_path) VALUES (%L, %L, %L, %L)',
+    pg_temp.id('trip'), 'passport', 'x', pg_temp.id('owner') || '/victim.pdf')) = -1);
+SELECT pg_temp.check('participant: an own document row cannot be re-aimed at another user''s folder',
+  pg_temp.try(format('UPDATE documents SET storage_path = %L WHERE name = %L',
+    pg_temp.id('owner') || '/victim.pdf', 'participant-own-file')) = -1);
+RESET ROLE;
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: placeholder documents never reach the brochure',
+  public.get_shared_trip('test-slug-0123456789')::text NOT LIKE '%placeholder-demo-no-file%');
+RESET ROLE;
+
+-- A suspended agent keeps their own trip's client row but loses the board and limits.
+-- 'owner' was approved above and 'trip' already has a trip_clients row: both upserts are no-ops there.
+SELECT set_config('request.jwt.claims', '', true);
+INSERT INTO public.agent_accounts (user_id, status, agency_name) VALUES (pg_temp.id('owner'), 'suspended', 'Was An Agency')
+  ON CONFLICT (user_id) DO UPDATE SET status = 'suspended';
+DELETE FROM public.user_roles WHERE user_id = pg_temp.id('owner') AND role = 'agent';
+INSERT INTO public.trip_clients (trip_id, client_name, client_phone) VALUES (pg_temp.id('trip'), 'Client', '050-0000009')
+  ON CONFLICT (trip_id) DO NOTHING;
+SELECT pg_temp.login(pg_temp.id('owner'));
+SELECT pg_temp.check('suspended agent: still reads their own trip''s client, but the board is empty',
+  (SELECT count(*) FROM trip_clients WHERE trip_id = pg_temp.id('trip')) = 1
+  AND (SELECT count(*) FROM agent_trip_board()) = 0 AND public.my_agent_limits() IS NULL);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('editor of a suspended agent''s trip: still no client contact',
+  (SELECT count(*) FROM trip_clients) = 0);
+RESET ROLE;

@@ -1,11 +1,17 @@
 // Seeds a fictional demo travel agency ("טיולי הגשר — סוכנות לדוגמה") for ONE
 // existing user, so the agency beta can be tried and demoed without real
-// client data. Everything here is invented: names, phones (050-0000xxx),
-// hotels, booking refs. No files are uploaded; passports are placeholder
-// document rows with no file ("אין קובץ").
+// client data. Everything here is invented: names, the guide's phone
+// (050-0000xxx), hotels, booking refs. Demo clients have NO phone, so a stray
+// tap on "send on WhatsApp" can't message a real number — during a demo, type
+// your own. No files are uploaded; passports are placeholder document rows with
+// no file ("אין קובץ").
 //
 //   npm run seed:demo-agency -- agent-v1@test.local            seed (or refresh)
 //   npm run seed:demo-agency -- agent-v1@test.local --remove   delete what it made
+//
+// Safety: it refuses a user whose agent account is suspended, and a user who
+// already has a different agency (agent account or profile branding) unless
+// --force is given, which replaces that agency with the demo one.
 //
 // What it does for that user:
 //   1. agent_accounts row 'active' + the 'agent' role (as if Roi approved it),
@@ -31,7 +37,7 @@ import { createInterface } from "node:readline/promises";
 
 const DEMO_AGENCY = "טיולי הגשר — סוכנות לדוגמה";
 const DEMO_AGENCY_PHONE = "03-0000000";
-// Dark blue: white hero text on it is far above WCAG AA (≈ 8:1).
+// Dark blue. The brochure uses it only as the accent edge of the agency strip (no text sits on it).
 const DEMO_COLOR = "#1d4e89";
 const TRIP_COUNT = 6;
 
@@ -39,14 +45,15 @@ const TRIP_COUNT = 6;
 const args = process.argv.slice(2);
 const flags = new Set(args.filter((a) => a.startsWith("--")));
 const email = args.find((a) => !a.startsWith("--"))?.trim().toLowerCase();
-const unknown = [...flags].filter((f) => f !== "--remove" && f !== "--prod");
+const unknown = [...flags].filter((f) => f !== "--remove" && f !== "--prod" && f !== "--force");
 if (!email || !email.includes("@") || unknown.length) {
-  console.error("Usage: npm run seed:demo-agency -- <email of an existing user> [--remove] [--prod]");
+  console.error("Usage: npm run seed:demo-agency -- <email of an existing user> [--remove] [--prod] [--force]");
   if (unknown.length) console.error(`Unknown flag: ${unknown.join(", ")}`);
   process.exit(2);
 }
 const REMOVE = flags.has("--remove");
 const PROD = flags.has("--prod");
+const FORCE = flags.has("--force");
 
 // ---- connection -------------------------------------------------------------------
 function localStatus() {
@@ -134,12 +141,13 @@ const at = (offset, hhmm) => {
   d.setHours(h, m, 0, 0);
   return d.toISOString(); // a full instant, not a calendar day
 };
-/** Offset (from today) of the first Friday on or after `offset`. */
-const firstFridayFrom = (offset) => {
+/** Offset (from today) of the first day on or after `offset` that falls on `weekday` (0 = Sunday). */
+const firstWeekdayFrom = (offset, weekday) => {
   let o = offset;
-  while (dayAt(o).getDay() !== 5) o++;
+  while (dayAt(o).getDay() !== weekday) o++;
   return o;
 };
+const firstFridayFrom = (offset) => firstWeekdayFrom(offset, 5);
 
 // ---- the six trips ----------------------------------------------------------------------
 // state: what the /agent list should show for it (agentTripStatus in src/lib/agent-board.ts).
@@ -155,7 +163,19 @@ function buildTrips() {
   ];
   const barMitzvahPeople = barMitzvahFamilies.flatMap(([surname, firsts]) => firsts.map((f) => `${f} ${surname}`));
 
-  const parisFriday = firstFridayFrom(6);
+  // Paris is built around one Shabbat: Thursday → Wednesday. The Thursday is 1–7 days
+  // ahead, so the trip always shows "יוצא בקרוב" (departing within a week), and
+  // nothing in it trips the itinerary's Shabbat warning (shabbatConflict in
+  // ItineraryTab): no flight on Friday or Saturday, the Friday items are a morning
+  // errand (always before candle lighting) and a dinner with no time, Saturday has
+  // no items at all (any item there, timed or not, counts before havdalah), and the
+  // walking tour is on Sunday.
+  const parisStart = firstFridayFrom(2) - 1; // a Thursday
+  const parisFriday = parisStart + 1;
+  const parisEnd = parisStart + 6; // the Wednesday after
+  // The bar mitzvah group keeps kosher too, so the same warning applies: Sunday → Thursday,
+  // aliyah at the Monday Torah reading, nothing on Shabbat.
+  const pragueStart = firstWeekdayFrom(45, 0);
 
   return [
     {
@@ -170,7 +190,7 @@ function buildTrips() {
         cover_emoji: "🏛️",
         is_shared: true,
       },
-      client: { client_name: "משפחת אלון (דמו)", client_phone: "050-0000001" },
+      client: { client_name: "משפחת אלון (דמו)", client_phone: null },
       people: [
         { name: "דני אלון", age: 42 },
         { name: "רותם אלון", age: 40 },
@@ -200,29 +220,29 @@ function buildTrips() {
       trip: {
         title: "בר המצווה של יונתן בפראג",
         destination: "פראג, צ'כיה",
-        start_date: day(45),
-        end_date: day(49),
+        start_date: day(pragueStart),
+        end_date: day(pragueStart + 4),
         trip_type: "family",
         cover_emoji: "🎉",
         is_shared: true,
       },
-      client: { client_name: "משפחת ברק (דמו)", client_phone: "050-0000002" },
+      client: { client_name: "משפחת ברק (דמו)", client_phone: null },
       people: barMitzvahPeople.map((name) => ({ name, preferences: ["kosher"] })),
       passportsFor: barMitzvahPeople.length,
       flights: [
-        { direction: "outbound", airline: "ישראייר", flight_number: "6H761", from_airport: "TLV", to_airport: "PRG", depart_at: at(45, "06:00"), arrive_at: at(45, "09:30"), booking_ref: "DEMO-P2" },
-        { direction: "inbound", airline: "ישראייר", flight_number: "6H762", from_airport: "PRG", to_airport: "TLV", depart_at: at(49, "18:20"), arrive_at: at(49, "23:10"), booking_ref: "DEMO-P2" },
+        { direction: "outbound", airline: "ישראייר", flight_number: "6H761", from_airport: "TLV", to_airport: "PRG", depart_at: at(pragueStart, "06:00"), arrive_at: at(pragueStart, "09:30"), booking_ref: "DEMO-P2" },
+        { direction: "inbound", airline: "ישראייר", flight_number: "6H762", from_airport: "PRG", to_airport: "TLV", depart_at: at(pragueStart + 4, "18:20"), arrive_at: at(pragueStart + 4, "23:10"), booking_ref: "DEMO-P2" },
       ],
       stays: [
-        { hotel_name: "Hotel Příklad Old Town", address: "Staré Město, Praha", check_in: day(45), check_out: day(49), booking_ref: "DEMO-H2", notes: "18 חדרים, קומה שלמה (דמו)" },
+        { hotel_name: "Hotel Příklad Old Town", address: "Staré Město, Praha", check_in: day(pragueStart), check_out: day(pragueStart + 4), booking_ref: "DEMO-H2", notes: "18 חדרים, קומה שלמה (דמו)" },
       ],
       transfers: [
-        { kind: "transfer", provider: "אוטובוס דמו 50 מקומות", pickup_location: "PRG", dropoff_location: "Hotel Příklad Old Town", pickup_at: at(45, "10:15"), booking_ref: "DEMO-T2" },
+        { kind: "transfer", provider: "אוטובוס דמו 50 מקומות", pickup_location: "PRG", dropoff_location: "Hotel Příklad Old Town", pickup_at: at(pragueStart, "10:15"), booking_ref: "DEMO-T2" },
       ],
       itinerary: [
-        { offset: 46, start_time: "09:00", title: "עלייה לתורה בבית הכנסת הספרדי", category: "activity", location: "Španělská synagoga, Praha" },
-        { offset: 46, start_time: "13:00", title: "סעודת בר מצווה (כשרה)", category: "food", location: "Josefov, Praha" },
-        { offset: 47, start_time: "10:00", title: "טירת פראג וגשר קארל", category: "activity", location: "Pražský hrad" },
+        { offset: pragueStart + 1, start_time: "09:00", title: "עלייה לתורה בבית הכנסת הספרדי", category: "activity", location: "Španělská synagoga, Praha" },
+        { offset: pragueStart + 1, start_time: "13:00", title: "סעודת בר מצווה (כשרה)", category: "food", location: "Josefov, Praha" },
+        { offset: pragueStart + 2, start_time: "10:00", title: "טירת פראג וגשר קארל", category: "activity", location: "Pražský hrad" },
       ],
     },
     {
@@ -231,13 +251,13 @@ function buildTrips() {
       trip: {
         title: "פריז, שבת ברובע היהודי",
         destination: "פריז, צרפת",
-        start_date: day(6),
-        end_date: day(12),
+        start_date: day(parisStart),
+        end_date: day(parisEnd),
         trip_type: "couple",
         cover_emoji: "🥐",
         is_shared: true,
       },
-      client: { client_name: "יעל ואיתי שמש (דמו)", client_phone: "050-0000003" },
+      client: { client_name: "יעל ואיתי שמש (דמו)", client_phone: null },
       // Kosher keepers: the itinerary shows Shabbat times (Hebcal, through the ask function).
       people: [
         { name: "יעל שמש", age: 34, preferences: ["kosher"] },
@@ -245,17 +265,19 @@ function buildTrips() {
       ],
       passportsFor: 2,
       flights: [
-        { direction: "outbound", airline: "אל על", flight_number: "LY325", from_airport: "TLV", to_airport: "CDG", depart_at: at(6, "08:15"), arrive_at: at(6, "12:05"), booking_ref: "DEMO-F3" },
-        { direction: "inbound", airline: "אל על", flight_number: "LY326", from_airport: "CDG", to_airport: "TLV", depart_at: at(12, "15:30"), arrive_at: at(12, "20:20"), booking_ref: "DEMO-F3" },
+        { direction: "outbound", airline: "אל על", flight_number: "LY325", from_airport: "TLV", to_airport: "CDG", depart_at: at(parisStart, "08:15"), arrive_at: at(parisStart, "12:05"), booking_ref: "DEMO-F3" },
+        { direction: "inbound", airline: "אל על", flight_number: "LY326", from_airport: "CDG", to_airport: "TLV", depart_at: at(parisEnd, "15:30"), arrive_at: at(parisEnd, "20:20"), booking_ref: "DEMO-F3" },
       ],
       stays: [
-        { hotel_name: "Hôtel Exemple Marais", address: "Le Marais, Paris", check_in: day(6), check_out: day(12), booking_ref: "DEMO-H3", notes: "קרוב לרחוב רוזייה, בהליכה לבית הכנסת (דמו)" },
+        { hotel_name: "Hôtel Exemple Marais", address: "Le Marais, Paris", check_in: day(parisStart), check_out: day(parisEnd), booking_ref: "DEMO-H3", notes: "קרוב לרחוב רוזייה, בהליכה לבית הכנסת (דמו)" },
       ],
       transfers: [],
       itinerary: [
-        { offset: parisFriday, start_time: "13:00", title: "קניות לשבת ברחוב רוזייה", category: "food", location: "Rue des Rosiers, Paris" },
-        { offset: parisFriday, start_time: "19:00", title: "ארוחת שבת שהוזמנה מראש", category: "food", location: "Le Marais, Paris" },
-        { offset: parisFriday + 1, start_time: "16:00", title: "סיור רגלי ברובע היהודי", category: "activity", location: "Le Marais, Paris" },
+        // 11:00 is before candle lighting in Paris on every Friday of the year (earliest ≈ 16:35).
+        { offset: parisFriday, start_time: "11:00", title: "קניות לשבת ברחוב רוזייה", category: "food", location: "Rue des Rosiers, Paris" },
+        // No time: the meal follows candle lighting, whenever that is this week.
+        { offset: parisFriday, start_time: null, title: "ארוחת שבת שהוזמנה מראש", category: "food", location: "Le Marais, Paris" },
+        { offset: parisFriday + 2, start_time: "10:00", title: "סיור רגלי ברובע היהודי", category: "activity", location: "Le Marais, Paris" },
       ],
     },
     {
@@ -272,7 +294,7 @@ function buildTrips() {
         guide_name: "אבי המדריך (דמו)",
         guide_phone: "050-0000101",
       },
-      client: { client_name: "מועדון צעדים (דמו)", client_phone: "050-0000004" },
+      client: { client_name: "מועדון צעדים (דמו)", client_phone: null },
       people: [
         "חנה לבני", "שמעון לבני", "רינה צור", "יוסי צור", "אסתר מור", "מאיר מור",
         "ציפי אורן", "דוד אורן", "שולה נחמיאס", "בני נחמיאס", "מרים שפר", "אברהם שפר",
@@ -309,7 +331,7 @@ function buildTrips() {
         cover_emoji: "🚲",
         is_shared: false,
       },
-      client: { client_name: "משפחת נחום (דמו)", client_phone: "050-0000005" },
+      client: { client_name: "משפחת נחום (דמו)", client_phone: null },
       people: [
         { name: "עמית נחום", age: 45 },
         { name: "שרון נחום", age: 44 },
@@ -336,7 +358,7 @@ function buildTrips() {
         cover_emoji: "💂",
         is_shared: true,
       },
-      client: { client_name: "רון ודנה גל (דמו)", client_phone: "050-0000006" },
+      client: { client_name: "רון ודנה גל (דמו)", client_phone: null },
       people: [
         { name: "רון גל", age: 31 },
         { name: "דנה גל", age: 30 },
@@ -359,6 +381,31 @@ function buildTrips() {
     ...t,
     people: t.people.map((p) => (typeof p === "string" ? { name: p } : p)),
   }));
+}
+
+// ---- safety -------------------------------------------------------------------------------
+/**
+ * What the seed would overwrite on this user. `blocked`: never seed (a suspended agent —
+ * un-suspending is an admin decision, not a seed side effect). `conflicts`: a real agency
+ * that only --force may replace.
+ */
+async function preflight(uid) {
+  const [account] = await rest("GET", `agent_accounts?select=status,agency_name&user_id=eq.${uid}`);
+  const [profile] = await rest("GET", `profiles?select=agency_name,agency_logo_url&id=eq.${uid}`);
+  const blocked = account?.status === "suspended"
+    ? `this user is a SUSPENDED agent ("${account.agency_name}"). The seed never re-activates an account — decide in /admin/agents, or use another user.`
+    : null;
+  const conflicts = [];
+  if (account && account.agency_name !== DEMO_AGENCY) {
+    conflicts.push(`an agent account for "${account.agency_name}" (${account.status})`);
+  }
+  const profileName = profile?.agency_name?.trim();
+  if (profileName && profileName !== DEMO_AGENCY) {
+    conflicts.push(`agency branding "${profileName}" on the profile`);
+  } else if (!profileName && profile?.agency_logo_url && account?.agency_name !== DEMO_AGENCY) {
+    conflicts.push("an agency logo on the profile");
+  }
+  return { blocked, conflicts };
 }
 
 // ---- seed ---------------------------------------------------------------------------------
@@ -546,6 +593,29 @@ if (!user) {
   return 1;
 }
 
+// Seeding over a real agency: never for a suspended one, otherwise only with --force.
+let conflicts = [];
+if (!REMOVE) {
+  let check;
+  try {
+    check = await preflight(user.id);
+  } catch (e) {
+    console.error(`Could not read the account of ${user.email}: ${e instanceof Error ? e.message : e}`);
+    return 1;
+  }
+  if (check.blocked) {
+    console.error(`Refusing: ${check.blocked} Nothing was changed.`);
+    return 1;
+  }
+  conflicts = check.conflicts;
+  if (conflicts.length && !FORCE) {
+    console.error(`Refusing: ${user.email} already has ${conflicts.join(" and ")}.`);
+    console.error("The seed would replace it with the demo agency. Use a fresh user, or add --force to replace it on purpose.");
+    console.error("Nothing was changed.");
+    return 1;
+  }
+}
+
 if (!isLocal) {
   const host = new URL(apiUrl).host;
   console.log(`\n*** PRODUCTION: ${host} ***`);
@@ -557,7 +627,11 @@ if (!isLocal) {
     console.log(`This will make this account the demo agency "${DEMO_AGENCY}":`);
     console.log("  - agent account 'active' + the 'agent' role (as if you approved it in /admin/agents)");
     console.log(`  - agency name and colour ${DEMO_COLOR} on the profile (shown on the public trip pages)`);
-    console.log("  - six fictional trips with clients, travellers, bookings; five of them shared with a public link");
+    console.log("  - six fictional trips with clients (no phone numbers), travellers, bookings; five of them shared with a public link");
+    console.log("It refuses a suspended agent, and an account that already has another agency unless --force.");
+    if (conflicts.length) {
+      console.log(`  --force: this REPLACES ${conflicts.join(" and ")} with the demo agency.`);
+    }
     console.log("Re-running it later updates the same six trips. Remove it all with --remove.");
   }
   const rl = createInterface({ input: process.stdin, output: process.stdout });
