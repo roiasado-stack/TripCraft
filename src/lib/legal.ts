@@ -11,7 +11,7 @@ export const LEGAL = {
   /** Postal address for legal notices. */
   address: "ירושלים",
   /** Contact address for privacy requests, account questions and legal notices. */
-  contactEmail: "Roi.asado@gmail.com",
+  contactEmail: "Tripcraft26@gmail.com",
   /** Accessibility coordinator — name, and a phone or email to reach them. */
   accessibilityContact: "רועי אסדו",
   /** City whose courts have jurisdiction. */
