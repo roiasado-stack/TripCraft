@@ -102,7 +102,7 @@ export default function SettingsPage() {
 
   const saveProfile = async () => {
     // Until the profile has loaded the fields hold defaults, not what's stored.
-    if (!user || !rolesReady) return;
+    if (!user || !rolesReady || !profile) return;
     setSaving(true);
     // Only the fields this form edits. agency_name isn't one: the brochure uses the approved name.
     const { error } = await supabase
@@ -191,7 +191,7 @@ export default function SettingsPage() {
           <p className="type-footnote -mt-4 px-4 text-muted-foreground">השם, הצבע והלוגו יופיעו בדף הטיול הציבורי שתשלחו ללקוחות, וכל מי שמחזיק בקישור יראה אותם. הלוגו נשמר מיד, והצבע נשמר בכפתור "שמירת פרופיל".</p>
         )}
 
-        <Button className="w-full" size="lg" loading={saving} disabled={!rolesReady} onClick={saveProfile}>
+        <Button className="w-full" size="lg" loading={saving} disabled={!rolesReady || !profile} onClick={saveProfile}>
           שמירת פרופיל
         </Button>
 
