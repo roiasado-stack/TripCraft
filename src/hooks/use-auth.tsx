@@ -9,6 +9,10 @@ type AuthState = {
   profile: Profile | null;
   roles: AppRole[];
   loading: boolean;
+  /** Profile and roles have loaded for the current user. `loading` turns false
+   *  as soon as the session is known, a beat before the roles arrive — so a
+   *  role gate (AgentRoute) must wait for this, or it bounces a real agent. */
+  rolesReady: boolean;
   isAgent: boolean;
   isAdmin: boolean;
   /** A "try it yourself" demo session (anonymous sign-in, migration 016). */
@@ -58,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rolesReady, setRolesReady] = useState(false);
 
   const loadProfileAndRoles = async (userId: string) => {
     const [{ data: prof }, { data: roleRows }] = await Promise.all([
@@ -66,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ]);
     setProfile((prof as Profile | null) ?? null);
     setRoles(((roleRows as { role: AppRole }[]) ?? []).map((r) => r.role));
+    setRolesReady(true);
   };
 
   useEffect(() => {
@@ -80,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(null);
         setRoles([]);
+        setRolesReady(false);
       }
       setLoading(false);
     });
@@ -103,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profile,
     roles,
     loading,
+    rolesReady,
     isAgent: roles.includes("agent") || roles.includes("admin"),
     isAdmin: roles.includes("admin"),
     isAnonymous: session?.user?.is_anonymous === true,

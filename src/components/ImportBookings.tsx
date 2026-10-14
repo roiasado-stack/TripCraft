@@ -254,9 +254,12 @@ export function ImportBookings({
   open,
   onClose,
   onConfirm,
+  context = "wizard",
 }: {
   open: boolean;
   onClose: () => void;
+  /** Where the result goes next, for the hints only: the wizard's later steps, or the agent's review screen. */
+  context?: "wizard" | "agent";
   /** Receives the reviewed trip basics, travellers and bookings (with their
    *  original files). Nothing is written by this component — the caller stages it. */
   onConfirm: (result: BookingsImportResult) => void;
@@ -569,7 +572,9 @@ export function ImportBookings({
       ) : (
         <div className="flex flex-col gap-4">
           <div className="rounded-2xl bg-primary-soft p-3 text-sm font-semibold text-secondary-foreground">
-            זה מה שזיהינו. אפשר לתקן — שום דבר לא נשמר עד שתלחץ "יצירת הטיול" באשף.
+            {context === "agent"
+              ? "זה מה שזיהינו. אפשר לתקן — שום דבר לא נשמר עד שתלחצו \"יצירת הטיול\" במסך הבא."
+              : "זה מה שזיהינו. אפשר לתקן — שום דבר לא נשמר עד שתלחץ \"יצירת הטיול\" באשף."}
           </div>
           {skipped > 0 && (
             <div className="flex gap-2 rounded-2xl bg-destructive/10 p-3 text-xs text-destructive">
@@ -623,7 +628,9 @@ export function ImportBookings({
             <h3 className="font-bold">נוסעים ({travellers.length})</h3>
             {travellers.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                לא נמצאו שמות נוסעים בהזמנות — אפשר להוסיף בשלב המשתתפים.
+                {context === "agent"
+                  ? "לא נמצאו שמות נוסעים בהזמנות — אפשר להוסיף במסך הבא."
+                  : "לא נמצאו שמות נוסעים בהזמנות — אפשר להוסיף בשלב המשתתפים."}
               </p>
             ) : (
               travellers.map((t) => {
@@ -678,7 +685,11 @@ export function ImportBookings({
                 </button>
               </Card>
             ))}
-            <p className="text-xs text-muted-foreground">פרטים מלאים (מושבים, טרמינלים, אסמכתאות) יופיעו לעריכה בשלב הלוגיסטיקה.</p>
+            <p className="text-xs text-muted-foreground">
+              {context === "agent"
+                ? "פרטים מלאים (מושבים, טרמינלים, אסמכתאות) נשמרים בטיול, ואפשר לערוך אותם שם."
+                : "פרטים מלאים (מושבים, טרמינלים, אסמכתאות) יופיעו לעריכה בשלב הלוגיסטיקה."}
+            </p>
           </section>
 
           <div className="flex gap-2">

@@ -1,21 +1,29 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, CircleAlert, CircleCheck, Plus, ScanLine, Ticket, Trash2, Users, X } from "lucide-react";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button, Card, Checkbox, Chip, Field, Input, Label, Segmented, Spinner } from "@/components/ui";
 import { ImportParticipants } from "@/components/ImportParticipants";
-import { ImportBookings, personKey, type BookingsImportResult, type BookingTraveller } from "@/components/ImportBookings";
-import {
-  ImportVoucher,
-  type VoucherCarData,
-  type VoucherFlightData,
-  type VoucherHotelData,
-  type VoucherResult,
-} from "@/components/ImportVoucher";
+import { ImportBookings, personKey, type BookingsImportResult } from "@/components/ImportBookings";
+import { ImportVoucher, type VoucherResult } from "@/components/ImportVoucher";
 import { generateContent } from "@/lib/ai";
-import { uploadTripDocument } from "@/lib/documents";
+import { insertTripWithDrafts, uploadSourceDocs } from "@/lib/create-trip";
+import {
+  bookingsToDrafts,
+  collectSourceDocs,
+  countHe,
+  flightDraftFromVoucher,
+  joinHebrew,
+  stayDraftFromVoucher,
+  transferDraftFromVoucher,
+  travellerToDraft,
+  type FlightDraft,
+  type ParticipantInsert,
+  type PartDraft,
+  type StayDraft,
+  type TransferDraft,
+} from "@/lib/trip-drafts";
 import { Flag } from "@/components/Flag";
 import type { Participant, Trip } from "@/lib/types";
 import { localDateString } from "@/lib/trip-dates";
@@ -28,154 +36,10 @@ import {
   tripDuration,
 } from "@/lib/trip-options";
 
-type PartDraft = {
-  name: string;
-  ageMode: "age" | "range";
-  age: string;
-  age_range: string;
-  preferences: string[];
-};
-// The optional fields below have no wizard UI: they carry voucher-scanned
-// detail through to create() as hidden values (manually added drafts simply
-// leave them unset). `source_file` is the scanned original, uploaded to
-// trip-docs once the trip exists. Every flight segment scanned from one file
-// shares that one File object (afterCreate de-duplicates by identity), so the
-// file is dropped only once every draft carrying it has been deleted in the
-// logistics step — deleting just one segment never loses it.
-type FlightDraft = {
-  direction: "outbound" | "inbound";
-  airline: string;
-  flight_number: string;
-  from_airport: string;
-  to_airport: string;
-  depart_at: string;
-  arrive_at?: string | null; // ISO / wall-clock datetime
-  from_terminal?: string | null;
-  to_terminal?: string | null;
-  seats?: string | null;
-  baggage?: string | null;
-  booking_ref?: string | null;
-  notes?: string | null;
-  source_file?: File | null;
-};
-type StayDraft = {
-  hotel_name: string;
-  address: string;
-  check_in: string;
-  check_out: string;
-  booking_ref: string;
-  phone?: string | null;
-  url?: string | null;
-  notes?: string | null;
-  source_file?: File | null;
-};
-type TransferDraft = {
-  kind: string;
-  provider: string;
-  pickup_location: string;
-  pickup_at: string;
-  dropoff_location?: string | null;
-  return_at?: string | null; // ISO / wall-clock datetime
-  booking_ref?: string | null;
-  phone?: string | null;
-  url?: string | null;
-  notes?: string | null;
-  source_file?: File | null;
-};
-
 type TaskStatus = "running" | "done" | "failed";
 type BuildState = { suggestions: TaskStatus | null; itinerary: TaskStatus | null; docs: TaskStatus | null };
 
 const STEPS = ["יעד", "משתתפים", "לוגיסטיקה", "סיכום"];
-
-/** Hidden datetime field → ISO for insert; null when empty or unparsable. */
-function toIso(v: string | null | undefined): string | null {
-  if (!v) return null;
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-function flightDraftFromVoucher(d: VoucherFlightData, file: File | null): FlightDraft {
-  return {
-    direction: d.direction === "inbound" ? "inbound" : "outbound",
-    airline: d.airline ?? "",
-    flight_number: d.flight_number ?? "",
-    from_airport: d.from_airport ?? "",
-    to_airport: d.to_airport ?? "",
-    depart_at: isoToDatetimeLocalInput(d.depart_at),
-    arrive_at: d.arrive_at,
-    from_terminal: d.from_terminal,
-    to_terminal: d.to_terminal,
-    seats: d.seats,
-    baggage: d.baggage,
-    booking_ref: d.booking_ref,
-    notes: d.notes,
-    source_file: file,
-  };
-}
-function stayDraftFromVoucher(d: VoucherHotelData, file: File | null): StayDraft {
-  return {
-    hotel_name: d.hotel_name,
-    address: d.address ?? "",
-    check_in: d.check_in ?? "",
-    check_out: d.check_out ?? "",
-    booking_ref: d.booking_ref ?? "",
-    phone: d.phone,
-    url: d.url,
-    notes: d.notes,
-    source_file: file,
-  };
-}
-function transferDraftFromVoucher(d: VoucherCarData, file: File | null): TransferDraft {
-  return {
-    kind: "car_rental",
-    provider: d.provider ?? "",
-    pickup_location: d.pickup_location ?? "",
-    pickup_at: isoToDatetimeLocalInput(d.pickup_at),
-    dropoff_location: d.dropoff_location,
-    return_at: d.return_at,
-    booking_ref: d.booking_ref,
-    phone: d.phone,
-    url: d.url,
-    notes: d.notes,
-    source_file: file,
-  };
-}
-
-/** Booking traveller → participant draft. An unknown age stays unset: exact-age
- *  mode with an empty age saves as age/age_range null, and the user can fill it
- *  in on the participants step (same rule as the passport-scan staging). */
-function travellerToDraft(t: BookingTraveller): PartDraft {
-  if (t.age != null) {
-    return { name: t.name, ageMode: "age", age: String(t.age), age_range: AGE_RANGES[5], preferences: t.preferences };
-  }
-  if (t.age_range) {
-    return { name: t.name, ageMode: "range", age: "", age_range: t.age_range, preferences: t.preferences };
-  }
-  return { name: t.name, ageMode: "age", age: "", age_range: AGE_RANGES[5], preferences: t.preferences };
-}
-
-/** ["2 טיסות", "מלון אחד", "3 נוסעים"] → "2 טיסות, מלון אחד ו-3 נוסעים". */
-function joinHebrew(parts: string[]): string {
-  if (parts.length <= 1) return parts[0] ?? "";
-  const last = parts[parts.length - 1];
-  return `${parts.slice(0, -1).join(", ")} ${/^\d/.test(last) ? "ו-" : "ו"}${last}`;
-}
-function countHe(n: number, one: string, many: string): string {
-  return n === 1 ? one : `${n} ${many}`;
-}
-
-/** ISO timestamp → the "YYYY-MM-DDTHH:MM" shape a native datetime-local input
- *  expects. Reads local wall-clock fields off the Date object rather than
- *  slicing the ISO string, so it round-trips correctly regardless of the
- *  timezone offset baked into the ISO value. */
-function isoToDatetimeLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export default function WizardPage() {
   const { user, isAgent } = useAuth();
@@ -229,10 +93,9 @@ export default function WizardPage() {
     }
     setSaving(true);
     try {
-      const { data: trip, error } = await supabase
-        .from("trips")
-        .insert({
-          user_id: user.id,
+      const { trip, participants: insertedParticipants, partRows, savedStays } = await insertTripWithDrafts({
+        userId: user.id,
+        fields: {
           title: effectiveTitle,
           destination: destination.trim(),
           start_date: startDate || null,
@@ -242,101 +105,17 @@ export default function WizardPage() {
           cover_emoji: emoji,
           guide_name: isAgent && tripType === "organized" ? guideName.trim() || null : null,
           guide_phone: isAgent && tripType === "organized" ? guidePhone.trim() || null : null,
-        })
-        .select()
-        .single();
-      if (error || !trip) throw error;
-      const tripId = trip.id;
-
-      // Supabase query builders are thenable, not real Promises.
-      const jobs: PromiseLike<unknown>[] = [];
-      const partRows = participants
-        .filter((p) => p.name.trim())
-        .map((p) => ({
-          trip_id: tripId,
-          name: p.name.trim(),
-          age: p.ageMode === "age" && p.age ? Number(p.age) : null,
-          age_range: p.ageMode === "range" ? p.age_range : null,
-          preferences: p.preferences,
-        }));
-      // The inserted rows feed the post-create AI generation below.
-      let insertedParticipants: Participant[] = [];
-      if (partRows.length) {
-        jobs.push(
-          supabase
-            .from("participants")
-            .insert(partRows)
-            .select()
-            .then(({ data }) => {
-              insertedParticipants = (data as Participant[] | null) ?? [];
-            }),
-        );
-      }
-      if (flights.length) {
-        jobs.push(
-          supabase.from("flights").insert(
-            flights.map((f) => ({
-              trip_id: tripId,
-              direction: f.direction,
-              airline: f.airline || null,
-              flight_number: f.flight_number || null,
-              from_airport: f.from_airport || null,
-              to_airport: f.to_airport || null,
-              depart_at: f.depart_at ? new Date(f.depart_at).toISOString() : null,
-              arrive_at: toIso(f.arrive_at),
-              from_terminal: f.from_terminal || null,
-              to_terminal: f.to_terminal || null,
-              seats: f.seats || null,
-              baggage: f.baggage || null,
-              booking_ref: f.booking_ref || null,
-              notes: f.notes || null,
-            })),
-          ),
-        );
-      }
-      const savedStays = stays.filter((s) => s.hotel_name.trim());
-      if (savedStays.length) {
-        jobs.push(
-          supabase.from("stays").insert(
-            savedStays.map((s) => ({
-              trip_id: tripId,
-              hotel_name: s.hotel_name.trim(),
-              address: s.address || null,
-              check_in: s.check_in || null,
-              check_out: s.check_out || null,
-              booking_ref: s.booking_ref || null,
-              phone: s.phone || null,
-              url: s.url || null,
-              notes: s.notes || null,
-            })),
-          ),
-        );
-      }
-      if (transfers.length) {
-        jobs.push(
-          supabase.from("transfers").insert(
-            transfers.map((t) => ({
-              trip_id: tripId,
-              kind: t.kind,
-              provider: t.provider || null,
-              pickup_location: t.pickup_location || null,
-              pickup_at: t.pickup_at ? new Date(t.pickup_at).toISOString() : null,
-              dropoff_location: t.dropoff_location || null,
-              return_at: toIso(t.return_at),
-              booking_ref: t.booking_ref || null,
-              phone: t.phone || null,
-              url: t.url || null,
-              notes: t.notes || null,
-            })),
-          ),
-        );
-      }
-      await Promise.all(jobs);
+        },
+        participants,
+        flights,
+        stays,
+        transfers,
+      });
 
       // ---- The trip exists from here on. Nothing below may throw: a failure
       // must never land in the catch below and invite a second "create". ----
-      await afterCreate(trip as Trip, insertedParticipants, partRows, savedStays);
-      navigate(`/trip/${tripId}`, { replace: true });
+      await afterCreate(trip, insertedParticipants, partRows, savedStays);
+      navigate(`/trip/${trip.id}`, { replace: true });
     } catch (e) {
       console.error(e);
       toast.error("משהו השתבש ביצירת הטיול. נסה שוב.");
@@ -355,22 +134,10 @@ export default function WizardPage() {
   const afterCreate = async (
     createdTrip: Trip,
     inserted: Participant[],
-    partRows: { name: string; age: number | null; age_range: string | null; preferences: string[] }[],
+    partRows: ParticipantInsert[],
     savedStays: StayDraft[],
   ) => {
-    // A multi-segment flight file puts the SAME File object on every segment's
-    // draft, so keep only the first occurrence of each File: every original is
-    // uploaded exactly once, as long as at least one of its drafts survived.
-    const seenFiles = new Set<File>();
-    const sourceDocs = [
-      ...flights.map((f) => ({ file: f.source_file, category: "flight" })),
-      ...savedStays.map((s) => ({ file: s.source_file, category: "hotel" })),
-      ...transfers.map((t) => ({ file: t.source_file, category: "car" })),
-    ].filter((d): d is { file: File; category: string } => {
-      if (!d.file || seenFiles.has(d.file)) return false;
-      seenFiles.add(d.file);
-      return true;
-    });
+    const sourceDocs = collectSourceDocs(flights, savedStays, transfers);
 
     if (!autoGenerate && !sourceDocs.length) {
       toast.success("הטיול נוצר! ✈️");
@@ -385,19 +152,8 @@ export default function WizardPage() {
     const mark = (key: keyof BuildState, status: TaskStatus) =>
       setBuilding((b) => (b ? { ...b, [key]: status } : b));
 
-    // Sequential on purpose: the storage path is `${Date.now()}-${name}`, so two
-    // same-named files uploaded in the same millisecond would collide.
     const uploadDocs = async (): Promise<number> => {
-      let failed = 0;
-      for (const d of sourceDocs) {
-        try {
-          if (!user) throw new Error("not_authenticated");
-          await uploadTripDocument({ userId: user.id, tripId: createdTrip.id, file: d.file, category: d.category });
-        } catch (err) {
-          console.error(err);
-          failed += 1;
-        }
-      }
+      const failed = user ? await uploadSourceDocs(user.id, createdTrip.id, sourceDocs) : sourceDocs.length;
       if (sourceDocs.length) mark("docs", failed ? "failed" : "done");
       return failed;
     };
@@ -450,12 +206,10 @@ export default function WizardPage() {
     const newTravellers = r.travellers.filter((t) => !have.has(personKey(t.name)));
     if (newTravellers.length) setParticipants((prev) => [...prev, ...newTravellers.map(travellerToDraft)]);
 
-    const nf = r.bookings.filter((b) => b.docType === "flight");
-    const nh = r.bookings.filter((b) => b.docType === "hotel");
-    const nc = r.bookings.filter((b) => b.docType === "car");
-    if (nf.length) setFlights((prev) => [...prev, ...nf.map((b) => flightDraftFromVoucher(b.data as VoucherFlightData, b.sourceFile))]);
-    if (nh.length) setStays((prev) => [...prev, ...nh.map((b) => stayDraftFromVoucher(b.data as VoucherHotelData, b.sourceFile))]);
-    if (nc.length) setTransfers((prev) => [...prev, ...nc.map((b) => transferDraftFromVoucher(b.data as VoucherCarData, b.sourceFile))]);
+    const { flights: nf, stays: nh, transfers: nc } = bookingsToDrafts(r);
+    if (nf.length) setFlights((prev) => [...prev, ...nf]);
+    if (nh.length) setStays((prev) => [...prev, ...nh]);
+    if (nc.length) setTransfers((prev) => [...prev, ...nc]);
     setAutoGenerate(true);
 
     const parts = [
