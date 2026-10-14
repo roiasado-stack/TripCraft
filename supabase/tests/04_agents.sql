@@ -88,7 +88,9 @@ RESET ROLE;
 -- Admin approves --------------------------------------------------------------------------
 SELECT pg_temp.login(pg_temp.id('admin'));
 SELECT pg_temp.check('admin: sees every agent account',
-  (SELECT count(*) FROM agent_accounts) = 3);
+  -- Count only the fixture's accounts: the local DB may hold test agents from manual runs.
+  (SELECT count(*) FROM agent_accounts
+   WHERE user_id IN (pg_temp.id('agent_a'), pg_temp.id('agent_b'), pg_temp.id('stranger'))) = 3);
 SELECT pg_temp.check('admin: list_agents shows email, status and usage',
   (SELECT email = 'agent-a@test.local' AND status = 'active' AND ai_month_usd = 1.5 AND ai_today_usd = 1.5
           AND google_searches_today = 2 AND google_photos_today = 0 AND active_trips = 1
@@ -393,9 +395,12 @@ SELECT pg_temp.check('clone_showcase_trip never copies trip_clients',
 
 -- Approving a user who never asked for access raises and grants no role
 SELECT pg_temp.login(pg_temp.id('admin'));
-SELECT pg_temp.check('admin: approving a user who never asked raises and grants no role',
-  pg_temp.try(format('SELECT public.admin_decide_agent(%L, true)', pg_temp.id('viewer'))) = -1
-  AND pg_temp.try(format('SELECT public.admin_decide_agent(%L, true)', gen_random_uuid())) = -1);
+DO $$ BEGIN
+  PERFORM public.admin_decide_agent(pg_temp.id('viewer'), true);
+  RAISE EXCEPTION 'FAIL: admin: approving a user who never asked must raise';
+EXCEPTION WHEN no_data_found THEN
+  RAISE NOTICE 'ok   admin: approving a user who never asked raises';
+END $$;
 RESET ROLE;
 SELECT set_config('request.jwt.claims', '', true);
 SELECT pg_temp.check('no agent role was created for a user without a request',
