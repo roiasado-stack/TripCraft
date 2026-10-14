@@ -234,3 +234,38 @@ SELECT pg_temp.login(pg_temp.id('demo'), true);
 SELECT pg_temp.check('demo session: cannot update an agency-logos object',
   pg_temp.try(format('UPDATE storage.objects SET name = %L WHERE bucket_id = %L AND name = %L', pg_temp.id('demo')::text || '/moved.png', 'agency-logos', pg_temp.id('demo')::text || '/seed.png')) = -1);
 RESET ROLE;
+
+-- G. Odd metadata, traversal, other bucket, smuggled marker: no logo path.
+RESET ROLE;
+INSERT INTO storage.objects (bucket_id, name, owner, metadata) VALUES
+  ('agency-logos', '00000000-0000-0000-0000-0000000000c5/abc.png',  '00000000-0000-0000-0000-0000000000c5', '{"mimetype":"image/png","size":"abc"}'),
+  ('agency-logos', '00000000-0000-0000-0000-0000000000c5/neg.png',  '00000000-0000-0000-0000-0000000000c5', '{"mimetype":"image/png","size":-1}'),
+  ('agency-logos', '00000000-0000-0000-0000-0000000000c5/nosz.png', '00000000-0000-0000-0000-0000000000c5', '{"mimetype":"image/png"}'),
+  ('agency-logos', '00000000-0000-0000-0000-0000000000c5/edge.png', '00000000-0000-0000-0000-0000000000c5', '{"mimetype":"image/png","size":1048576}'),
+  ('agency-logos', '00000000-0000-0000-0000-0000000000c5/parm.png', '00000000-0000-0000-0000-0000000000c5', '{"mimetype":"image/png; x=text/html","size":10}'),
+  ('trip-docs',    '00000000-0000-0000-0000-0000000000c5/doc.png',  '00000000-0000-0000-0000-0000000000c5', '{"mimetype":"image/png","size":10}');
+CREATE TEMP TABLE bad_logo (label TEXT, url TEXT) ON COMMIT DROP;
+INSERT INTO bad_logo VALUES
+  ('size "abc"',        'https://proj.supabase.co/storage/v1/object/public/agency-logos/00000000-0000-0000-0000-0000000000c5/abc.png'),
+  ('negative size',     'https://proj.supabase.co/storage/v1/object/public/agency-logos/00000000-0000-0000-0000-0000000000c5/neg.png'),
+  ('missing size',      'https://proj.supabase.co/storage/v1/object/public/agency-logos/00000000-0000-0000-0000-0000000000c5/nosz.png'),
+  ('mimetype with a parameter', 'https://proj.supabase.co/storage/v1/object/public/agency-logos/00000000-0000-0000-0000-0000000000c5/parm.png'),
+  ('../ into another agent''s folder', 'https://proj.supabase.co/storage/v1/object/public/agency-logos/00000000-0000-0000-0000-0000000000c5/../00000000-0000-0000-0000-0000000000c6/logo-2.png'),
+  ('same name in another bucket', 'https://proj.supabase.co/storage/v1/object/public/trip-docs/00000000-0000-0000-0000-0000000000c5/doc.png'),
+  ('query string',      'https://proj.supabase.co/storage/v1/object/public/agency-logos/00000000-0000-0000-0000-0000000000c5/logo-1.png?x=1'),
+  ('marker smuggled after a foreign path', 'https://evil.example/storage/v1/object/public/agency-logos/x?/storage/v1/object/public/agency-logos/00000000-0000-0000-0000-0000000000c5/logo-1.png');
+DO $$ DECLARE b RECORD; BEGIN
+  FOR b IN SELECT * FROM bad_logo LOOP
+    UPDATE public.profiles SET agency_logo_url = b.url WHERE id = '00000000-0000-0000-0000-0000000000c5';
+    IF public.agency_branding('00000000-0000-0000-0000-0000000000c5') -> 'logo_path' <> 'null'::jsonb THEN
+      RAISE EXCEPTION 'FAIL: logo_path returned for %', b.label;
+    END IF;
+  END LOOP;
+END $$;
+SELECT pg_temp.check('odd metadata, traversal, other bucket, query and smuggled marker yield no logo path', true);
+UPDATE public.profiles SET agency_logo_url = 'https://proj.supabase.co/storage/v1/object/public/agency-logos/00000000-0000-0000-0000-0000000000c5/edge.png'
+WHERE id = pg_temp.id('brand_agent');
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: a logo of exactly 1 MB is still shown',
+  public.get_shared_trip('brand-slug-0123456789') #>> '{agency,logo_path}' = '00000000-0000-0000-0000-0000000000c5/edge.png');
+RESET ROLE;
