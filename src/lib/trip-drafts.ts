@@ -208,3 +208,10 @@ export function joinHebrew(parts: string[]): string {
 export function countHe(n: number, one: string, many: string): string {
   return n === 1 ? one : `${n} ${many}`;
 }
+
+/** A trip-limit hit comes back from the trips trigger (migration 022) as this message. */
+export function isTripLimitError(e: unknown): boolean {
+  return typeof e === "object" && e !== null && String((e as { message?: string }).message).includes("agent_trip_limit_reached");
+}
+
+export const TRIP_LIMIT_MESSAGE = "הגעת למכסת הטיולים הפעילים בחשבון. אפשר למחוק טיול ישן או לפנות אלינו.";

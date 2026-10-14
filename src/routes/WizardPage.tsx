@@ -23,6 +23,8 @@ import {
   type PartDraft,
   type StayDraft,
   type TransferDraft,
+  isTripLimitError,
+  TRIP_LIMIT_MESSAGE,
 } from "@/lib/trip-drafts";
 import { Flag } from "@/components/Flag";
 import type { Participant, Trip } from "@/lib/types";
@@ -118,7 +120,7 @@ export default function WizardPage() {
       navigate(`/trip/${trip.id}`, { replace: true });
     } catch (e) {
       console.error(e);
-      toast.error("משהו השתבש ביצירת הטיול. נסה שוב.");
+      toast.error(isTripLimitError(e) ? TRIP_LIMIT_MESSAGE : "משהו השתבש ביצירת הטיול. נסה שוב.");
     } finally {
       setSaving(false);
     }

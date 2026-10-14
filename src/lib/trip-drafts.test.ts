@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isTripLimitError,
   bookingsToDrafts,
   collectSourceDocs,
   countHe,
@@ -96,5 +97,16 @@ describe("joinHebrew / countHe", () => {
   it("uses the singular word for one", () => {
     expect(countHe(1, "טיסה אחת", "טיסות")).toBe("טיסה אחת");
     expect(countHe(3, "טיסה אחת", "טיסות")).toBe("3 טיסות");
+  });
+});
+
+describe("isTripLimitError", () => {
+  it("recognises the trips trigger's limit error", () => {
+    expect(isTripLimitError({ message: "agent_trip_limit_reached", code: "23514" })).toBe(true);
+  });
+  it("ignores other errors and non-objects", () => {
+    expect(isTripLimitError({ message: "duplicate key" })).toBe(false);
+    expect(isTripLimitError(null)).toBe(false);
+    expect(isTripLimitError("agent_trip_limit_reached")).toBe(false);
   });
 });

@@ -17,16 +17,13 @@ import {
   type PartDraft,
   type StayDraft,
   type TransferDraft,
+  isTripLimitError,
+  TRIP_LIMIT_MESSAGE,
 } from "@/lib/trip-drafts";
 import { AGE_RANGES } from "@/lib/trip-options";
 import { normalizePhone } from "@/lib/whatsapp";
 
 const STEP_LABELS = ["מסמכים", "בדיקה", "שליחה"];
-
-/** A trip-limit hit comes back from the trips trigger (migration 022) as this message. */
-function isTripLimit(e: unknown): boolean {
-  return typeof e === "object" && e !== null && String((e as { message?: string }).message).includes("agent_trip_limit_reached");
-}
 
 /**
  * "New trip from documents" (agency beta, phase 2): 1) the documents, through
@@ -121,8 +118,8 @@ export default function AgentNewTripPage() {
     } catch (e) {
       console.error(e);
       toast.error(
-        isTripLimit(e)
-          ? "הגעת למכסת הטיולים הפעילים בחשבון. אפשר למחוק טיול ישן או לפנות אלינו."
+        isTripLimitError(e)
+          ? TRIP_LIMIT_MESSAGE
           : "משהו השתבש ביצירת הטיול. נסו שוב.",
       );
       setSaving(false);
