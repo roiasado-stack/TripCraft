@@ -98,7 +98,12 @@ export interface SharedTripPayload {
     /** The destination photo — a Wikimedia URL or null (021 filters anything else out). */
     image_url?: string | null;
   };
-  agency: { name: string | null; color: string | null } | null;
+  /**
+   * The owner's branding — only when the owner is an active agent (023), else
+   * null. `color` is #rrggbb or null; `logo_url` is a file in the owner's own
+   * agency-logos folder or null.
+   */
+  agency: { name: string | null; color: string | null; logo_url: string | null } | null;
   flights: Pick<Flight, "id" | "from_airport" | "to_airport" | "airline" | "flight_number" | "depart_at">[];
   stays: Pick<Stay, "id" | "hotel_name" | "address" | "check_in" | "check_out" | "map_url">[];
   itinerary: Pick<

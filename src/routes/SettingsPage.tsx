@@ -7,6 +7,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { Button, Field, GroupedList, Input, ListRow, Modal, Switch } from "@/components/ui";
 import { DOCS_BUCKET } from "@/lib/documents";
+import { AGENCY_LOGO_BUCKET } from "@/lib/agency-brand";
+import { AgencyLogoField } from "@/components/AgencyLogoField";
 import { LegalLinks } from "@/routes/LegalPages";
 import type { AgentAccount } from "@/lib/types";
 
@@ -51,6 +53,14 @@ export default function SettingsPage() {
       for (let i = 0; i < paths.length; i += 100) {
         const { error } = await bucket.remove(paths.slice(i, i + 100));
         if (error) throw error;
+      }
+      // An agent's logos (public bucket, migration 023) sit under <uid>/ as well.
+      const logos = supabase.storage.from(AGENCY_LOGO_BUCKET);
+      const { data: logoFiles, error: logoErr } = await logos.list(user.id, { limit: 1000 });
+      if (logoErr) throw logoErr;
+      if (logoFiles?.length) {
+        const { error: rmErr } = await logos.remove(logoFiles.map((f) => `${user.id}/${f.name}`));
+        if (rmErr) throw rmErr;
       }
       const { error } = await supabase.rpc("delete_my_account");
       if (error) throw error;
@@ -140,10 +150,11 @@ export default function SettingsPage() {
                 className="size-9 shrink-0 cursor-pointer rounded-lg border border-border"
               />
             </label>
+            <AgencyLogoField />
           </GroupedList>
         )}
         {isAgent && (
-          <p className="type-footnote -mt-4 px-4 text-muted-foreground">המיתוג יופיע בקישורי השיתוף שתשלח ללקוחות.</p>
+          <p className="type-footnote -mt-4 px-4 text-muted-foreground">השם, הצבע והלוגו יופיעו בדף הטיול הציבורי שתשלחו ללקוחות, וכל מי שמחזיק בקישור יראה אותם. הלוגו נשמר מיד, ושם וצבע נשמרים בכפתור "שמירת פרופיל".</p>
         )}
 
         <Button className="w-full" size="lg" loading={saving} onClick={saveProfile}>

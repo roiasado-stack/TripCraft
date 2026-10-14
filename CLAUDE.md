@@ -103,7 +103,7 @@ there are the business team; they never touch code.
 
 - **Public brochure** — `/share/:slug` (`SharePage`) is read-only and served to **anonymous**
   visitors. It reads everything through one RPC, `get_shared_trip(slug)` (latest definition in
-  016), which returns only the fields the page renders. Anything new that should appear there goes
+  023), which returns only the fields the page renders. Anything new that should appear there goes
   into that function (new migration) and `SharedTripPayload` in `@/lib/types` — never booking refs,
   participants, documents or notes. The page must never assume a logged-in user.
 - **Members** — invited by a per-role link (`/join/:token`, `JoinPage`), joined through
