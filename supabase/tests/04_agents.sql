@@ -390,3 +390,13 @@ RESET ROLE;
 SELECT pg_temp.check('clone_showcase_trip never copies trip_clients',
   EXISTS (SELECT 1 FROM trips WHERE demo_source_id = pg_temp.id('trip') AND user_id = pg_temp.id('participant'))
   AND NOT EXISTS (SELECT 1 FROM trips t JOIN trip_clients c ON c.trip_id = t.id WHERE t.demo_source_id = pg_temp.id('trip')));
+
+-- Approving a user who never asked for access raises and grants no role
+SELECT pg_temp.login(pg_temp.id('admin'));
+SELECT pg_temp.check('admin: approving a user who never asked raises and grants no role',
+  pg_temp.try(format('SELECT public.admin_decide_agent(%L, true)', pg_temp.id('viewer'))) = -1
+  AND pg_temp.try(format('SELECT public.admin_decide_agent(%L, true)', gen_random_uuid())) = -1);
+RESET ROLE;
+SELECT set_config('request.jwt.claims', '', true);
+SELECT pg_temp.check('no agent role was created for a user without a request',
+  NOT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = pg_temp.id('viewer') AND role = 'agent'));
