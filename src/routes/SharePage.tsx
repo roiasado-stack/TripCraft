@@ -13,8 +13,7 @@ import { MapLink } from "@/components/MapLink";
 import { Flag } from "@/components/Flag";
 import { ImageCredit } from "@/components/MediaCard";
 import { isTripPhotoUrl } from "@/lib/photo-url";
-import { isAgencyLogoUrl, safeAgencyColor } from "@/lib/agency-brand";
-import { agencyLogoPrefix } from "@/components/AgencyLogoField";
+import { AGENCY_LOGO_BUCKET, isAgencyLogoPath, safeAgencyColor } from "@/lib/agency-brand";
 import { cn } from "@/lib/utils";
 import { resolveMapUrl } from "@/lib/maps";
 import { LegalLinks } from "@/routes/LegalPages";
@@ -88,7 +87,11 @@ export default function SharePage() {
   // anonymous visitors (a CSS value or foreign URL could load a tracking pixel).
   const accent = safeAgencyColor(agency?.color) ?? undefined;
   const agencyName = agency?.name?.trim() || null;
-  const agencyLogo = isAgencyLogoUrl(agency?.logo_url, agencyLogoPrefix()) ? agency?.logo_url : null;
+  // Only a path comes from the server; the URL is always our own project's.
+  const logoPath = agency?.logo_path;
+  const agencyLogo = isAgencyLogoPath(logoPath)
+    ? supabase.storage.from(AGENCY_LOGO_BUCKET).getPublicUrl(logoPath).data.publicUrl
+    : null;
   const isAgencyPage = Boolean(agencyName || agencyLogo);
   const duration = tripDuration(trip.start_date, trip.end_date);
   const heroPhoto = isTripPhotoUrl(trip.image_url) ? trip.image_url : null;

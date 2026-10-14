@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fitWithin,
+  isAgencyLogoPath,
   isAgencyLogoUrl,
   logoFileProblem,
   logoObjectPath,
@@ -46,6 +47,38 @@ describe("isAgencyLogoUrl / logoPathFromUrl", () => {
   });
   it("needs a prefix ending in a slash", () => {
     expect(isAgencyLogoUrl(`${PREFIX}${UID}/logo.png`, PREFIX.slice(0, -1))).toBe(false);
+  });
+  it("rejects a non-image file name in our bucket", () => {
+    expect(isAgencyLogoUrl(`${PREFIX}${UID}/copied.html`, PREFIX)).toBe(false);
+  });
+});
+
+describe("isAgencyLogoPath", () => {
+  it("accepts an image file directly in one user's folder", () => {
+    for (const ok of [`${UID}/logo-1700000000000.webp`, `${UID}/logo-1.png`, `${UID}/logo_1.jpg`, `${UID}/a.jpeg`]) {
+      expect(isAgencyLogoPath(ok)).toBe(true);
+    }
+  });
+  it("rejects URLs, other file types, nested or traversal paths and the bucket root", () => {
+    for (const bad of [
+      `${PREFIX}${UID}/logo.png`,
+      `https://evil.example/${UID}/logo.png`,
+      `//evil.example/${UID}/logo.png`,
+      `${UID}/copied.html`,
+      `${UID}/logo.svg`,
+      `${UID}/logo.png.html`,
+      `${UID}/logo.png?track=1`,
+      `${UID}/../x.png`,
+      `${UID}/sub/logo.png`,
+      `${UID}/.png`,
+      "logo.png",
+      "not-a-uuid/logo.png",
+      "",
+      null,
+      undefined,
+    ]) {
+      expect(isAgencyLogoPath(bad)).toBe(false);
+    }
   });
 });
 

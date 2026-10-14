@@ -20,13 +20,24 @@ export function safeAgencyColor(color: string | null | undefined): string | null
 }
 
 /**
- * True when `url` is a file directly inside one user's folder of our own
+ * True when `path` is an image file directly inside one user's folder of the
+ * agency-logos bucket (`<uuid>/<name>.png|jpg|jpeg|webp`) — the shape
+ * get_shared_trip returns as `agency.logo_path` (023). The brochure builds the
+ * URL from our own project with getPublicUrl, so only the path is trusted.
+ */
+export function isAgencyLogoPath(path: string | null | undefined): path is string {
+  return typeof path === "string" && /^[0-9a-f-]{36}\/[A-Za-z0-9_-]+\.(png|jpe?g|webp)$/i.test(path);
+}
+
+/**
+ * True when `url` is a logo file (see isAgencyLogoPath) of our own
  * agency-logos bucket. `publicPrefix` is the bucket's public URL ending in "/"
- * (supabase.storage.from(AGENCY_LOGO_BUCKET).getPublicUrl("") at the call site).
+ * (agencyLogoPrefix() at the call site). Used by the settings preview, which
+ * reads the URL stored on the profile.
  */
 export function isAgencyLogoUrl(url: string | null | undefined, publicPrefix: string): url is string {
   if (typeof url !== "string" || !publicPrefix.endsWith("/") || !url.startsWith(publicPrefix)) return false;
-  return /^[0-9a-f-]{36}\/[A-Za-z0-9._-]+$/i.test(url.slice(publicPrefix.length));
+  return isAgencyLogoPath(url.slice(publicPrefix.length));
 }
 
 /** The object path (`<uid>/logo-….webp`) of one of our logo URLs, or null. */

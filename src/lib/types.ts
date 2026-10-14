@@ -100,10 +100,11 @@ export interface SharedTripPayload {
   };
   /**
    * The owner's branding — only when the owner is an active agent (023), else
-   * null. `color` is #rrggbb or null; `logo_url` is a file in the owner's own
-   * agency-logos folder or null.
+   * null. `color` is #rrggbb or null; `logo_path` is the object name
+   * (`<owner uuid>/<file>`) of a PNG/JPEG/WebP up to 1 MB in the owner's own
+   * agency-logos folder, or null — never a URL; the page builds it with getPublicUrl.
    */
-  agency: { name: string | null; color: string | null; logo_url: string | null } | null;
+  agency: { name: string | null; color: string | null; logo_path: string | null } | null;
   flights: Pick<Flight, "id" | "from_airport" | "to_airport" | "airline" | "flight_number" | "depart_at">[];
   stays: Pick<Stay, "id" | "hotel_name" | "address" | "check_in" | "check_out" | "map_url">[];
   itinerary: Pick<

@@ -12,10 +12,12 @@
 --    colour and logo only when the owner is an ACTIVE agent (agent role +
 --    agent_accounts.status = 'active'). Anyone else's brochure gets
 --    agency = null — before this, any user's profiles.agency_name/colour
---    showed up. The colour must be a #rrggbb value and the logo must be an
---    object in the owner's own agency-logos folder: both are user-writable
---    text, and a free-form value could load a tracking pixel for every
---    visitor (same reason 021 filters image_url).
+--    showed up. The colour must be a #rrggbb value, and the logo comes back as
+--    a PATH (`<owner>/<file>`) to an existing PNG/JPEG/WebP of at most 1 MB in
+--    the owner's own agency-logos folder, never as a URL: both are
+--    user-writable, and a free-form value could load a tracking pixel for
+--    every visitor (same reason 021 filters image_url). The page builds the
+--    logo URL from its own Supabase project.
 --
 -- Idempotent. Paste into the SQL Editor after 022.
 -- ============================================================================
@@ -58,20 +60,34 @@ CREATE POLICY "agency logos delete" ON storage.objects FOR DELETE TO authenticat
 USING (bucket_id = 'agency-logos' AND (storage.foldername(name))[1] = auth.uid()::text);
 
 -- Branding of a trip owner -------------------------------------------------------------
--- {name, color, logo_url} when the owner is an active agent, otherwise NULL.
+-- {name, color, logo_path} when the owner is an active agent, otherwise NULL.
+-- logo_path is the object name `<owner>/<file>`, never a URL: the page builds
+-- the URL from its own Supabase project, so a stored URL on another host can't
+-- reach visitors. profiles.agency_logo_url holds the public URL (settings
+-- preview); the path is the part after /storage/v1/object/public/agency-logos/
+-- whatever the scheme or host (local is http://127.0.0.1:54321), and counts only
+-- when it sits directly in the owner's folder, has an image file name, and names
+-- an existing object that storage recorded as a PNG/JPEG/WebP of at most 1 MB
+-- (so a copied text/html or oversized object is never shown).
 -- Internal: called by get_shared_trip only.
 CREATE OR REPLACE FUNCTION public.agency_branding(_owner UUID)
 RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT jsonb_build_object(
     'name', nullif(btrim(p.agency_name), ''),
     'color', CASE WHEN p.agency_color ~ '^#[0-9A-Fa-f]{6}$' THEN p.agency_color END,
-    'logo_url', CASE WHEN EXISTS (
-        SELECT 1 FROM storage.objects o
-        WHERE o.bucket_id = 'agency-logos'
-          AND p.agency_logo_url ~ ('^https://[A-Za-z0-9.:-]+/storage/v1/object/public/agency-logos/'
-                                   || _owner::text || '/[A-Za-z0-9._-]+$')
-          AND o.name = substring(p.agency_logo_url FROM '/agency-logos/(.+)$')
-      ) THEN p.agency_logo_url END
+    'logo_path', (
+      SELECT l.path
+      FROM (SELECT substring(p.agency_logo_url FROM '/storage/v1/object/public/agency-logos/(.+)$') AS path) l
+      WHERE l.path ~ ('^' || _owner::text || '/[A-Za-z0-9_-]+\.(png|jpe?g|webp)$')
+        AND EXISTS (
+          SELECT 1 FROM storage.objects o
+          WHERE o.bucket_id = 'agency-logos'
+            AND o.name = l.path
+            AND o.metadata->>'mimetype' IN ('image/png', 'image/jpeg', 'image/webp')
+            AND CASE WHEN o.metadata->>'size' ~ '^[0-9]{1,18}$'
+                     THEN (o.metadata->>'size')::bigint <= 1048576 ELSE false END
+        )
+    )
   )
   FROM public.profiles p
   WHERE p.id = _owner
@@ -100,7 +116,7 @@ RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $
       -- every visitor's IP with a tracking pixel.
       'image_url', CASE WHEN t.image_url ~ '^https://(upload|thumb)\.wikimedia\.org/' THEN t.image_url END
     ),
-    -- Name, #rrggbb colour and own-bucket logo of an active agent owner; NULL otherwise.
+    -- Name, #rrggbb colour and own-folder logo path of an active agent owner; NULL otherwise.
     'agency', public.agency_branding(t.user_id),
     'flights', COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
@@ -166,6 +182,14 @@ WHERE pg_get_functiondef('public.get_shared_trip(text)'::regprocedure) NOT LIKE 
 UNION ALL
 SELECT 'agency_branding: not gated on an active agent', '', ''
 WHERE pg_get_functiondef('public.agency_branding(uuid)'::regprocedure) NOT LIKE '%status = ''active''%'
+UNION ALL
+SELECT 'agency_branding: logo not checked as a stored image of at most 1 MB', '', ''
+WHERE pg_get_functiondef('public.agency_branding(uuid)'::regprocedure) NOT LIKE '%mimetype%'
+   OR pg_get_functiondef('public.agency_branding(uuid)'::regprocedure) NOT LIKE '%1048576%'
+UNION ALL
+SELECT 'agency_branding: returns a URL instead of a path', '', ''
+WHERE pg_get_functiondef('public.agency_branding(uuid)'::regprocedure) LIKE '%''logo_url''%'
+   OR pg_get_functiondef('public.agency_branding(uuid)'::regprocedure) NOT LIKE '%''logo_path''%'
 UNION ALL
 SELECT 'agency_branding: callable by an API role', r, ''
 FROM unnest(ARRAY['anon', 'authenticated']) AS r
