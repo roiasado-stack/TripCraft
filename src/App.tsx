@@ -14,6 +14,7 @@ import TripsListPage from "@/routes/TripsListPage";
 import WizardPage from "@/routes/WizardPage";
 import SettingsPage from "@/routes/SettingsPage";
 import AdminMonitoringPage from "@/routes/AdminMonitoringPage";
+import AdminAgentsPage from "@/routes/AdminAgentsPage";
 import AgentPage from "@/routes/AgentPage";
 import AgentNewTripPage from "@/routes/AgentNewTripPage";
 import AgentSendPage from "@/routes/AgentSendPage";
@@ -114,6 +115,14 @@ export default function App() {
                   element={
                     <AdminRoute>
                       <AdminMonitoringPage />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/admin/agents"
+                  element={
+                    <AdminRoute>
+                      <AdminAgentsPage />
                     </AdminRoute>
                   }
                 />

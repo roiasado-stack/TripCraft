@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ChevronRight } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { AlertTriangle, ChevronRight, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { AgentRun, StaleKnowledgeChunk } from "@/lib/types";
 import { Badge, Card, EmptyState, FullSpinner } from "@/components/ui";
@@ -81,7 +81,14 @@ export default function AdminMonitoringPage() {
         <button onClick={() => navigate("/settings")} className="grid size-10 place-items-center rounded-2xl border border-border bg-card" aria-label="חזרה">
           <ChevronRight className="size-5" />
         </button>
-        <h1 className="text-xl font-extrabold">מוניטורינג · היום</h1>
+        <h1 className="flex-1 text-xl font-extrabold">מוניטורינג · היום</h1>
+        <Link
+          to="/admin/agents"
+          className="inline-flex h-10 items-center gap-1.5 rounded-2xl border border-border bg-card px-3.5 text-sm font-semibold text-primary"
+        >
+          <Users className="size-4" />
+          סוכנים
+        </Link>
       </header>
 
       {totalCost >= ALERT_THRESHOLD_USD && (

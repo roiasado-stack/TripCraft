@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Briefcase, ChevronRight, Clock, Gauge, LogOut, Moon, Sun, Trash2 } from "lucide-react";
+import { Briefcase, ChevronRight, Clock, Gauge, LogOut, Moon, Sun, Trash2, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useToast } from "@/hooks/use-toast";
@@ -173,6 +173,7 @@ export default function SettingsPage() {
         {isAdmin && (
           <GroupedList>
             <ListRow to="/admin/monitoring" leading={<Gauge className="size-5 text-primary" />} title="מוניטורינג" />
+            <ListRow to="/admin/agents" leading={<Users className="size-5 text-primary" />} title="סוכנים" />
           </GroupedList>
         )}
 
