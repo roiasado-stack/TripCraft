@@ -11,7 +11,7 @@ export const LEGAL = {
   /** Postal address for legal notices. */
   address: "ירושלים",
   /** Contact address for privacy requests, account questions and legal notices. */
-  contactEmail: "Roi.asado@gmail.com",
+  contactEmail: "Tripcraft26@gmail.com",
   /** Accessibility coordinator — name, and a phone or email to reach them. */
   accessibilityContact: "רועי אסדו",
   /** City whose courts have jurisdiction. */
@@ -21,7 +21,7 @@ export const LEGAL = {
   /** How long Supabase keeps backups after a deletion, in days. "0" = the plan keeps no backups
    *  (checked 2026-09-30: no daily backups, no PITR). Update when upgrading the Supabase plan. */
   backupRetention: "0",
-  lastUpdated: "4 באוקטובר 2026",
+  lastUpdated: "14 באוקטובר 2026",
 } as const;
 
 export const isPlaceholder = (value: string) => value.startsWith("[");
