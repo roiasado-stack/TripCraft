@@ -129,7 +129,6 @@ export default function SharePage() {
           "relative mt-4 overflow-hidden rounded-4xl text-white shadow-pop",
           heroPhoto ? "flex min-h-72 flex-col justify-end" : "bg-gradient-sea",
         )}
-        style={!heroPhoto && accent ? { background: accent } : undefined}
       >
         {heroPhoto && (
           <>

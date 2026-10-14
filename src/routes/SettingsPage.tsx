@@ -57,7 +57,8 @@ export default function SettingsPage() {
       // An agent's logos (public bucket, migration 023) sit under <uid>/ as well.
       const logos = supabase.storage.from(AGENCY_LOGO_BUCKET);
       const { data: logoFiles, error: logoErr } = await logos.list(user.id, { limit: 1000 });
-      if (logoErr) throw logoErr;
+      // Before migration 023 the bucket doesn't exist yet: nothing to delete, not a failure.
+      if (logoErr && !/not found/i.test(logoErr.message)) throw logoErr;
       if (logoFiles?.length) {
         const { error: rmErr } = await logos.remove(logoFiles.map((f) => `${user.id}/${f.name}`));
         if (rmErr) throw rmErr;
