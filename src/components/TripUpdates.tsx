@@ -30,6 +30,7 @@ export function TripUpdates({
   editable = true,
   preloaded,
   className = "mt-4",
+  composeRequest = 0,
 }: {
   tripId: string;
   /** Caller's role: participants post and manage their own; editors manage all. */
@@ -38,6 +39,8 @@ export function TripUpdates({
   /** Already-fetched updates (the share page gets them from get_shared_trip) — skips the query. */
   preloaded?: Omit<TripUpdate, "trip_id">[];
   className?: string;
+  /** Bump to open the "new update" sheet from outside (the agent's "send an update" row). */
+  composeRequest?: number;
 }) {
   const toast = useToast();
   const { user } = useAuth();
@@ -66,6 +69,11 @@ export function TripUpdates({
     setUpdates((data as TripUpdate[]) ?? []);
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (composeRequest > 0 && canPost) setDraft({ title: "", body: "", kind: "info", is_pinned: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composeRequest]);
 
   useEffect(() => {
     if (preloaded) return;

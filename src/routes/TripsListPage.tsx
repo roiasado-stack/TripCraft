@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Clock, Plus, Settings, Sparkles, Wand2 } from "lucide-react";
+import { Briefcase, Clock, Plus, Settings, Sparkles, Wand2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -99,6 +99,21 @@ export default function TripsListPage() {
         {firstName && <p className="type-footnote font-semibold text-muted-foreground">היי {firstName}</p>}
         <h1 className="type-large-title">{isAgent ? "הטיולים של הלקוחות" : "הטיולים שלי"}</h1>
       </div>
+
+      {isAgent && (
+        <GroupedList className="mb-6">
+          <ListRow
+            to="/agent"
+            leading={
+              <span className="grid size-8 place-items-center rounded-[9px] bg-tile text-tile-foreground">
+                <Briefcase className="size-[18px]" />
+              </span>
+            }
+            title="סביבת הסוכן"
+            subtitle="טיול חדש מהמסמכים ושליחה ללקוח"
+          />
+        </GroupedList>
+      )}
 
       {pendingCount > 0 && (
         <GroupedList className="mb-6">

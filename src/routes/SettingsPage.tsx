@@ -1,25 +1,54 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Gauge, LogOut, Moon, Sun, Trash2 } from "lucide-react";
+import { Briefcase, ChevronRight, Clock, Gauge, LogOut, Moon, Sun, Trash2, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { Button, Field, GroupedList, Input, ListRow, Modal, Switch } from "@/components/ui";
 import { DOCS_BUCKET } from "@/lib/documents";
+import { AGENCY_LOGO_BUCKET } from "@/lib/agency-brand";
+import { AgencyLogoField } from "@/components/AgencyLogoField";
 import { LegalLinks } from "@/routes/LegalPages";
+import type { AgentAccount } from "@/lib/types";
 
 const DELETE_CONFIRM_WORD = "מחיקה";
 
 export default function SettingsPage() {
-  const { user, profile, roles, isAgent, isAdmin, refreshProfile, signOut } = useAuth();
+  const { user, profile, roles, rolesReady, isAgent, isAdmin, isAnonymous, refreshProfile, signOut } = useAuth();
   const { theme, toggle } = useTheme();
   const toast = useToast();
   const navigate = useNavigate();
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
-  const [agencyName, setAgencyName] = useState(profile?.agency_name ?? "");
   const [agencyColor, setAgencyColor] = useState(profile?.agency_color ?? "#12b3b0");
+  // The brochure shows the name the admin approved (agent_accounts, migration 023), read-only here.
+  const [approvedAgency, setApprovedAgency] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // On a reload the profile arrives after the first render: fill the fields once it
+  // (or another user's profile) is there, or saving would wipe what's stored.
+  useEffect(() => {
+    if (!profile) return;
+    setFullName(profile.full_name ?? "");
+    setAgencyColor(profile.agency_color ?? "#12b3b0");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
+
+  useEffect(() => {
+    if (!user || !isAgent) return;
+    let cancelled = false;
+    supabase
+      .from("agent_accounts")
+      .select("agency_name")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setApprovedAgency((data as { agency_name: string } | null)?.agency_name ?? null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, isAgent]);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -51,6 +80,15 @@ export default function SettingsPage() {
         const { error } = await bucket.remove(paths.slice(i, i + 100));
         if (error) throw error;
       }
+      // An agent's logos (public bucket, migration 023) sit under <uid>/ as well.
+      const logos = supabase.storage.from(AGENCY_LOGO_BUCKET);
+      const { data: logoFiles, error: logoErr } = await logos.list(user.id, { limit: 1000 });
+      // Before migration 023 the bucket doesn't exist yet: nothing to delete, not a failure.
+      if (logoErr && !/not found/i.test(logoErr.message)) throw logoErr;
+      if (logoFiles?.length) {
+        const { error: rmErr } = await logos.remove(logoFiles.map((f) => `${user.id}/${f.name}`));
+        if (rmErr) throw rmErr;
+      }
       const { error } = await supabase.rpc("delete_my_account");
       if (error) throw error;
       await signOut();
@@ -63,11 +101,13 @@ export default function SettingsPage() {
   };
 
   const saveProfile = async () => {
-    if (!user) return;
+    // Until the profile has loaded the fields hold defaults, not what's stored.
+    if (!user || !rolesReady || !profile) return;
     setSaving(true);
+    // Only the fields this form edits. agency_name isn't one: the brochure uses the approved name.
     const { error } = await supabase
       .from("profiles")
-      .update({ full_name: fullName || null, agency_name: agencyName || null, agency_color: agencyColor })
+      .update(isAgent ? { full_name: fullName.trim() || null, agency_color: agencyColor } : { full_name: fullName.trim() || null })
       .eq("id", user.id);
     if (error) {
       setSaving(false);
@@ -123,10 +163,15 @@ export default function SettingsPage() {
         {/* agent branding */}
         {isAgent && (
           <GroupedList title="מיתוג סוכנות">
-            <label className={fieldRow}>
+            <div className={fieldRow}>
               <span className="type-body w-24 shrink-0">שם הסוכנות</span>
-              <input value={agencyName} onChange={(e) => setAgencyName(e.target.value)} placeholder="לא חובה" className={fieldInput} />
-            </label>
+              <div className="min-w-0 flex-1 py-2.5">
+                <div className="type-body truncate">
+                  <bdi>{approvedAgency ?? "—"}</bdi>
+                </div>
+                <div className="type-footnote text-muted-foreground">השם שאושר. לשינוי השם פנו אלינו</div>
+              </div>
+            </div>
             <label className={fieldRow}>
               <span className="type-body w-24 shrink-0">צבע מותג</span>
               <span dir="ltr" className="type-footnote min-w-0 flex-1 text-end font-mono text-muted-foreground">
@@ -139,13 +184,14 @@ export default function SettingsPage() {
                 className="size-9 shrink-0 cursor-pointer rounded-lg border border-border"
               />
             </label>
+            <AgencyLogoField />
           </GroupedList>
         )}
         {isAgent && (
-          <p className="type-footnote -mt-4 px-4 text-muted-foreground">המיתוג יופיע בקישורי השיתוף שתשלח ללקוחות.</p>
+          <p className="type-footnote -mt-4 px-4 text-muted-foreground">השם, הצבע והלוגו יופיעו בדף הטיול הציבורי שתשלחו ללקוחות, וכל מי שמחזיק בקישור יראה אותם. הלוגו נשמר מיד, והצבע נשמר בכפתור "שמירת פרופיל".</p>
         )}
 
-        <Button className="w-full" size="lg" loading={saving} onClick={saveProfile}>
+        <Button className="w-full" size="lg" loading={saving} disabled={!rolesReady || !profile} onClick={saveProfile}>
           שמירת פרופיל
         </Button>
 
@@ -161,9 +207,18 @@ export default function SettingsPage() {
           </div>
         </GroupedList>
 
+        {isAgent ? (
+          <GroupedList>
+            <ListRow to="/agent" leading={<Briefcase className="size-5 text-primary" />} title="סביבת הסוכן" />
+          </GroupedList>
+        ) : (
+          !isAnonymous && <AgentAccess />
+        )}
+
         {isAdmin && (
           <GroupedList>
             <ListRow to="/admin/monitoring" leading={<Gauge className="size-5 text-primary" />} title="מוניטורינג" />
+            <ListRow to="/admin/agents" leading={<Users className="size-5 text-primary" />} title="סוכנים" />
           </GroupedList>
         )}
 
@@ -225,5 +280,154 @@ export default function SettingsPage() {
         </Field>
       </Modal>
     </div>
+  );
+}
+
+/**
+ * "I'm a travel agent": a signed-up user asks for agent access with their agency
+ * name and phone (request_agent_access, migration 022). The request waits for
+ * an admin; until then this shows its status. Never grants anything by itself.
+ */
+function AgentAccess() {
+  const { user, refreshProfile } = useAuth();
+  const toast = useToast();
+  const [account, setAccount] = useState<Pick<AgentAccount, "status" | "agency_name" | "phone"> | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [agency, setAgency] = useState("");
+  const [phone, setPhone] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const load = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("agent_accounts")
+      .select("status, agency_name, phone")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    setAccount((data as Pick<AgentAccount, "status" | "agency_name" | "phone"> | null) ?? null);
+    setLoaded(true);
+  };
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  const openForm = () => {
+    setAgency(account?.agency_name ?? "");
+    setPhone(account?.phone ?? "");
+    setOpen(true);
+  };
+
+  const submit = async () => {
+    if (!agency.trim()) {
+      toast.error("צריך שם סוכנות");
+      return;
+    }
+    setSending(true);
+    const { error } = await supabase.rpc("request_agent_access", { p_agency_name: agency.trim(), p_phone: phone.trim() });
+    setSending(false);
+    if (error) {
+      const m = error.message ?? "";
+      toast.error(
+        m.includes("invalid_details")
+          ? "בדקו את שם הסוכנות (עד 120 תווים) ואת הטלפון."
+          : m.includes("not_allowed")
+            ? "בחשבון דמו אי אפשר לבקש גישת סוכן."
+            : "הבקשה לא נשלחה. נסו שוב.",
+      );
+      return;
+    }
+    setOpen(false);
+    toast.success(account ? "הפרטים עודכנו ✓" : "הבקשה נשלחה. נעדכן כשהיא תאושר.");
+    load();
+  };
+
+  if (!loaded) return null;
+
+  const rowBtn =
+    "type-body flex min-h-12 w-full items-center gap-3 px-4 py-2.5 text-start transition-colors active:bg-muted/70";
+
+  return (
+    <>
+      <GroupedList title="סוכני נסיעות">
+        {!account ? (
+          <button type="button" onClick={openForm} className={rowBtn}>
+            <Briefcase className="size-5 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-primary">אני סוכן/ת נסיעות</span>
+              <span className="type-footnote block text-muted-foreground">בקשת גישה לסביבת הסוכן: טיול מהמסמכים ושליחה ללקוח</span>
+            </span>
+          </button>
+        ) : account.status === "pending" ? (
+          <>
+            <div className="flex min-h-12 items-center gap-3 px-4 py-2.5">
+              <Clock className="size-5 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1">
+                <div className="type-body">הבקשה בבדיקה</div>
+                <div className="type-footnote truncate text-muted-foreground">
+                  <bdi>{account.agency_name}</bdi>
+                </div>
+              </div>
+            </div>
+            <button type="button" onClick={openForm} className={`${rowBtn} text-primary`}>
+              עריכת הפרטים
+            </button>
+          </>
+        ) : account.status === "suspended" ? (
+          <div className="flex min-h-12 items-center gap-3 px-4 py-2.5">
+            <Briefcase className="size-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <div className="type-body">גישת הסוכן מושעית</div>
+              <div className="type-footnote text-muted-foreground">לפרטים אפשר לפנות אלינו.</div>
+            </div>
+          </div>
+        ) : (
+          // Approved after this session loaded its roles.
+          <button type="button" onClick={() => refreshProfile()} className={rowBtn}>
+            <Briefcase className="size-5 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-primary">הגישה אושרה — לפתיחת סביבת הסוכן</span>
+            </span>
+          </button>
+        )}
+      </GroupedList>
+
+      <Modal
+        open={open}
+        onClose={() => !sending && setOpen(false)}
+        title={account ? "פרטי הבקשה" : "גישת סוכן נסיעות"}
+        footer={
+          <>
+            <Button variant="ghost" className="flex-1" disabled={sending} onClick={() => setOpen(false)}>
+              ביטול
+            </Button>
+            <Button className="flex-1" loading={sending} disabled={!agency.trim()} onClick={submit}>
+              {account ? "שמירה" : "שליחת בקשה"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <p className="type-footnote text-muted-foreground">
+            נבדוק את הבקשה ונפתח לך את סביבת הסוכן. בינתיים החשבון ממשיך לעבוד כרגיל.
+          </p>
+          <Field label="שם הסוכנות">
+            <Input value={agency} onChange={(e) => setAgency(e.target.value)} maxLength={120} placeholder="לדוגמה: טיולי גשר" />
+          </Field>
+          <Field label="טלפון">
+            <Input
+              type="tel"
+              dir="ltr"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              maxLength={40}
+              placeholder="050-1234567"
+            />
+          </Field>
+        </div>
+      </Modal>
+    </>
   );
 }

@@ -104,6 +104,10 @@ const GOOGLE_KOSHER_PER_USER_PER_DAY = 20;
 async function reserveGoogleCall(userId: string, tripId: string): Promise<boolean> {
   const db = adminDb();
   if (!db) return false;
+  // An active travel agent (migration 022) has their own daily Google limit.
+  const agent = await db.rpc("agent_limits", { _user_id: userId });
+  if (agent.error) return false;
+  const perUserPerDay = agent.data ? Number((agent.data as { google_daily: number }).google_daily) : GOOGLE_KOSHER_PER_USER_PER_DAY;
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
@@ -113,22 +117,40 @@ async function reserveGoogleCall(userId: string, tripId: string): Promise<boolea
   ]);
   // A failed count is treated as "over": the cap must fail closed.
   if (month.error || mine.error) return false;
-  if ((month.count ?? 0) >= GOOGLE_KOSHER_MONTHLY_CALLS || (mine.count ?? 0) >= GOOGLE_KOSHER_PER_USER_PER_DAY) return false;
+  if ((month.count ?? 0) >= GOOGLE_KOSHER_MONTHLY_CALLS || !(perUserPerDay > (mine.count ?? 0))) return false;
   const { error } = await db.from("agent_runs").insert({ trip_id: tripId, user_id: userId, kind: GOOGLE_KOSHER_KIND, cost_usd: 0, status: "ok" });
   return !error;
 }
 
-/** True once the caller, the demo pool (for anonymous callers) or the whole app has hit today's cap. */
+/**
+ * Which cap the caller, the demo pool (for anonymous callers) or the whole app
+ * has hit: "month" for an agent's own monthly budget, "day" for every other
+ * (and every unreadable) case, null when the call may go ahead. Truthy = stop.
+ */
 // deno-lint-ignore no-explicit-any
-async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<boolean> {
-  const [mine, app, demo] = await Promise.all([
+async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<"day" | "month" | null> {
+  const [mine, app, demo, agent] = await Promise.all([
     supabase.rpc("my_agent_daily_cost_usd"),
     supabase.rpc("app_agent_daily_cost_usd"),
     isAnonymous ? supabase.rpc("anon_agent_daily_cost_usd") : Promise.resolve({ data: 0 }),
+    // An active travel agent (migration 022): their own day and month caps, or NULL.
+    isAnonymous ? Promise.resolve({ data: null }) : supabase.rpc("my_agent_limits"),
   ]);
-  if ((app.data ?? 0) >= APP_DAILY_CAP_USD) return true;
-  if (isAnonymous) return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD;
-  return (mine.data ?? 0) >= DAILY_CAP_USD;
+  // The app-wide cap is the last line of defence: an unreadable total counts as reached.
+  if (app.error || (app.data ?? 0) >= APP_DAILY_CAP_USD) return "day";
+  // An unreadable personal spend counts as reached too, for every kind of caller.
+  if (mine.error) return "day";
+  if (isAnonymous) {
+    return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD ? "day" : null;
+  }
+  // Can't tell whether the caller is an agent, or can't read an agent's spend: fail closed.
+  if (agent.error) return "day";
+  if (agent.data) {
+    // The month goes first: it won't clear tomorrow, and the message has to say so.
+    if (!(Number(agent.data.ai_monthly_usd) > Number(agent.data.month_cost_usd))) return "month";
+    return !(Number(agent.data.ai_daily_usd) > (mine.data ?? 0)) ? "day" : null;
+  }
+  return (mine.data ?? 0) >= DAILY_CAP_USD ? "day" : null;
 }
 
 // Service-role client for agent_runs writes, which users can't do themselves (018).
@@ -659,8 +681,9 @@ Deno.serve(async (req) => {
     const message = (body.message ?? "").trim();
     if (!message) return json({ error: "empty_message" }, 400);
 
-    if (await overDailyCap(supabase, isAnonymous)) {
-      return json({ error: "daily_cap_reached" }, 429);
+    const cap = await overDailyCap(supabase, isAnonymous);
+    if (cap) {
+      return json({ error: cap === "month" ? "monthly_cap_reached" : "daily_cap_reached" }, 429);
     }
     // Held estimate (about 4x the measured average question) until the real cost is logged.
     const { data: held } = (await adminDb()

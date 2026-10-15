@@ -13,6 +13,7 @@ import { MapLink } from "@/components/MapLink";
 import { Flag } from "@/components/Flag";
 import { ImageCredit } from "@/components/MediaCard";
 import { isTripPhotoUrl } from "@/lib/photo-url";
+import { AGENCY_LOGO_BUCKET, isAgencyLogoPath, safeAgencyColor } from "@/lib/agency-brand";
 import { cn } from "@/lib/utils";
 import { resolveMapUrl } from "@/lib/maps";
 import { LegalLinks } from "@/routes/LegalPages";
@@ -82,7 +83,16 @@ export default function SharePage() {
     );
 
   const { trip, agency, flights, stays, itinerary, suggestions, updates } = shared;
-  const accent = agency?.color || undefined;
+  // 023 already filters these server-side; checked again because they reach
+  // anonymous visitors (a CSS value or foreign URL could load a tracking pixel).
+  const accent = safeAgencyColor(agency?.color) ?? undefined;
+  const agencyName = agency?.name?.trim() || null;
+  // Only a path comes from the server; the URL is always our own project's.
+  const logoPath = agency?.logo_path;
+  const agencyLogo = isAgencyLogoPath(logoPath)
+    ? supabase.storage.from(AGENCY_LOGO_BUCKET).getPublicUrl(logoPath).data.publicUrl
+    : null;
+  const isAgencyPage = Boolean(agencyName || agencyLogo);
   const duration = tripDuration(trip.start_date, trip.end_date);
   const heroPhoto = isTripPhotoUrl(trip.image_url) ? trip.image_url : null;
   const days = new Set<string>();
@@ -93,9 +103,26 @@ export default function SharePage() {
   return (
     <div className="mx-auto min-h-screen max-w-lg px-4 pb-16">
       {/* agency header */}
-      {agency?.name && (
-        <div className="mb-4 mt-4 rounded-2xl px-4 py-3 text-center text-sm font-bold text-white shadow-soft" style={{ background: accent ?? "var(--primary)" }}>
-          {agency.name}
+      {/* The agency's own colour is a stripe, never a text background: any
+          colour an agent picks keeps the name readable in both modes. */}
+      {isAgencyPage && (
+        <div
+          className="mt-4 flex items-center gap-3 rounded-2xl border-s-4 border-primary bg-card px-4 py-3 text-card-foreground shadow-soft"
+          style={accent ? { borderInlineStartColor: accent } : undefined}
+        >
+          {agencyLogo && (
+            <img
+              src={agencyLogo}
+              alt={agencyName ? `הלוגו של ${agencyName}` : "הלוגו של הסוכנות"}
+              className="size-12 shrink-0 rounded-xl object-contain"
+            />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="type-footnote text-muted-foreground">הטיול שלכם מאת</div>
+            {agencyName && (
+              <div className="type-headline truncate [unicode-bidi:plaintext]">{agencyName}</div>
+            )}
+          </div>
         </div>
       )}
 
@@ -105,7 +132,6 @@ export default function SharePage() {
           "relative mt-4 overflow-hidden rounded-4xl text-white shadow-pop",
           heroPhoto ? "flex min-h-72 flex-col justify-end" : "bg-gradient-sea",
         )}
-        style={!heroPhoto && accent ? { background: accent } : undefined}
       >
         {heroPhoto && (
           <>
@@ -284,9 +310,14 @@ export default function SharePage() {
         </Section>
       )}
 
-      <p className="mt-8 text-center text-xs text-muted-foreground">
-        נבנה עם <span className="font-bold">TripCraft</span> 🌴
-      </p>
+      {/* On an agent's page TripCraft stays a quiet credit, not an invitation. */}
+      {isAgencyPage ? (
+        <p className="mt-8 text-center text-xs text-muted-foreground">נבנה עם TripCraft</p>
+      ) : (
+        <p className="mt-8 text-center text-xs text-muted-foreground">
+          נבנה עם <span className="font-bold">TripCraft</span> 🌴
+        </p>
+      )}
       <LegalLinks className="mt-2" />
     </div>
   );

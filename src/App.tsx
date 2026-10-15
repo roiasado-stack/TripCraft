@@ -6,6 +6,7 @@ import { ToastProvider } from "@/hooks/use-toast";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
+import { AgentRoute } from "@/components/AgentRoute";
 import { SetupNeeded } from "@/components/SetupNeeded";
 import AuthPage from "@/routes/AuthPage";
 import ResetPasswordPage from "@/routes/ResetPasswordPage";
@@ -13,6 +14,10 @@ import TripsListPage from "@/routes/TripsListPage";
 import WizardPage from "@/routes/WizardPage";
 import SettingsPage from "@/routes/SettingsPage";
 import AdminMonitoringPage from "@/routes/AdminMonitoringPage";
+import AdminAgentsPage from "@/routes/AdminAgentsPage";
+import AgentPage from "@/routes/AgentPage";
+import AgentNewTripPage from "@/routes/AgentNewTripPage";
+import AgentSendPage from "@/routes/AgentSendPage";
 import SharePage from "@/routes/SharePage";
 import JoinPage from "@/routes/JoinPage";
 import { AccessibilityPage, CreditsPage, PrivacyPage, TermsPage } from "@/routes/LegalPages";
@@ -82,10 +87,42 @@ export default function App() {
                   }
                 />
                 <Route
+                  path="/agent"
+                  element={
+                    <AgentRoute>
+                      <AgentPage />
+                    </AgentRoute>
+                  }
+                />
+                <Route
+                  path="/agent/new"
+                  element={
+                    <AgentRoute>
+                      <AgentNewTripPage />
+                    </AgentRoute>
+                  }
+                />
+                <Route
+                  path="/agent/send/:tripId"
+                  element={
+                    <AgentRoute>
+                      <AgentSendPage />
+                    </AgentRoute>
+                  }
+                />
+                <Route
                   path="/admin/monitoring"
                   element={
                     <AdminRoute>
                       <AdminMonitoringPage />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/admin/agents"
+                  element={
+                    <AdminRoute>
+                      <AdminAgentsPage />
                     </AdminRoute>
                   }
                 />

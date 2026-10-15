@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CopyPlus, Plane, Sparkles, Users } from "lucide-react";
+import { CopyPlus, ExternalLink, Eye, Megaphone, MessageCircle, Plane, Sparkles, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -34,7 +34,8 @@ export default function HomeTab() {
   const [today, setToday] = useState<ItineraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [duplicating, setDuplicating] = useState(false);
-  const { user, isAnonymous } = useAuth();
+  const [composeRequest, setComposeRequest] = useState(0);
+  const { user, isAnonymous, isAgent } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -252,7 +253,49 @@ export default function HomeTab() {
         </GroupedList>
       )}
 
-      <TripUpdates tripId={trip.id} role={role} className="mt-6" />
+      {/* The agent who owns this trip: send it to the client, see the client's page, post an update. */}
+      {isAgent && can(role, "manage") && (
+        <GroupedList className="mt-6" title="ללקוח">
+          <ListRow
+            to={`/agent/send/${trip.id}`}
+            leading={<IconTile icon={<MessageCircle className="size-[18px]" />} />}
+            title="שליחה ללקוח"
+            subtitle="וואטסאפ עם דף הטיול וקישור הצטרפות"
+          />
+          {trip.is_shared && trip.share_slug ? (
+            <a
+              href={`/share/${trip.share_slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-14 items-center gap-3 px-4 py-3 transition-colors active:bg-muted/70"
+            >
+              <IconTile icon={<Eye className="size-[18px]" />} />
+              <span className="type-headline min-w-0 flex-1">מה הנוסעים רואים</span>
+              <ExternalLink className="size-4 shrink-0 text-muted-foreground/60" aria-hidden />
+            </a>
+          ) : (
+            <ListRow
+              leading={<IconTile icon={<Eye className="size-[18px]" />} />}
+              title="מה הנוסעים רואים"
+              subtitle="דף הטיול ייפתח כשתשלחו אותו ללקוח"
+              className="opacity-60"
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => setComposeRequest((n) => n + 1)}
+            className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-start transition-colors active:bg-muted/70"
+          >
+            <IconTile icon={<Megaphone className="size-[18px]" />} tone="accent" />
+            <span className="min-w-0 flex-1">
+              <span className="type-headline block">שליחת עדכון לנוסעים</span>
+              <span className="type-footnote block text-muted-foreground">מופיע בדף הטיול ואצל כל מי שהצטרף</span>
+            </span>
+          </button>
+        </GroupedList>
+      )}
+
+      <TripUpdates tripId={trip.id} role={role} className="mt-6" composeRequest={composeRequest} />
 
       <GroupedList className="mt-6">
         <ListRow

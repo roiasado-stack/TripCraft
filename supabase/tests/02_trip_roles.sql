@@ -154,3 +154,48 @@ SELECT pg_temp.login_anon();
 SELECT pg_temp.check('anon: cannot set the trip photo',
   pg_temp.try(format('UPDATE trips SET image_url = %L WHERE id = %L', 'https://upload.wikimedia.org/x.jpg', pg_temp.id('trip'))) IN (0, -1));
 RESET ROLE;
+
+-- Agency send flow (AgentSendPage): sharing, invite links, client details, source docs --
+-- Sharing ON is owner-only too (AgentSendPage turns it on). Fixture trip starts shared.
+SELECT set_config('request.jwt.claims', '', true);
+UPDATE public.trips SET is_shared = false WHERE id = pg_temp.id('trip');
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('editor: cannot turn public sharing ON',
+  pg_temp.try(format('UPDATE trips SET is_shared = true WHERE id = %L', pg_temp.id('trip'))) = -1);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('participant'));
+SELECT pg_temp.check('participant: cannot turn sharing ON or create a participant link',
+  pg_temp.try(format('UPDATE trips SET is_shared = true WHERE id = %L', pg_temp.id('trip'))) IN (-1, 0)
+  AND pg_temp.try(format('INSERT INTO trip_invites (trip_id, role) VALUES (%L, %L)', pg_temp.id('trip'), 'participant')) = -1);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('owner'));
+SELECT pg_temp.check('owner: can turn sharing ON and create a participant link',
+  pg_temp.try(format('UPDATE trips SET is_shared = true WHERE id = %L', pg_temp.id('trip'))) = 1
+  AND pg_temp.try(format('INSERT INTO trip_invites (trip_id, role) VALUES (%L, %L)', pg_temp.id('trip'), 'participant')) = 1);
+RESET ROLE;
+SELECT set_config('request.jwt.claims', '', true);
+UPDATE public.trips SET is_shared = true WHERE id = pg_temp.id('trip');
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('editor: cannot change requires_approval on a link',
+  pg_temp.try(format('UPDATE trip_invites SET requires_approval = false WHERE trip_id = %L', pg_temp.id('trip'))) = 0);
+RESET ROLE;
+SELECT set_config('request.jwt.claims', '', true);
+INSERT INTO public.trip_clients (trip_id, client_name, client_phone) VALUES (pg_temp.id('trip'), 'SECRET-CLIENT', 'SECRET-CLIENT-PHONE');
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('editor: cannot read, update or upsert trip_clients',
+  (SELECT count(*) FROM trip_clients) = 0
+  AND pg_temp.try(format('UPDATE trip_clients SET client_phone = %L WHERE trip_id = %L', 'x', pg_temp.id('trip'))) = 0
+  AND pg_temp.try(format('INSERT INTO trip_clients (trip_id, client_name) VALUES (%L, %L) ON CONFLICT (trip_id) DO UPDATE SET client_name = excluded.client_name', pg_temp.id('trip'), 'x')) = -1);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('owner'));
+SELECT pg_temp.check('owner: upsert of trip_clients (AgentSendPage saveClient) works',
+  pg_temp.try(format('INSERT INTO trip_clients (trip_id, client_name, client_phone) VALUES (%L, %L, %L) ON CONFLICT (trip_id) DO UPDATE SET client_name = excluded.client_name, client_phone = excluded.client_phone', pg_temp.id('trip'), 'New', '050-1')) = 1);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('participant'));
+SELECT pg_temp.check('participant: cannot upload trip-docs under another user''s folder',
+  pg_temp.try(format('INSERT INTO storage.objects (bucket_id, name, owner) VALUES (%L, %L, %L)',
+    'trip-docs', pg_temp.id('owner')::text || '/' || pg_temp.id('trip')::text || '/x.pdf', pg_temp.id('participant'))) = -1);
+SELECT pg_temp.check('participant: can upload trip-docs under own folder',
+  pg_temp.try(format('INSERT INTO storage.objects (bucket_id, name, owner) VALUES (%L, %L, %L)',
+    'trip-docs', pg_temp.id('participant')::text || '/' || pg_temp.id('trip')::text || '/x.pdf', pg_temp.id('participant'))) = 1);
+RESET ROLE;
