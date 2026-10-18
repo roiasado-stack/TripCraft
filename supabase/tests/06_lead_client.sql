@@ -43,11 +43,21 @@ SELECT pg_temp.check('preview: says it is a personal link, email masked',
   (SELECT public.invite_preview('lead-token') ->> 'grants_lead') = 'true'
   AND (SELECT public.invite_preview('lead-token') ->> 'lead_email_hint') = 'Le***@Test.local');
 RESET ROLE;
-SELECT pg_temp.check('a personal link that requires approval or is not a participant link is rejected',
-  pg_temp.try(format($q$INSERT INTO trip_invites (trip_id, role, created_by, grants_lead, requires_approval)
-                        VALUES (%L, 'editor', %L, true, false)$q$, pg_temp.id('trip3'), pg_temp.id('owner'))) = -1
-  AND pg_temp.try(format($q$INSERT INTO trip_invites (trip_id, role, created_by, lead_email)
-                        VALUES (%L, 'viewer', %L, 'x@y.z')$q$, pg_temp.id('trip3'), pg_temp.id('owner'))) = -1);
+-- other_trip has no live personal link, so only the CHECK can reject these.
+SELECT pg_temp.check('a personal link must be a participant link',
+  pg_temp.err(format($q$INSERT INTO trip_invites (trip_id, role, created_by, grants_lead, requires_approval)
+                        VALUES (%L, 'editor', %L, true, false)$q$, pg_temp.id('other_trip'), pg_temp.id('stranger')))
+  LIKE '%trip_invites_lead_check%');
+SELECT pg_temp.check('a personal link cannot require approval',
+  pg_temp.err(format($q$INSERT INTO trip_invites (trip_id, role, created_by, grants_lead, requires_approval)
+                        VALUES (%L, 'participant', %L, true, true)$q$, pg_temp.id('other_trip'), pg_temp.id('stranger')))
+  LIKE '%trip_invites_lead_check%');
+SELECT pg_temp.check('only a personal link carries an email',
+  pg_temp.err(format($q$INSERT INTO trip_invites (trip_id, role, created_by, lead_email)
+                        VALUES (%L, 'viewer', %L, 'x@y.z')$q$, pg_temp.id('other_trip'), pg_temp.id('stranger')))
+  LIKE '%trip_invites_lead_check%');
+SELECT pg_temp.check('short addresses are masked to one letter',
+  public.mask_email('ab@x.com') = 'a***@x.com' AND public.mask_email('dana@x.com') = 'da***@x.com');
 
 -- Email lock ---------------------------------------------------------------------------
 SELECT pg_temp.login(pg_temp.id('imposter'));
@@ -84,6 +94,10 @@ RESET ROLE;
 
 SELECT pg_temp.check('the personal link is used up',
   (SELECT revoked_at FROM trip_invites WHERE token = 'lead-token') IS NOT NULL);
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('a used personal link has no preview (and no email hint) any more',
+  public.invite_preview('lead-token') IS NULL);
+RESET ROLE;
 SELECT pg_temp.login(pg_temp.id('imposter'));
 SELECT pg_temp.check('a used personal link no longer works for anyone',
   pg_temp.err($$SELECT public.accept_trip_invite('lead-token')$$) = 'invalid_invite');
@@ -114,7 +128,16 @@ SELECT pg_temp.login(pg_temp.id('lead'));
 SELECT pg_temp.check('lead: removes a family member',
   pg_temp.err(format('SELECT public.lead_set_member_status(%L, %L)',
     (SELECT id FROM trip_members WHERE trip_id = pg_temp.id('trip') AND user_id = pg_temp.id('friend')), 'removed')) = 'ok');
-SELECT pg_temp.check('lead: cannot remove an editor, themselves, or someone on another trip',
+SELECT pg_temp.check('lead: cannot approve a pending editor',
+  pg_temp.try(format('SELECT public.lead_set_member_status(%L, %L)',
+    (SELECT id FROM trip_members WHERE trip_id = pg_temp.id('trip') AND user_id = pg_temp.id('pending')), 'active')) = -1);
+RESET ROLE;
+INSERT INTO trip_members (trip_id, user_id, role, status) VALUES (pg_temp.id('trip'), pg_temp.id('client3'), 'participant', 'pending');
+SELECT pg_temp.login(pg_temp.id('lead'));
+SELECT pg_temp.check('lead: approves a waiting participant',
+  pg_temp.err(format('SELECT public.lead_set_member_status(%L, %L)',
+    (SELECT id FROM trip_members WHERE trip_id = pg_temp.id('trip') AND user_id = pg_temp.id('client3')), 'active')) = 'ok');
+SELECT pg_temp.check('lead: cannot remove an editor or themselves',
   pg_temp.try(format('SELECT public.lead_set_member_status(%L, %L)',
     (SELECT id FROM trip_members WHERE trip_id = pg_temp.id('trip') AND user_id = pg_temp.id('editor')), 'removed')) = -1
   AND pg_temp.try(format('SELECT public.lead_set_member_status(%L, %L)',
@@ -153,6 +176,23 @@ RESET ROLE;
 SELECT pg_temp.check('people already in stay after the link is replaced',
   (SELECT status FROM trip_members WHERE trip_id = pg_temp.id('trip') AND user_id = pg_temp.id('participant')) = 'active');
 
+-- A removal sticks: deleting your own 'removed' row ("leave") doesn't reopen the door.
+SELECT pg_temp.login(pg_temp.id('friend'));
+SELECT pg_temp.check('removed member: cannot delete their own removed row',
+  pg_temp.try(format('DELETE FROM trip_members WHERE trip_id = %L AND user_id = auth.uid()', pg_temp.id('trip'))) = 0);
+SELECT pg_temp.check('removed by the lead: the new group link does not bring them back',
+  (SELECT public.accept_trip_invite((SELECT token FROM links WHERE k = 'g2')) ->> 'status') = 'removed');
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('removed'));
+SELECT pg_temp.check('removed by the owner: cannot delete the row and rejoin',
+  pg_temp.try(format('DELETE FROM trip_members WHERE trip_id = %L AND user_id = auth.uid()', pg_temp.id('trip'))) = 0
+  AND (SELECT public.accept_trip_invite('test-invite-token') ->> 'status') = 'removed');
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('viewer'));
+SELECT pg_temp.check('an active member can still leave',
+  pg_temp.try(format('DELETE FROM trip_members WHERE trip_id = %L AND user_id = auth.uid()', pg_temp.id('trip'))) = 1);
+RESET ROLE;
+
 -- Nobody else gets the lead tools -----------------------------------------------------------------
 SELECT pg_temp.login(pg_temp.id('participant'));
 SELECT pg_temp.check('regular participant: no lead tools',
@@ -167,11 +207,59 @@ SELECT pg_temp.check('stranger: no lead tools',
 RESET ROLE;
 SELECT pg_temp.login(pg_temp.id('demo'), true);
 SELECT pg_temp.check('demo visitor: no lead tools',
-  pg_temp.try(format('SELECT public.lead_group_link(%L)', pg_temp.id('trip'))) = -1);
+  pg_temp.try(format('SELECT public.lead_group_link(%L)', pg_temp.id('trip'))) = -1
+  AND pg_temp.try(format('SELECT public.lead_rotate_group_link(%L)', pg_temp.id('trip'))) = -1
+  AND pg_temp.try(format('SELECT public.set_trip_lead(%L)',
+    (SELECT id FROM public.trip_members WHERE user_id = pg_temp.id('participant') AND trip_id = pg_temp.id('trip')))) = -1);
 RESET ROLE;
 SELECT pg_temp.login_anon();
 SELECT pg_temp.check('logged out: cannot call the lead tools',
-  pg_temp.try(format('SELECT public.lead_group_link(%L)', pg_temp.id('trip'))) = -1);
+  pg_temp.try(format('SELECT public.lead_group_link(%L)', pg_temp.id('trip'))) = -1
+  AND pg_temp.try(format('SELECT public.lead_rotate_group_link(%L)', pg_temp.id('trip'))) = -1
+  AND pg_temp.try(format('SELECT public.lead_set_member_status(%L, %L)', gen_random_uuid(), 'removed')) = -1
+  AND pg_temp.try(format('SELECT public.set_trip_lead(%L)', gen_random_uuid())) = -1);
+RESET ROLE;
+
+-- Edge cases of the personal link ------------------------------------------------------------------
+INSERT INTO ids VALUES ('trip5', '10000000-0000-0000-0000-000000000005'),
+                       ('trip6', '10000000-0000-0000-0000-000000000006'),
+                       ('phoneonly', '00000000-0000-0000-0000-0000000001e6');
+INSERT INTO public.trips (id, user_id, title, destination) VALUES
+  (pg_temp.id('trip5'), pg_temp.id('owner'), 'Pending editor trip', 'Vienna'),
+  (pg_temp.id('trip6'), pg_temp.id('owner'), 'Viewer trip', 'Lisbon');
+INSERT INTO public.trip_members (trip_id, user_id, role, status) VALUES
+  (pg_temp.id('trip5'), pg_temp.id('lead'),   'editor', 'pending'),
+  (pg_temp.id('trip6'), pg_temp.id('cousin'), 'viewer', 'active');
+INSERT INTO public.trip_invites (trip_id, role, token, requires_approval, created_by, grants_lead, lead_email) VALUES
+  (pg_temp.id('trip5'), 'participant', 'lead-pending-editor', false, pg_temp.id('owner'), true, 'lead@test.local'),
+  (pg_temp.id('trip6'), 'participant', 'lead-viewer',         false, pg_temp.id('owner'), true, 'cousin@test.local');
+INSERT INTO auth.users (id, phone, aud, role, is_anonymous, phone_confirmed_at)
+  VALUES (pg_temp.id('phoneonly'), '972500000001', 'authenticated', 'authenticated', false, now());
+
+SELECT pg_temp.login(pg_temp.id('lead'));
+SELECT public.accept_trip_invite('lead-pending-editor');
+SELECT pg_temp.check('pending editor + personal link: a participant lead, no edit rights',
+  public.trip_role(pg_temp.id('trip5')) = 'participant' AND NOT public.can_edit_trip(pg_temp.id('trip5'))
+  AND public.is_trip_lead(pg_temp.id('trip5')));
+RESET ROLE;
+
+SELECT pg_temp.login(pg_temp.id('phoneonly'));
+SELECT pg_temp.check('an account without an email cannot use an email-locked link',
+  pg_temp.err($$SELECT public.accept_trip_invite('lead-viewer')$$) = 'wrong_account');
+RESET ROLE;
+SELECT pg_temp.check('the email-locked link is still live after that',
+  (SELECT revoked_at FROM trip_invites WHERE token = 'lead-viewer') IS NULL);
+
+SELECT pg_temp.login(pg_temp.id('cousin'));
+SELECT public.accept_trip_invite('lead-viewer');
+SELECT pg_temp.check('active viewer with the matching email: becomes a participant lead, still no edit',
+  public.trip_role(pg_temp.id('trip6')) = 'participant' AND public.is_trip_lead(pg_temp.id('trip6'))
+  AND NOT public.can_edit_trip(pg_temp.id('trip6')));
+RESET ROLE;
+
+SELECT pg_temp.login(pg_temp.id('owner'));
+SELECT pg_temp.check('owner: a personal link cannot be switched to require approval',
+  pg_temp.try($$UPDATE trip_invites SET requires_approval = true WHERE token = 'lead-pending-editor'$$) <= 0);
 RESET ROLE;
 
 -- Owner moves the lead mark -----------------------------------------------------------------------
@@ -205,6 +293,13 @@ SELECT pg_temp.check('no email: a waiting lead has no lead tools',
 RESET ROLE;
 SELECT pg_temp.check('no email: the link is used up',
   (SELECT revoked_at FROM trip_invites WHERE token = 'lead-no-email') IS NOT NULL);
+INSERT INTO trip_invites (trip_id, role, token, requires_approval, created_by, grants_lead)
+  VALUES (pg_temp.id('trip3'), 'participant', 'lead-while-pending', false, pg_temp.id('owner'), true);
+SELECT pg_temp.login(pg_temp.id('imposter'));
+SELECT pg_temp.check('a waiting lead already holds the place: no second lead',
+  pg_temp.err($$SELECT public.accept_trip_invite('lead-while-pending')$$) = 'lead_taken');
+RESET ROLE;
+UPDATE trip_invites SET revoked_at = now() WHERE token = 'lead-while-pending';
 
 SELECT pg_temp.login(pg_temp.id('owner'));
 SELECT pg_temp.check('owner: approves the waiting lead',

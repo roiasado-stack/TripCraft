@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Clock, LogIn } from "lucide-react";
+import { Clock, LogIn, UserX } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -18,7 +18,14 @@ type Preview = {
   end_date: string | null;
   cover_emoji: string | null;
   role: MemberRole;
+  /** The client's personal link from the agent (migration 024). */
+  grants_lead?: boolean;
+  /** Masked address the personal link is locked to, e.g. da***@gmail.com. */
+  lead_email_hint?: string | null;
 };
+
+/** accept_trip_invite refusals that need their own message (migration 024). */
+type JoinProblem = "wrong_account" | "lead_taken" | null;
 
 /**
  * /join/:token — where a WhatsApp invite lands. Public: shows what the link
@@ -27,13 +34,15 @@ type Preview = {
  */
 export default function JoinPage() {
   const { token = "" } = useParams();
-  const { session, isAnonymous, loading, signInWithGoogle, signOut } = useAuth();
+  const { session, user, isAnonymous, loading, signInWithGoogle, signOut } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [preview, setPreview] = useState<Preview | null | undefined>(undefined);
   const [joining, setJoining] = useState(false);
   const [pending, setPending] = useState(false);
+  const [problem, setProblem] = useState<JoinProblem>(null);
   const returnPath = `/join/${token}`;
+  const isLeadLink = !!preview?.grants_lead;
 
   useEffect(() => {
     // A failed lookup shows the same "invite not valid" card as an unknown token.
@@ -47,7 +56,14 @@ export default function JoinPage() {
     const { data, error } = await supabase.rpc("accept_trip_invite", { p_token: token });
     setJoining(false);
     if (error) {
-      toast.error(error.message.includes("invalid_invite") ? "ההזמנה כבר לא בתוקף." : "ההצטרפות נכשלה. נסו שוב.");
+      if (error.message.includes("wrong_account")) setProblem("wrong_account");
+      else if (error.message.includes("lead_taken")) setProblem("lead_taken");
+      else
+        toast.error(
+          error.message.includes("invalid_invite")
+            ? "ההזמנה כבר לא בתוקף, או שהקישור האישי כבר שומש."
+            : "ההצטרפות נכשלה. נסו שוב.",
+        );
       return;
     }
     const result = data as { trip_id: string; status: "pending" | "active" | "owner" | "removed" };
@@ -73,7 +89,9 @@ export default function JoinPage() {
           <div className="rounded-3xl bg-card p-6 text-center text-card-foreground">
             <div className="text-5xl">🔒</div>
             <h1 className="type-title mt-3">ההזמנה לא בתוקף</h1>
-            <p className="type-footnote mt-1 text-muted-foreground">ייתכן שהקישור בוטל. בקשו מבעל הטיול קישור חדש.</p>
+            <p className="type-footnote mt-1 text-muted-foreground">
+              ייתכן שהקישור בוטל, או שזה קישור אישי שכבר שומש. בני משפחה מקבלים קישור מהלקוח שמנהל את הטיול.
+            </p>
             <Link to="/" className="type-headline mt-4 inline-flex min-h-11 items-center text-primary">
               לטיולים שלי
             </Link>
@@ -97,17 +115,61 @@ export default function JoinPage() {
                   {preview.end_date ? ` – ${formatHeb(preview.end_date)}` : ""}
                 </p>
               )}
-              <div className="type-footnote mt-4 rounded-2xl bg-primary-soft p-3 text-start">
-                <span className="font-semibold text-primary">{ROLE_LABELS[preview.role]}</span>
-                <span className="block text-foreground">{ROLE_HINTS[preview.role]}</span>
-              </div>
+              {isLeadLink ? (
+                <div className="type-footnote mt-4 rounded-2xl bg-primary-soft p-3 text-start">
+                  <span className="font-semibold text-primary">הקישור האישי שלך מהסוכן</span>
+                  <span className="block text-foreground">
+                    תצטרפו כלקוח הראשי של הטיול: תראו הכול, ותוכלו להזמין את בני המשפחה ולנהל מי בטיול.
+                  </span>
+                  {preview.lead_email_hint && (
+                    <span className="mt-1 block text-muted-foreground">
+                      הקישור נפתח רק לחשבון <bdi dir="ltr">{preview.lead_email_hint}</bdi>
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="type-footnote mt-4 rounded-2xl bg-primary-soft p-3 text-start">
+                  <span className="font-semibold text-primary">{ROLE_LABELS[preview.role]}</span>
+                  <span className="block text-foreground">{ROLE_HINTS[preview.role]}</span>
+                </div>
+              )}
             </div>
 
             <div className="mt-5">
-              {pending ? (
+              {problem === "wrong_account" ? (
+                <div className="flex flex-col gap-3">
+                  <p className="type-footnote flex items-start gap-3 rounded-2xl bg-muted p-3">
+                    <UserX className="size-5 shrink-0 text-destructive" />
+                    <span>
+                      הקישור הזה מיועד לחשבון{" "}
+                      {preview.lead_email_hint ? <bdi dir="ltr">{preview.lead_email_hint}</bdi> : "אחר"}, ואתם מחוברים
+                      עכשיו כ-<bdi dir="ltr">{user?.email || "חשבון אחר"}</bdi>. התחברו עם החשבון הנכון. אם המייל שלכם
+                      השתנה, בקשו מהסוכן לעדכן אותו ולשלוח קישור חדש.
+                    </span>
+                  </p>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={async () => {
+                      await signOut();
+                      setProblem(null);
+                    }}
+                  >
+                    <LogIn className="size-4" />
+                    החלפת חשבון
+                  </Button>
+                </div>
+              ) : problem === "lead_taken" ? (
+                <p className="type-footnote flex items-start gap-3 rounded-2xl bg-muted p-3">
+                  <Clock className="size-5 shrink-0 text-primary" />
+                  לטיול הזה כבר יש לקוח ראשי. בקשו ממנו את קישור ההצטרפות של המשפחה.
+                </p>
+              ) : pending ? (
                 <div className="type-footnote flex items-center gap-3 rounded-2xl bg-muted p-3">
                   <Clock className="size-5 shrink-0 text-primary" />
-                  הבקשה נשלחה. הטיול יופיע ברשימת הטיולים שלך אחרי שבעל הטיול יאשר.
+                  {isLeadLink
+                    ? "נכנסתם. הסוכן יאשר אתכם, ואז הטיול יופיע ברשימת הטיולים שלכם ותוכלו להזמין את המשפחה."
+                    : "הבקשה נשלחה. הטיול יופיע ברשימת הטיולים שלך אחרי שבעל הטיול יאשר."}
                 </div>
               ) : session && !isAnonymous ? (
                 <Button size="lg" className="w-full" loading={joining} onClick={join}>

@@ -74,6 +74,14 @@ CREATE POLICY "members list" ON public.trip_members FOR SELECT TO authenticated
          OR (status = 'active' AND public.can_view_trip(trip_id))
          OR public.is_trip_lead(trip_id));
 
+-- A removed member could delete their own 'removed' row ("leave") and then
+-- rejoin through the same link, undoing a removal by the owner or the lead
+-- (a gap in 015/019). Leaving is for members who are in or waiting.
+-- delete_my_account is SECURITY DEFINER and unaffected.
+DROP POLICY IF EXISTS "owner or self removes" ON public.trip_members;
+CREATE POLICY "owner or self removes" ON public.trip_members FOR DELETE TO authenticated
+  USING (public.owns_trip(trip_id) OR (user_id = auth.uid() AND status <> 'removed'));
+
 -- The owner may now also move the lead mark (UPDATE stays owner-only by policy).
 CREATE OR REPLACE FUNCTION public.guard_member_update()
 RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public AS $$
@@ -90,7 +98,8 @@ $$;
 CREATE OR REPLACE FUNCTION public.mask_email(_email TEXT)
 RETURNS TEXT LANGUAGE sql IMMUTABLE SET search_path = public AS $$
   SELECT CASE WHEN _email IS NULL OR position('@' IN _email) = 0 THEN NULL
-    ELSE left(split_part(_email, '@', 1), 2) || '***@' || split_part(_email, '@', 2) END
+    ELSE left(split_part(_email, '@', 1), CASE WHEN length(split_part(_email, '@', 1)) <= 3 THEN 1 ELSE 2 END)
+         || '***@' || split_part(_email, '@', 2) END
 $$;
 
 -- Same as 015 plus whether the link makes you the lead, and for whom (masked).
@@ -176,7 +185,8 @@ BEGIN
     -- mark as lead. An existing editor stays editor; a viewer becomes a participant.
     UPDATE public.trip_members
        SET is_lead = true, status = new_status,
-           role = CASE WHEN role = 'editor' THEN 'editor' ELSE 'participant' END
+           -- Editor only if the owner already approved it; a pending editor becomes a participant.
+           role = CASE WHEN existing.status = 'active' AND existing.role = 'editor' THEN 'editor' ELSE 'participant' END
      WHERE id = existing.id;
   ELSE
     INSERT INTO public.trip_members (trip_id, user_id, role, status, display_name, invite_id, is_lead)
@@ -208,17 +218,17 @@ BEGIN
 END;
 $$;
 
--- The link leaked: the old one stops working, people already in stay.
+-- The link leaked: the old one stops working, people already in stay. The new
+-- link joins without approval — the lead's own link (an old approval-required
+-- one from before 024 is replaced by a link that doesn't need the agent).
 CREATE OR REPLACE FUNCTION public.lead_rotate_group_link(p_trip_id UUID)
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE approval BOOLEAN;
 BEGIN
   IF NOT public.is_trip_lead(p_trip_id) THEN RAISE EXCEPTION 'not_lead' USING ERRCODE = '42501'; END IF;
   UPDATE public.trip_invites SET revoked_at = now()
-   WHERE trip_id = p_trip_id AND role = 'participant' AND NOT grants_lead AND revoked_at IS NULL
-  RETURNING requires_approval INTO approval;
+   WHERE trip_id = p_trip_id AND role = 'participant' AND NOT grants_lead AND revoked_at IS NULL;
   INSERT INTO public.trip_invites (trip_id, role, requires_approval, created_by)
-  SELECT p_trip_id, 'participant', COALESCE(approval, false), t.user_id FROM public.trips t WHERE t.id = p_trip_id;
+  SELECT p_trip_id, 'participant', false, t.user_id FROM public.trips t WHERE t.id = p_trip_id;
   RETURN public.lead_group_link(p_trip_id);
 END;
 $$;
@@ -289,6 +299,10 @@ FROM unnest(ARRAY['public.lead_group_link(uuid)', 'public.lead_rotate_group_link
                   'public.lead_set_member_status(uuid, text)', 'public.set_trip_lead(uuid)',
                   'public.is_trip_lead(uuid)']) AS p
 WHERE has_function_privilege('anon', p, 'EXECUTE')
+UNION ALL
+SELECT 'a removed member can still delete their own row', policyname, cmd
+FROM pg_policies WHERE schemaname = 'public' AND tablename = 'trip_members' AND cmd = 'DELETE'
+  AND coalesce(qual, '') NOT LIKE '%removed%'
 UNION ALL
 SELECT 'trip_clients.client_email readable beyond the owner', policyname, cmd
 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'trip_clients'

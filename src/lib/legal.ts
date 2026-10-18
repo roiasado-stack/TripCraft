@@ -21,7 +21,7 @@ export const LEGAL = {
   /** How long Supabase keeps backups after a deletion, in days. "0" = the plan keeps no backups
    *  (checked 2026-09-30: no daily backups, no PITR). Update when upgrading the Supabase plan. */
   backupRetention: "0",
-  lastUpdated: "14 באוקטובר 2026",
+  lastUpdated: "18 באוקטובר 2026",
 } as const;
 
 export const isPlaceholder = (value: string) => value.startsWith("[");

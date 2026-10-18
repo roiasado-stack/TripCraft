@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Copy, Link2, Link2Off, LogOut, MessageCircle, UserMinus, X } from "lucide-react";
+import { Check, Copy, Crown, Link2, Link2Off, LogOut, MessageCircle, RefreshCw, UserMinus, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -57,6 +57,11 @@ function Avatar({ name }: { name: string }) {
  * role, approves joiners, changes roles and removes people; everyone else
  * sees who's on the trip and can leave. The database enforces all of it —
  * this only shows the controls that will work.
+ *
+ * On an agent's trip the client who opened the personal link is the lead
+ * (migration 024): they get the group link to forward, can replace it if it
+ * leaked, and approve or remove viewers/participants — through the lead_* RPCs,
+ * never the tables. The owner sees who the lead is and can move the mark.
  */
 export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
   const { user, isAnonymous } = useAuth();
@@ -69,16 +74,31 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
   const [inviteRole, setInviteRole] = useState<MemberRole>("participant");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  // The lead's group link (lead_group_link); null until loaded or when not the lead.
+  const [groupLink, setGroupLink] = useState<{ token: string; requires_approval: boolean } | null>(null);
 
   const load = async () => {
     const [{ data: m }, { data: i }] = await Promise.all([
       supabase.from("trip_members").select("*").eq("trip_id", trip.id).order("created_at"),
       isOwner
-        ? supabase.from("trip_invites").select("*").eq("trip_id", trip.id).is("revoked_at", null)
+        ? supabase
+            .from("trip_invites")
+            .select("*")
+            .eq("trip_id", trip.id)
+            .eq("grants_lead", false) // the client's personal link lives on the agent's send screen
+            .is("revoked_at", null)
         : Promise.resolve({ data: [] }),
     ]);
-    setMembers((m as TripMember[]) ?? []);
+    const rows = (m as TripMember[]) ?? [];
+    setMembers(rows);
     setInvites((i as TripInvite[]) ?? []);
+    if (!isOwner && !isAnonymous && rows.some((r) => r.user_id === user?.id && r.is_lead && r.status === "active")) {
+      const { data, error } = await supabase.rpc("lead_group_link", { p_trip_id: trip.id });
+      if (error) console.error(error);
+      setGroupLink((data as { token: string; requires_approval: boolean } | null) ?? null);
+    } else {
+      setGroupLink(null);
+    }
     setLoading(false);
   };
   useEffect(() => {
@@ -86,8 +106,13 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.id]);
 
+  const isLead = !isOwner && members.some((m) => m.user_id === user?.id && m.is_lead && m.status === "active");
   const invite = invites.find((i) => i.role === inviteRole);
   const inviteUrl = invite ? `${window.location.origin}/join/${invite.token}` : "";
+  const groupUrl = groupLink ? `${window.location.origin}/join/${groupLink.token}` : "";
+  /** Whom the lead may approve or remove (lead_set_member_status allows the same). */
+  const leadManages = (m: TripMember) =>
+    isLead && !m.is_lead && m.user_id !== user?.id && (m.role === "viewer" || m.role === "participant");
 
   const createInvite = async () => {
     setBusy(true);
@@ -130,9 +155,9 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
     load();
   };
 
-  const copy = async () => {
+  const copy = async (url: string = inviteUrl) => {
     try {
-      await navigator.clipboard.writeText(inviteUrl);
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       toast.success("הקישור הועתק");
@@ -142,6 +167,45 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
   };
 
   const whatsappText = `הוזמנת לטיול "${trip.title}" ב-TripCraft (${ROLE_LABELS[inviteRole]}): ${inviteUrl}`;
+  const groupText = `הצטרפו לטיול "${trip.title}" ב-TripCraft: ${groupUrl}`;
+
+  const rotateGroupLink = async () => {
+    if (busy) return;
+    setBusy(true);
+    const { data, error } = await supabase.rpc("lead_rotate_group_link", { p_trip_id: trip.id });
+    setBusy(false);
+    if (error || !data) {
+      if (error) console.error(error);
+      toast.error("לא הצלחנו להחליף את הקישור");
+      return;
+    }
+    setGroupLink(data as { token: string; requires_approval: boolean });
+    toast.success("הקישור הוחלף. הקישור הקודם כבר לא עובד, ומי שבטיול נשאר.");
+  };
+
+  /** Lead only: approve or remove a viewer/participant (migration 024). */
+  const leadSetStatus = async (m: TripMember, status: "active" | "removed", done: string) => {
+    const { error } = await supabase.rpc("lead_set_member_status", { p_member_id: m.id, p_status: status });
+    if (error) {
+      console.error(error);
+      toast.error(status === "active" ? "האישור נכשל" : "ההסרה נכשלה");
+      return;
+    }
+    toast.success(done);
+    load();
+  };
+
+  /** Owner only: this member becomes the lead; the previous lead stays on the trip as a member. */
+  const makeLead = async (m: TripMember) => {
+    const { error } = await supabase.rpc("set_trip_lead", { p_member_id: m.id });
+    if (error) {
+      console.error(error);
+      toast.error("העדכון נכשל");
+      return;
+    }
+    toast.success(`${m.display_name || "המשתמש"} הוא/היא עכשיו הלקוח הראשי`);
+    load();
+  };
 
   const updateMember = async (m: TripMember, patch: Partial<Pick<TripMember, "role" | "status">>, done: string) => {
     const { error } = await supabase.from("trip_members").update(patch).eq("id", m.id);
@@ -215,7 +279,7 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
               <ActionRow
                 icon={copied ? <Check className="size-5" /> : <Copy className="size-5" />}
                 label="העתקת הקישור"
-                onClick={copy}
+                onClick={() => copy()}
               />
               <ActionRow
                 icon={<MessageCircle className="size-5" />}
@@ -252,7 +316,45 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
         </section>
       )}
 
-      {isOwner && pending.length > 0 && (
+      {isLead && (
+        <section>
+          <h3 className={sectionTitle}>הזמנת המשפחה והקבוצה</h3>
+          <p className="type-footnote mb-2 px-4 text-muted-foreground">
+            {groupLink?.requires_approval
+              ? "מי שנכנס בקישור מחכה לאישור שלך כאן למטה."
+              : "מי שנכנס בקישור מצטרף מיד"}
+            {" "}ורואה את כל הטיול, כולל המסמכים שהסוכן שיתף. שלחו אותו רק למי שנוסע איתכם.
+          </p>
+          {groupLink ? (
+            <InsetGroup>
+              <div dir="ltr" className="overflow-x-auto whitespace-nowrap px-4 py-3 font-mono text-xs text-muted-foreground">
+                {groupUrl}
+              </div>
+              <ActionRow
+                icon={copied ? <Check className="size-5" /> : <Copy className="size-5" />}
+                label="העתקת הקישור"
+                onClick={() => copy(groupUrl)}
+              />
+              <ActionRow
+                icon={<MessageCircle className="size-5" />}
+                label="שליחה בוואטסאפ"
+                href={`https://wa.me/?text=${encodeURIComponent(groupText)}`}
+              />
+              <ActionRow
+                icon={busy ? <Spinner className="size-5" /> : <RefreshCw className="size-5" />}
+                label="החלפת הקישור, אם הגיע למי שלא צריך"
+                destructive
+                disabled={busy}
+                onClick={rotateGroupLink}
+              />
+            </InsetGroup>
+          ) : (
+            <p className="type-footnote rounded-2xl bg-muted p-4 text-muted-foreground">לא הצלחנו לטעון את הקישור. נסו לרענן.</p>
+          )}
+        </section>
+      )}
+
+      {(isOwner || isLead) && pending.length > 0 && (
         <section>
           <h3 className={sectionTitle}>ממתינים לאישור ({pending.length})</h3>
           <InsetGroup>
@@ -261,24 +363,34 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
                 <Avatar name={m.display_name || "משתמש"} />
                 <div className="min-w-0 flex-1">
                   <div className="type-headline truncate [unicode-bidi:plaintext]">{m.display_name || "משתמש"}</div>
-                  <div className="type-footnote text-muted-foreground">מבקש להצטרף כ{ROLE_LABELS[m.role]}</div>
+                  <div className="type-footnote text-muted-foreground">
+                    {m.is_lead ? "נכנס/ה בקישור האישי, כלקוח ראשי" : `מבקש להצטרף כ${ROLE_LABELS[m.role]}`}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => updateMember(m, { status: "active" }, "אושר ✓")}
-                  aria-label={`אישור ${m.display_name || "משתמש"}`}
-                  className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95"
-                >
-                  <Check className="size-5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => removeMember(m, "הבקשה נדחתה")}
-                  aria-label={`דחיית ${m.display_name || "משתמש"}`}
-                  className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-foreground/5"
-                >
-                  <X className="size-5" />
-                </button>
+                {(isOwner || leadManages(m)) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        isOwner ? updateMember(m, { status: "active" }, "אושר ✓") : leadSetStatus(m, "active", "אושר ✓")
+                      }
+                      aria-label={`אישור ${m.display_name || "משתמש"}`}
+                      className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95"
+                    >
+                      <Check className="size-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        isOwner ? removeMember(m, "הבקשה נדחתה") : leadSetStatus(m, "removed", "הבקשה נדחתה")
+                      }
+                      aria-label={`דחיית ${m.display_name || "משתמש"}`}
+                      className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-foreground/5"
+                    >
+                      <X className="size-5" />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </InsetGroup>
@@ -296,9 +408,27 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
             {active.map((m) => (
               <div key={m.id} className="flex min-h-14 items-center gap-3 py-2 ps-4 pe-2">
                 <Avatar name={m.display_name || "משתמש"} />
-                <div className="type-headline min-w-0 flex-1 truncate [unicode-bidi:plaintext]">
-                  {m.display_name || "משתמש"}
-                  {m.user_id === user?.id && <span className="text-muted-foreground"> (את/ה)</span>}
+                <div className="min-w-0 flex-1">
+                  <div className="type-headline truncate [unicode-bidi:plaintext]">
+                    {m.display_name || "משתמש"}
+                    {m.user_id === user?.id && <span className="text-muted-foreground"> (את/ה)</span>}
+                  </div>
+                  {m.is_lead ? (
+                    <div className="type-footnote flex items-center gap-1 text-primary">
+                      <Crown className="size-3.5" aria-hidden />
+                      לקוח ראשי
+                    </div>
+                  ) : (
+                    isOwner && (
+                      <button
+                        type="button"
+                        onClick={() => makeLead(m)}
+                        className="type-footnote -my-1 inline-flex min-h-8 items-center text-primary"
+                      >
+                        סימון כלקוח ראשי
+                      </button>
+                    )
+                  )}
                 </div>
                 {isOwner ? (
                   <>
@@ -323,6 +453,15 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
                       <UserMinus className="size-5" />
                     </button>
                   </>
+                ) : leadManages(m) ? (
+                  <button
+                    type="button"
+                    onClick={() => leadSetStatus(m, "removed", "הוסר מהטיול")}
+                    className="grid size-11 shrink-0 place-items-center rounded-full text-destructive transition-colors active:bg-foreground/5"
+                    aria-label={`הסרת ${m.display_name || "משתמש"} מהטיול`}
+                  >
+                    <UserMinus className="size-5" />
+                  </button>
                 ) : (
                   <span className="type-footnote shrink-0 pe-2 text-muted-foreground">{ROLE_LABELS[m.role]}</span>
                 )}
