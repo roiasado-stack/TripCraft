@@ -172,7 +172,7 @@ function BoardRow({ row, today }: { row: AgentTripBoardRow; today: Date }) {
   const v = rowView(row, today);
   const meta = [row.destination, v.dates].filter(Boolean).join(" · ");
   return (
-    <Link to={`/trip/${row.id}`} className="flex items-center gap-3 py-3 ps-4 pe-2 transition-colors active:bg-muted/70">
+    <Link to={`/agency/trips/${row.id}`} className="flex items-center gap-3 py-3 ps-4 pe-2 transition-colors active:bg-muted/70">
       <Flag destination={row.destination} fallback="✈️" className="w-[36px] text-[26px]" />
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-2">
@@ -210,7 +210,7 @@ function BoardTable({ rows, today }: { rows: AgentTripBoardRow[]; today: Date })
         <tbody className="divide-y divide-separator">
           {rows.map((row) => {
             const v = rowView(row, today);
-            const open = () => navigate(`/trip/${row.id}`);
+            const open = () => navigate(`/agency/trips/${row.id}`);
             return (
               <tr
                 key={row.id}
@@ -220,7 +220,7 @@ function BoardTable({ rows, today }: { rows: AgentTripBoardRow[]; today: Date })
                 <td className={td}>
                   {/* The link keeps keyboard, middle-click and "open in a new tab" working. */}
                   <Link
-                    to={`/trip/${row.id}`}
+                    to={`/agency/trips/${row.id}`}
                     onClick={(e) => e.stopPropagation()}
                     className="flex min-w-0 items-center gap-3 outline-none focus-visible:underline"
                   >

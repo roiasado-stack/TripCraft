@@ -19,6 +19,8 @@ import AgentPage from "@/routes/AgentPage";
 import AgentNewTripPage from "@/routes/AgentNewTripPage";
 import AgentSendPage from "@/routes/AgentSendPage";
 import AgencyLayout from "@/routes/agency/AgencyLayout";
+import AgencyTripLayout from "@/routes/agency/AgencyTripLayout";
+import AgencyTripPage from "@/routes/agency/AgencyTripPage";
 import SharePage from "@/routes/SharePage";
 import JoinPage from "@/routes/JoinPage";
 import { AccessibilityPage, CreditsPage, PrivacyPage, TermsPage } from "@/routes/LegalPages";
@@ -102,6 +104,9 @@ export default function App() {
                 >
                   <Route index element={<AgentPage />} />
                   <Route path="new" element={<AgentNewTripPage />} />
+                  <Route path="trips/:tripId" element={<AgencyTripLayout />}>
+                    <Route index element={<AgencyTripPage />} />
+                  </Route>
                   <Route path="trips/:tripId/send" element={<AgentSendPage />} />
                 </Route>
                 {/* The workspace moved from /agent: links already sent out keep working. */}

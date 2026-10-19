@@ -170,7 +170,8 @@ function telHref(phone?: string | null): string | null {
   return digits.length >= 6 ? `tel:${digits}` : null;
 }
 
-export default function TransportTab() {
+/** `embedded`: shown inside another screen (the agency trip screen) — no trip header, no side padding. */
+export default function TransportTab({ embedded = false }: { embedded?: boolean } = {}) {
   const { trip, role } = useTrip();
   const canEdit = can(role, "edit");
   const toast = useToast();
@@ -249,8 +250,8 @@ export default function TransportTab() {
     setSheet({ title, actions: actions.filter((a): a is SheetAction => !!a) });
 
   return (
-    <div className="px-4">
-      <TripHeader trip={trip} subtitle="טיסות, לינה ותחבורה" />
+    <div className={embedded ? undefined : "px-4"}>
+      {!embedded && <TripHeader trip={trip} subtitle="טיסות, לינה ותחבורה" />}
 
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="type-title">טיסות ולינה</h2>
