@@ -27,7 +27,9 @@ runs Vite on :5174 against it via `.env.localstack`. Test accounts belong there,
 - `supabase/tests/*.sql` run inside a rolled-back transaction after `_helpers.sql` (fixture: one trip,
   one user per role, a demo user). They are the executable version of "Who sees a trip" below. A new
   table, policy, RPC or role behaviour gets cases there in the same change; a security bug gets a case
-  that fails before the fix.
+  that fails before the fix. Anything limited to agent trips (or any other kind of trip/user) also gets
+  a case proving it does nothing on an ordinary user's trip — the lead client shipped without one and
+  reached regular trips (caught only in final review, #13).
 - Unit tests only for pure logic in `src/lib` (parsers, permissions, URL builders). No component tests,
   no mocking Supabase — RLS is tested against the real database instead.
 - ESLint is limited to bug-catching rules on purpose; there is no formatter. A justified exception to
