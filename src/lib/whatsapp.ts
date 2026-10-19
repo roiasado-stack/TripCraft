@@ -52,7 +52,12 @@ export function clientMessage(p: {
     "",
     `לצפייה בטיול (בלי הרשמה): ${p.shareUrl}`,
   ];
-  if (p.joinUrl) lines.push("", `להצטרפות לטיול ולקבלת עדכונים לאורך הדרך: ${p.joinUrl}`);
+  if (p.joinUrl)
+    lines.push(
+      "",
+      `הקישור האישי שלך להצטרפות ולעדכונים לאורך הדרך: ${p.joinUrl}`,
+      "הקישור אישי לך ועובד פעם אחת. את בני המשפחה מזמינים מתוך האפליקציה.",
+    );
   const agency = p.agencyName?.trim();
   if (agency) lines.push("", agency);
   return lines.join("\n");

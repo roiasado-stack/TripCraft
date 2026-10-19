@@ -71,7 +71,8 @@ describe("clientMessage", () => {
     const m = clientMessage({ clientName: "דנה", destination: "רומא", shareUrl, joinUrl });
     expect(m).not.toContain("שוברים");
     expect(m).not.toContain("מסמכים");
-    expect(m).toContain(`להצטרפות לטיול ולקבלת עדכונים לאורך הדרך: ${joinUrl}`);
+    expect(m).toContain(`הקישור האישי שלך להצטרפות ולעדכונים לאורך הדרך: ${joinUrl}`);
+    expect(m).toContain("את בני המשפחה מזמינים מתוך האפליקציה");
   });
 
   it("reads naturally without a name, destination, join link or agency", () => {
@@ -80,6 +81,7 @@ describe("clientMessage", () => {
     expect(m).toContain("הטיול שלכם מוכן");
     expect(m).toContain(shareUrl);
     expect(m).not.toContain("להצטרפות");
+    expect(m).not.toContain("הקישור אישי");
     expect(m).not.toContain("undefined");
     expect(m).not.toContain("null");
   });

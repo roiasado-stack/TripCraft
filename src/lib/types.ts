@@ -47,6 +47,8 @@ export interface TripClient {
   trip_id: string;
   client_name: string | null;
   client_phone: string | null;
+  /** Locks the personal join link to the client's account (migration 024). */
+  client_email: string | null;
   updated_at: string;
 }
 
@@ -61,6 +63,8 @@ export interface TripMember {
   role: MemberRole;
   status: "pending" | "active" | "removed";
   display_name: string | null;
+  /** The agent's client, who manages who joins (migration 024). */
+  is_lead: boolean;
   created_at: string;
 }
 
@@ -70,6 +74,10 @@ export interface TripInvite {
   role: MemberRole;
   token: string;
   requires_approval: boolean;
+  /** Personal single-use link that makes whoever opens it the lead (024). */
+  grants_lead: boolean;
+  /** When set, only the account with this confirmed email can use the personal link. */
+  lead_email: string | null;
   revoked_at: string | null;
   created_at: string;
 }
