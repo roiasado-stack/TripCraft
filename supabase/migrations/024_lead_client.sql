@@ -58,21 +58,34 @@ ALTER TABLE public.trip_clients DROP CONSTRAINT IF EXISTS trip_clients_email_che
 ALTER TABLE public.trip_clients ADD CONSTRAINT trip_clients_email_check
   CHECK (client_email IS NULL OR length(client_email) <= 254);
 
+-- Agent trips only ---------------------------------------------------------------
+-- The lead exists only on trips whose owner is an agent (or admin) — the same
+-- signal as useAuth().isAgent. A family trip never gets a lead, so its owner's
+-- links can't be rotated or its members removed by anyone but the owner.
+CREATE OR REPLACE FUNCTION public.is_agent_trip(_trip_id UUID)
+RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM public.trips t WHERE t.id = _trip_id
+                   AND (public.has_role(t.user_id, 'agent') OR public.has_role(t.user_id, 'admin')))
+$$;
+
 -- Who is the lead ------------------------------------------------------------------
+-- A viewer is never the lead (guard_member_update clears the mark), checked here too.
 CREATE OR REPLACE FUNCTION public.is_trip_lead(_trip_id UUID)
 RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT EXISTS (SELECT 1 FROM public.trip_members m
                  WHERE m.trip_id = _trip_id AND m.user_id = auth.uid()
-                   AND m.is_lead AND m.status = 'active')
+                   AND m.is_lead AND m.status = 'active' AND m.role <> 'viewer')
          AND NOT public.is_anon_user()
+         AND public.is_agent_trip(_trip_id)
 $$;
 
--- The lead sees pending joiners too (only relevant if the owner turned approval back on).
+-- The lead sees pending joiners too (only relevant if the owner turned approval
+-- back on) — not the people who were removed.
 DROP POLICY IF EXISTS "members list" ON public.trip_members;
 CREATE POLICY "members list" ON public.trip_members FOR SELECT TO authenticated
   USING (public.owns_trip(trip_id) OR user_id = auth.uid()
          OR (status = 'active' AND public.can_view_trip(trip_id))
-         OR public.is_trip_lead(trip_id));
+         OR (status <> 'removed' AND public.is_trip_lead(trip_id)));
 
 -- A removed member could delete their own 'removed' row ("leave") and then
 -- rejoin through the same link, undoing a removal by the owner or the lead
@@ -90,6 +103,8 @@ BEGIN
      OR NEW.invite_id IS DISTINCT FROM OLD.invite_id THEN
     RAISE EXCEPTION 'only role, status and is_lead can change' USING ERRCODE = '42501';
   END IF;
+  -- Turning the lead into a viewer is how the owner restricts them: the mark goes too.
+  IF NEW.role = 'viewer' THEN NEW.is_lead := false; END IF;
   RETURN NEW;
 END;
 $$;
@@ -157,6 +172,10 @@ BEGIN
   END IF;
 
   -- Personal link --------------------------------------------------------------
+  -- Only agent trips have a lead; on any other trip the link is not valid.
+  IF NOT public.is_agent_trip(inv.trip_id) THEN
+    RAISE EXCEPTION 'invalid_invite' USING ERRCODE = 'P0002';
+  END IF;
   IF inv.lead_email IS NOT NULL
      AND (my_email IS NULL OR my_confirmed IS NULL OR lower(my_email) <> lower(inv.lead_email)) THEN
     -- Not used up: the right account can still open it.
@@ -173,9 +192,9 @@ BEGIN
 
   -- Already on the trip without a verified email: nothing proves they are the
   -- client, and they can't be made to wait again. Left as is, link not used up;
-  -- the owner can mark them lead by hand (set_trip_lead).
+  -- the owner can mark them lead by hand (set_trip_lead). The page tells them so.
   IF is_member AND inv.lead_email IS NULL THEN
-    RETURN jsonb_build_object('trip_id', inv.trip_id, 'status', existing.status);
+    RETURN jsonb_build_object('trip_id', inv.trip_id, 'status', existing.status, 'not_lead', true);
   END IF;
 
   -- Verified by email → in at once. Otherwise the owner approves this one person.
@@ -260,6 +279,7 @@ BEGIN
   IF NOT FOUND OR NOT public.owns_trip(m.trip_id) OR public.is_anon_user() THEN
     RAISE EXCEPTION 'not_owner' USING ERRCODE = '42501';
   END IF;
+  IF NOT public.is_agent_trip(m.trip_id) THEN RAISE EXCEPTION 'not_agent_trip' USING ERRCODE = '42501'; END IF;
   IF m.status NOT IN ('pending', 'active') THEN RAISE EXCEPTION 'not_allowed' USING ERRCODE = '42501'; END IF;
   UPDATE public.trip_members SET is_lead = false WHERE trip_id = m.trip_id AND is_lead AND id <> m.id;
   UPDATE public.trip_members
@@ -270,6 +290,7 @@ END;
 $$;
 
 -- Grants ---------------------------------------------------------------------------------
+REVOKE EXECUTE ON FUNCTION public.is_agent_trip(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.is_trip_lead(uuid), public.mask_email(text),
   public.lead_group_link(uuid), public.lead_rotate_group_link(uuid),
   public.lead_set_member_status(uuid, text), public.set_trip_lead(uuid) FROM PUBLIC, anon;
@@ -293,6 +314,10 @@ UNION ALL
 SELECT 'accept_trip_invite: personal link not single-use or not email-checked', '', ''
 WHERE pg_get_functiondef('public.accept_trip_invite(text)'::regprocedure) NOT LIKE '%SET revoked_at = now()%'
    OR pg_get_functiondef('public.accept_trip_invite(text)'::regprocedure) NOT LIKE '%email_confirmed_at%'
+UNION ALL
+SELECT 'lead powers not limited to agent trips', '', ''
+WHERE pg_get_functiondef('public.is_trip_lead(uuid)'::regprocedure) NOT LIKE '%is_agent_trip%'
+   OR pg_get_functiondef('public.set_trip_lead(uuid)'::regprocedure) NOT LIKE '%is_agent_trip%'
 UNION ALL
 SELECT 'lead RPC callable by anon', p, ''
 FROM unnest(ARRAY['public.lead_group_link(uuid)', 'public.lead_rotate_group_link(uuid)',

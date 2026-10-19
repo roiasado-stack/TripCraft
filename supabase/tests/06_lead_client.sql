@@ -30,6 +30,8 @@ INSERT INTO ids VALUES
 INSERT INTO public.trips (id, user_id, title, destination) VALUES
   (pg_temp.id('trip3'), pg_temp.id('owner'), 'No-email trip', 'Prague'),
   (pg_temp.id('other_trip'), pg_temp.id('stranger'), 'Someone else', 'Paris');
+-- The lead exists only on agent trips (is_agent_trip); the fixture owner is an agent here.
+INSERT INTO public.user_roles (user_id, role) VALUES (pg_temp.id('owner'), 'agent');
 INSERT INTO public.trip_members (trip_id, user_id, role, status) VALUES
   (pg_temp.id('other_trip'), pg_temp.id('cousin'), 'participant', 'active'),
   (pg_temp.id('trip3'), pg_temp.id('cousin'), 'participant', 'active');
@@ -88,6 +90,8 @@ SELECT pg_temp.check('lead: cannot change members directly (table RLS unchanged)
                      pg_temp.id('trip'), pg_temp.id('participant'))) = 0);
 SELECT pg_temp.check('lead: sees pending joiners',
   (SELECT count(*) FROM trip_members WHERE trip_id = pg_temp.id('trip') AND status = 'pending') = 1);
+SELECT pg_temp.check('lead: does not see members the owner removed',
+  (SELECT count(*) FROM trip_members WHERE trip_id = pg_temp.id('trip') AND status = 'removed') = 0);
 SELECT pg_temp.check('lead: cannot read the invites table',
   (SELECT count(*) FROM trip_invites) = 0);
 RESET ROLE;
@@ -272,13 +276,15 @@ SELECT pg_temp.check('owner: the old lead mark is cleared',
 RESET ROLE;
 SELECT pg_temp.check('a second lead row is impossible',
   pg_temp.err(format('UPDATE trip_members SET is_lead = true WHERE trip_id = %L AND user_id = %L',
-    pg_temp.id('trip'), pg_temp.id('viewer'))) LIKE '%trip_members_one_lead_idx%');
+    pg_temp.id('trip'), pg_temp.id('editor'))) LIKE '%trip_members_one_lead_idx%');
 
 -- No email: the owner approves the lead once -----------------------------------------------------------
 SELECT pg_temp.login(pg_temp.id('cousin'));
 SELECT pg_temp.check('no email: someone already on the trip is not made lead, link not used up',
   (SELECT public.accept_trip_invite('lead-no-email') ->> 'status') = 'active'
   AND NOT public.is_trip_lead(pg_temp.id('trip3')));
+SELECT pg_temp.check('no email: someone already on the trip is told they were not made lead',
+  (SELECT public.accept_trip_invite('lead-no-email') ->> 'not_lead') = 'true');
 RESET ROLE;
 SELECT pg_temp.check('no email: the link is still live after that',
   (SELECT revoked_at FROM trip_invites WHERE token = 'lead-no-email') IS NULL);

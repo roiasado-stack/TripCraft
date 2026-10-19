@@ -64,7 +64,7 @@ function Avatar({ name }: { name: string }) {
  * never the tables. The owner sees who the lead is and can move the mark.
  */
 export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
-  const { user, isAnonymous } = useAuth();
+  const { user, isAnonymous, isAgent } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const isOwner = role === "owner";
@@ -76,6 +76,7 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
   const [copied, setCopied] = useState(false);
   // The lead's group link (lead_group_link); null until loaded or when not the lead.
   const [groupLink, setGroupLink] = useState<{ token: string; requires_approval: boolean } | null>(null);
+  const [isLead, setIsLead] = useState(false);
 
   const load = async () => {
     const [{ data: m }, { data: i }] = await Promise.all([
@@ -92,7 +93,15 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
     const rows = (m as TripMember[]) ?? [];
     setMembers(rows);
     setInvites((i as TripInvite[]) ?? []);
+    // The server decides (is_trip_lead also needs an active lead on an agent trip, not a viewer).
+    let lead = false;
     if (!isOwner && !isAnonymous && rows.some((r) => r.user_id === user?.id && r.is_lead && r.status === "active")) {
+      const { data: isLeadNow, error: leadError } = await supabase.rpc("is_trip_lead", { _trip_id: trip.id });
+      if (leadError) console.error(leadError);
+      lead = isLeadNow === true;
+    }
+    setIsLead(lead);
+    if (lead) {
       const { data, error } = await supabase.rpc("lead_group_link", { p_trip_id: trip.id });
       if (error) console.error(error);
       setGroupLink((data as { token: string; requires_approval: boolean } | null) ?? null);
@@ -106,7 +115,6 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.id]);
 
-  const isLead = !isOwner && members.some((m) => m.user_id === user?.id && m.is_lead && m.status === "active");
   const invite = invites.find((i) => i.role === inviteRole);
   const inviteUrl = invite ? `${window.location.origin}/join/${invite.token}` : "";
   const groupUrl = groupLink ? `${window.location.origin}/join/${groupLink.token}` : "";
@@ -419,7 +427,9 @@ export function TripMembers({ trip, role }: { trip: Trip; role: TripRole }) {
                       לקוח ראשי
                     </div>
                   ) : (
-                    isOwner && (
+                    // Only agent trips have a lead (is_agent_trip, migration 024).
+                    isOwner &&
+                    isAgent && (
                       <button
                         type="button"
                         onClick={() => makeLead(m)}

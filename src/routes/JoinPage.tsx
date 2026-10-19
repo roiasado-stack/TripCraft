@@ -66,9 +66,20 @@ export default function JoinPage() {
         );
       return;
     }
-    const result = data as { trip_id: string; status: "pending" | "active" | "owner" | "removed" };
+    const result = data as {
+      trip_id: string;
+      status: "pending" | "active" | "owner" | "removed";
+      /** Already on the trip, personal link without an email: not made lead (migration 024). */
+      not_lead?: boolean;
+    };
     if (result.status === "removed") {
-      toast.error("בעל הטיול הסיר אותך מהטיול, ולכן הקישור לא מצרף אותך שוב. אפשר לבקש ממנו להוסיף אותך מחדש.");
+      toast.error("הוסרת מהטיול, ולכן הקישור לא מצרף אותך שוב. אפשר לבקש ממי שמנהל את הטיול להוסיף אותך מחדש.");
+      return;
+    }
+    if (result.not_lead) {
+      toast.error("כבר הייתם בטיול, ולכן הקישור האישי לא הפך אתכם ללקוח הראשי. בקשו מהסוכן לסמן אתכם כלקוח ראשי.");
+      if (result.status === "pending") setPending(true);
+      else navigate(`/trip/${result.trip_id}`, { replace: true });
       return;
     }
     if (result.status === "pending") {
