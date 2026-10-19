@@ -51,6 +51,12 @@ export default function AgencyTripPage() {
     };
   }, [trip.id]);
 
+  /** After the send panel saved the client's details, so the heading shows the new name. */
+  const reloadClient = async () => {
+    const { data } = await supabase.from("trip_clients").select("*").eq("trip_id", trip.id).maybeSingle();
+    setClient((data as TripClient | null) ?? null);
+  };
+
   const today = new Date();
   const length = tripLength(trip.start_date, trip.end_date);
   const clientName = client?.client_name?.trim();
@@ -104,9 +110,9 @@ export default function AgencyTripPage() {
         </section>
 
         {/* Sending: the side column on desktop (stays in view), right after the details on a phone. */}
-        <aside className="lg:sticky lg:top-6 lg:col-start-2 lg:row-span-4 lg:row-start-1">
+        <aside className="lg:sticky lg:top-6 lg:col-start-2 lg:row-span-4 lg:row-start-1 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
           <Card className="p-4">
-            <AgentSendPanel tripId={trip.id} embedded onTripChange={reloadTrip} />
+            <AgentSendPanel tripId={trip.id} embedded onTripChange={reloadTrip} onClientChange={reloadClient} />
           </Card>
         </aside>
 

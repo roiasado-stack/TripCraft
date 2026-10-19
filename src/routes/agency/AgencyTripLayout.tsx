@@ -18,6 +18,8 @@ export default function AgencyTripLayout() {
   const { tripId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  // By id: a token refresh hands out a new user object, and must not reload (and reset) the screen.
+  const userId = user?.id;
   const [trip, setTrip] = useState<Trip | null>(null);
   const [role, setRole] = useState<TripRole | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -44,7 +46,7 @@ export default function AgencyTripLayout() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!tripId || !user) return;
+      if (!tripId || !userId) return;
       setState("loading");
       // RLS returns the trip to its owner and active members only (015).
       const [{ data, error }, { data: tripRole }] = await Promise.all([
@@ -69,7 +71,7 @@ export default function AgencyTripLayout() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tripId, user]);
+  }, [tripId, userId]);
 
   if (state === "loading")
     return (

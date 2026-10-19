@@ -65,12 +65,15 @@ export function AgentSendPanel({
   tripId,
   embedded = false,
   onTripChange,
+  onClientChange,
 }: {
   tripId: string | undefined;
   /** In the agency trip screen's side column: no page chrome, no trip card, no "to the trip" rows. */
   embedded?: boolean;
   /** Called after this panel changes the trip row (sharing turned on). */
   onTripChange?: () => void;
+  /** Called after this panel saved the client's details (trip_clients). */
+  onClientChange?: () => void;
 }) {
   const { user, profile } = useAuth();
   const userId = user?.id;
@@ -282,6 +285,7 @@ export function AgentSendPanel({
       return;
     }
     saved.current = { name, phone, email, exists: true };
+    onClientChange?.();
   };
 
   const sendWhatsApp = async () => {
