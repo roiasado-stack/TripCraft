@@ -143,7 +143,7 @@ export default function AgentSendPage() {
           emoji="🧭"
           title={state === "forbidden" ? "אין גישה לטיול הזה" : "משהו השתבש"}
           description={state === "forbidden" ? "רק מי שיצר את הטיול יכול לשלוח אותו ללקוח." : "נסו לרענן את הדף."}
-          action={<Button onClick={() => navigate("/agent")}>לסביבת הסוכן</Button>}
+          action={<Button onClick={() => navigate("/agency")}>לסביבת הסוכן</Button>}
         />
       </div>
     );
@@ -360,10 +360,10 @@ export default function AgentSendPage() {
     "type-body flex min-h-12 w-full items-center gap-3 px-4 text-start text-primary transition-colors active:bg-muted/70";
 
   return (
-    <div className="mx-auto min-h-screen max-w-lg px-4 pb-16 pt-4">
+    <div className="mx-auto max-w-lg px-4 pb-16 pt-4 lg:max-w-2xl lg:px-8 lg:pt-8">
       <div className="mb-4 flex items-center justify-between">
         <button
-          onClick={() => navigate("/agent")}
+          onClick={() => navigate("/agency")}
           className="-ms-2 grid size-11 place-items-center rounded-full text-primary transition-colors active:bg-muted/70"
           aria-label="לסביבת הסוכן"
         >
@@ -513,7 +513,7 @@ export default function AgentSendPage() {
             <ChevronLeft className="size-5" />
             לטיול
           </button>
-          <button type="button" onClick={() => navigate("/agent")} className={actionRow}>
+          <button type="button" onClick={() => navigate("/agency")} className={actionRow}>
             <Check className="size-5" />
             סיום
           </button>

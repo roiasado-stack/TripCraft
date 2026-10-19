@@ -209,7 +209,7 @@ export default function SettingsPage() {
 
         {isAgent ? (
           <GroupedList>
-            <ListRow to="/agent" leading={<Briefcase className="size-5 text-primary" />} title="סביבת הסוכן" />
+            <ListRow to="/agency" leading={<Briefcase className="size-5 text-primary" />} title="סביבת הסוכן" />
           </GroupedList>
         ) : (
           !isAnonymous && <AgentAccess />

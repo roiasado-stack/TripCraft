@@ -1,4 +1,4 @@
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/hooks/use-theme";
@@ -18,6 +18,7 @@ import AdminAgentsPage from "@/routes/AdminAgentsPage";
 import AgentPage from "@/routes/AgentPage";
 import AgentNewTripPage from "@/routes/AgentNewTripPage";
 import AgentSendPage from "@/routes/AgentSendPage";
+import AgencyLayout from "@/routes/agency/AgencyLayout";
 import SharePage from "@/routes/SharePage";
 import JoinPage from "@/routes/JoinPage";
 import { AccessibilityPage, CreditsPage, PrivacyPage, TermsPage } from "@/routes/LegalPages";
@@ -30,6 +31,11 @@ import SuggestionsTab from "@/routes/trip/SuggestionsTab";
 import AskTab from "@/routes/trip/AskTab";
 import DocumentsTab from "@/routes/trip/DocumentsTab";
 import ChecklistTab from "@/routes/trip/ChecklistTab";
+
+function LegacySendRedirect() {
+  const { tripId } = useParams();
+  return <Navigate to={`/agency/trips/${tripId}/send`} replace />;
+}
 
 function NotFound() {
   return (
@@ -87,29 +93,21 @@ export default function App() {
                   }
                 />
                 <Route
-                  path="/agent"
+                  path="/agency"
                   element={
                     <AgentRoute>
-                      <AgentPage />
+                      <AgencyLayout />
                     </AgentRoute>
                   }
-                />
-                <Route
-                  path="/agent/new"
-                  element={
-                    <AgentRoute>
-                      <AgentNewTripPage />
-                    </AgentRoute>
-                  }
-                />
-                <Route
-                  path="/agent/send/:tripId"
-                  element={
-                    <AgentRoute>
-                      <AgentSendPage />
-                    </AgentRoute>
-                  }
-                />
+                >
+                  <Route index element={<AgentPage />} />
+                  <Route path="new" element={<AgentNewTripPage />} />
+                  <Route path="trips/:tripId/send" element={<AgentSendPage />} />
+                </Route>
+                {/* The workspace moved from /agent: links already sent out keep working. */}
+                <Route path="/agent" element={<Navigate to="/agency" replace />} />
+                <Route path="/agent/new" element={<Navigate to="/agency/new" replace />} />
+                <Route path="/agent/send/:tripId" element={<LegacySendRedirect />} />
                 <Route
                   path="/admin/monitoring"
                   element={

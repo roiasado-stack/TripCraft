@@ -28,7 +28,7 @@ const STEP_LABELS = ["מסמכים", "בדיקה", "שליחה"];
 /**
  * "New trip from documents" (agency beta, phase 2): 1) the documents, through
  * the existing ImportBookings scan; 2) one review screen with the client;
- * 3) /agent/send/:id. Creation goes through the same insert as the wizard.
+ * 3) /agency/trips/:id/send. Creation goes through the same insert as the wizard.
  */
 export default function AgentNewTripPage() {
   const { user } = useAuth();
@@ -144,7 +144,7 @@ export default function AgentNewTripPage() {
           ? "שמירת אחד מקבצי ההזמנה נכשלה — אפשר להעלות אותו בלשונית \"מסמכים\"."
           : `שמירת ${failedDocs} מקבצי ההזמנה נכשלה — אפשר להעלות אותם בלשונית "מסמכים".`,
       );
-    navigate(`/agent/send/${tripId}`, { replace: true });
+    navigate(`/agency/trips/${tripId}/send`, { replace: true });
   };
 
   const renameTraveller = (i: number, name: string) =>
@@ -157,11 +157,11 @@ export default function AgentNewTripPage() {
   const fieldInput = "type-body min-w-0 flex-1 bg-transparent py-3 outline-none placeholder:text-muted-foreground";
 
   return (
-    <div className="mx-auto min-h-screen max-w-lg px-4 pb-32 pt-4">
+    <div className="mx-auto max-w-lg px-4 pb-32 pt-4 lg:max-w-2xl lg:px-8 lg:pt-8">
       {/* top bar */}
       <div className="mb-4 flex items-center justify-between">
         <button
-          onClick={() => (step === 1 ? setStep(0) : navigate("/agent"))}
+          onClick={() => (step === 1 ? setStep(0) : navigate("/agency"))}
           className="-ms-2 grid size-11 place-items-center rounded-full text-primary transition-colors active:bg-muted/70"
           aria-label="חזרה"
         >
@@ -171,7 +171,7 @@ export default function AgentNewTripPage() {
           שלב {step + 1} מתוך {STEP_LABELS.length}
         </span>
         <button
-          onClick={() => navigate("/agent")}
+          onClick={() => navigate("/agency")}
           className="-me-2 grid size-11 place-items-center rounded-full text-muted-foreground transition-colors active:bg-muted/70"
           aria-label="ביטול"
         >
@@ -299,8 +299,8 @@ export default function AgentNewTripPage() {
       <ImportBookings open={importOpen} onClose={() => setImportOpen(false)} onConfirm={onImported} context="agent" />
 
       {step === 1 && (
-        <div className="material safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-separator px-4 py-3">
-          <div className="mx-auto max-w-lg">
+        <div className="material safe-bottom fixed inset-x-0 bottom-0 z-40 border-t lg:start-64 border-separator px-4 py-3">
+          <div className="mx-auto max-w-lg lg:max-w-2xl lg:px-4">
             <Button size="lg" variant="accent" className="w-full" loading={saving} disabled={!destination.trim()} onClick={create}>
               <Check className="size-5" />
               יצירת הטיול
