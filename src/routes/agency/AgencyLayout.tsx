@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Briefcase, FilePlus2, LayoutList, LogOut, Menu, Settings, ShieldCheck, Smartphone, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -17,6 +17,8 @@ export default function AgencyLayout() {
   const { user, profile, isAdmin, signOut } = useAuth();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [requestedAgency, setRequestedAgency] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,8 +38,45 @@ export default function AgencyLayout() {
     };
   }, [user]);
 
-  // A tap on a menu item closes the drawer.
+  // Back/forward closes the drawer too (a tap on a link closes it in onPanelClick).
   useEffect(() => setMenuOpen(false), [location.pathname]);
+
+  // The drawer is a modal: focus moves in, Tab stays inside, Escape closes, and
+  // focus goes back to the menu button — the same contract as Modal in ui.tsx.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const panel = panelRef.current;
+    panel?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        return;
+      }
+      if (e.key !== "Tab" || !panel) return;
+      const items = panel.querySelectorAll<HTMLElement>("a[href], button:not([disabled])");
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    const button = menuButtonRef.current;
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      button?.focus();
+    };
+  }, [menuOpen]);
+
+  // A tap on any link in the drawer closes it, even when it points to the page already open.
+  const onPanelClick = (e: MouseEvent) => {
+    if ((e.target as HTMLElement).closest("a")) setMenuOpen(false);
+  };
 
   // The admin-approved name first: it is the one the brochure shows (023).
   const agency = requestedAgency?.trim() || profile?.agency_name?.trim() || "סביבת הסוכן";
@@ -91,6 +130,7 @@ export default function AgencyLayout() {
           {brand}
         </Link>
         <button
+          ref={menuButtonRef}
           type="button"
           onClick={() => setMenuOpen(true)}
           className="-me-2 grid size-11 shrink-0 place-items-center rounded-full text-primary transition-colors active:bg-muted/70"
@@ -103,7 +143,12 @@ export default function AgencyLayout() {
       {menuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="תפריט הסוכן">
           <button type="button" className="absolute inset-0 bg-foreground/30" onClick={() => setMenuOpen(false)} aria-label="סגירת התפריט" />
-          <div className="safe-bottom absolute inset-y-0 start-0 flex w-72 max-w-[85vw] flex-col gap-6 bg-card px-3 py-4 shadow-xl">
+          <div
+            ref={panelRef}
+            tabIndex={-1}
+            onClick={onPanelClick}
+            className="safe-bottom absolute inset-y-0 start-0 flex w-72 max-w-[85vw] flex-col gap-6 bg-card px-3 py-4 shadow-xl outline-none"
+          >
             <div className="flex items-center justify-between gap-2 ps-2">
               {brand}
               <button
