@@ -199,3 +199,49 @@ SELECT pg_temp.check('participant: can upload trip-docs under own folder',
   pg_temp.try(format('INSERT INTO storage.objects (bucket_id, name, owner) VALUES (%L, %L, %L)',
     'trip-docs', pg_temp.id('participant')::text || '/' || pg_temp.id('trip')::text || '/x.pdf', pg_temp.id('participant'))) = 1);
 RESET ROLE;
+
+-- Stays and transfers (TransportTab writes, agency workspace): editors and owner only -------------
+SELECT pg_temp.login(pg_temp.id('viewer'));
+SELECT pg_temp.check('viewer: cannot add, edit or delete a stay',
+  pg_temp.try(format('INSERT INTO stays (trip_id, hotel_name) VALUES (%L, %L)', pg_temp.id('trip'), 'x')) = -1
+  AND pg_temp.try(format('UPDATE stays SET hotel_name = %L WHERE trip_id = %L', 'x', pg_temp.id('trip'))) = 0
+  AND pg_temp.try(format('DELETE FROM stays WHERE trip_id = %L', pg_temp.id('trip'))) = 0);
+SELECT pg_temp.check('viewer: cannot add, edit or delete a transfer',
+  pg_temp.try(format('INSERT INTO transfers (trip_id, provider) VALUES (%L, %L)', pg_temp.id('trip'), 'x')) = -1
+  AND pg_temp.try(format('UPDATE transfers SET provider = %L WHERE trip_id = %L', 'x', pg_temp.id('trip'))) = 0
+  AND pg_temp.try(format('DELETE FROM transfers WHERE trip_id = %L', pg_temp.id('trip'))) = 0);
+RESET ROLE;
+
+SELECT pg_temp.login(pg_temp.id('participant'));
+SELECT pg_temp.check('participant: cannot add, edit or delete a stay',
+  pg_temp.try(format('INSERT INTO stays (trip_id, hotel_name) VALUES (%L, %L)', pg_temp.id('trip'), 'x')) = -1
+  AND pg_temp.try(format('UPDATE stays SET hotel_name = %L WHERE trip_id = %L', 'x', pg_temp.id('trip'))) = 0
+  AND pg_temp.try(format('DELETE FROM stays WHERE trip_id = %L', pg_temp.id('trip'))) = 0);
+SELECT pg_temp.check('participant: cannot add, edit or delete a transfer',
+  pg_temp.try(format('INSERT INTO transfers (trip_id, provider) VALUES (%L, %L)', pg_temp.id('trip'), 'x')) = -1
+  AND pg_temp.try(format('UPDATE transfers SET provider = %L WHERE trip_id = %L', 'x', pg_temp.id('trip'))) = 0
+  AND pg_temp.try(format('DELETE FROM transfers WHERE trip_id = %L', pg_temp.id('trip'))) = 0);
+RESET ROLE;
+
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('editor: can add, edit and delete a stay',
+  pg_temp.try(format('INSERT INTO stays (trip_id, hotel_name, phone) VALUES (%L, %L, %L)', pg_temp.id('trip'), 'x', '050')) = 1
+  AND pg_temp.try(format('UPDATE stays SET hotel_name = %L, phone = %L WHERE trip_id = %L', 'y', '051', pg_temp.id('trip'))) = 1
+  AND pg_temp.try(format('DELETE FROM stays WHERE trip_id = %L', pg_temp.id('trip'))) = 1);
+SELECT pg_temp.check('editor: can add, edit and delete a transfer',
+  pg_temp.try(format('INSERT INTO transfers (trip_id, kind, provider) VALUES (%L, %L, %L)', pg_temp.id('trip'), 'car_rental', 'x')) = 1
+  AND pg_temp.try(format('UPDATE transfers SET provider = %L WHERE trip_id = %L', 'y', pg_temp.id('trip'))) = 1
+  AND pg_temp.try(format('DELETE FROM transfers WHERE trip_id = %L', pg_temp.id('trip'))) = 1);
+RESET ROLE;
+
+SELECT pg_temp.login(pg_temp.id('pending'));
+SELECT pg_temp.check('pending member: cannot add a stay or transfer',
+  pg_temp.try(format('INSERT INTO stays (trip_id, hotel_name) VALUES (%L, %L)', pg_temp.id('trip'), 'x')) = -1
+  AND pg_temp.try(format('INSERT INTO transfers (trip_id, provider) VALUES (%L, %L)', pg_temp.id('trip'), 'x')) = -1);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('stranger'));
+SELECT pg_temp.check('stranger: cannot see or change stays and transfers',
+  (SELECT count(*) FROM stays WHERE trip_id = pg_temp.id('trip')) = 0
+  AND (SELECT count(*) FROM transfers WHERE trip_id = pg_temp.id('trip')) = 0
+  AND pg_temp.try(format('UPDATE stays SET hotel_name = %L WHERE trip_id = %L', 'x', pg_temp.id('trip'))) = 0);
+RESET ROLE;

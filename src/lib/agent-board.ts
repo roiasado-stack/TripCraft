@@ -1,4 +1,4 @@
-// The agent's trip list (/agent): one status per trip, the "needs handling"
+// The agent's trip list (/agency): one status per trip, the "needs handling"
 // notes and search, all derived from an agent_trip_board() row (migration 022).
 import type { AgentAttentionFlag, AgentTripBoardRow } from "./types";
 import { tripPhase } from "./trip-dates";
@@ -72,15 +72,15 @@ export function boardCounters(
   return `${joined} · דרכונים ${Math.min(row.passports_count, row.participants_count)}/${row.participants_count}`;
 }
 
-/** Case- and spacing-insensitive search over client name, destination and trip title. */
+/** Case- and spacing-insensitive search over client name, destination, trip title and the agency's booking number. */
 export function matchesBoardQuery(
-  row: Pick<AgentTripBoardRow, "client_name" | "destination" | "title">,
+  row: Pick<AgentTripBoardRow, "client_name" | "destination" | "title"> & Partial<Pick<AgentTripBoardRow, "external_ref">>,
   query: string,
 ): boolean {
   const norm = (s: string | null | undefined) => (s ?? "").toLocaleLowerCase().replace(/\s+/g, " ").trim();
   const q = norm(query);
   if (!q) return true;
-  return [row.client_name, row.destination, row.title].some((f) => norm(f).includes(q));
+  return [row.client_name, row.destination, row.title, row.external_ref].some((f) => norm(f).includes(q));
 }
 
 /**

@@ -25,7 +25,8 @@ function localToIso(value: string | null): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-export default function DocumentsTab() {
+/** `embedded`: shown inside another screen (the agency trip screen) — no trip header, no side padding. */
+export default function DocumentsTab({ embedded = false }: { embedded?: boolean } = {}) {
   const { trip, role, participants } = useTrip();
   const { user, isAnonymous } = useAuth();
   const canParticipate = can(role, "participate");
@@ -246,8 +247,8 @@ export default function DocumentsTab() {
   const participantName = (id: string | null) => participants.find((p) => p.id === id)?.name;
 
   return (
-    <div className="px-4">
-      <TripHeader trip={trip} subtitle="מסמכים וקבצים" />
+    <div className={embedded ? undefined : "px-4"}>
+      {!embedded && <TripHeader trip={trip} subtitle="מסמכים וקבצים" />}
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="type-title">מסמכים</h2>
         {canParticipate && (

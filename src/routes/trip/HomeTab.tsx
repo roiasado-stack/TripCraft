@@ -257,7 +257,7 @@ export default function HomeTab() {
       {isAgent && can(role, "manage") && (
         <GroupedList className="mt-6" title="ללקוח">
           <ListRow
-            to={`/agent/send/${trip.id}`}
+            to={`/agency/trips/${trip.id}/send`}
             leading={<IconTile icon={<MessageCircle className="size-[18px]" />} />}
             title="שליחה ללקוח"
             subtitle="וואטסאפ עם דף הטיול וקישור הצטרפות"

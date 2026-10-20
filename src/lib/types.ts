@@ -49,6 +49,10 @@ export interface TripClient {
   client_phone: string | null;
   /** Locks the personal join link to the client's account (migration 024). */
   client_email: string | null;
+  /** 'manual' | 'documents' — see IMPORT_SOURCES in @/lib/agency-import (migration 025). */
+  source: string;
+  /** The agency's own booking/file number, owner-only (migration 025). */
+  external_ref: string | null;
   updated_at: string;
 }
 
@@ -322,6 +326,10 @@ export interface AgentTripBoardRow {
   end_date: string | null;
   client_name: string | null;
   client_phone: string | null;
+  /** Where the trip came from (trip_clients.source, migration 025); null without a client row. */
+  source: string | null;
+  /** The agency's own booking/file number (migration 025). */
+  external_ref: string | null;
   is_shared: boolean;
   share_slug: string | null;
   image_url: string | null;
