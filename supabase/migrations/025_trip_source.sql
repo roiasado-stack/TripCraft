@@ -28,7 +28,7 @@ ALTER TABLE public.trip_clients ADD CONSTRAINT trip_clients_source_check
 ALTER TABLE public.trip_clients ADD COLUMN IF NOT EXISTS external_ref TEXT;
 ALTER TABLE public.trip_clients DROP CONSTRAINT IF EXISTS trip_clients_external_ref_check;
 ALTER TABLE public.trip_clients ADD CONSTRAINT trip_clients_external_ref_check
-  CHECK (external_ref IS NULL OR (length(external_ref) BETWEEN 1 AND 80));
+  CHECK (external_ref IS NULL OR (length(external_ref) BETWEEN 1 AND 80 AND btrim(external_ref) <> ''));
 
 -- 2. The board -----------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.agent_trip_board();
