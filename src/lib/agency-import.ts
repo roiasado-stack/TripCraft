@@ -55,9 +55,15 @@ export function normalizeExternalRef(raw: string | null | undefined): string | n
 const key = (...parts: (string | null | undefined)[]) =>
   parts.map((p) => (p ?? "").trim().toLowerCase().replace(/\s+/g, " ")).join("|");
 
-function uniqueBy<T>(items: T[], k: (item: T) => string): T[] {
+/**
+ * Keeps the first item per key. A booking without a booking number is never
+ * merged: without it two blank-ish scans can't be told apart, and dropping a
+ * real booking is worse than showing one twice (the agent can delete a copy).
+ */
+function uniqueByRef<T extends { booking_ref?: string | null }>(items: T[], k: (item: T) => string): T[] {
   const seen = new Set<string>();
   return items.filter((item) => {
+    if (!item.booking_ref?.trim()) return true;
     const id = k(item);
     if (seen.has(id)) return false;
     seen.add(id);
@@ -68,15 +74,18 @@ function uniqueBy<T>(items: T[], k: (item: T) => string): T[] {
 /**
  * Drops bookings that came in twice (the same voucher scanned again, or a
  * future source re-sending what it sent). One booking number can cover several
- * segments (a return flight on one PNR), so the key is the booking plus what
- * tells its parts apart. The first copy wins.
+ * segments (a return flight on one PNR, two hotels on one package), so the key
+ * is the booking number plus everything that tells its parts apart. The first
+ * copy wins.
  */
 export function dedupeBookings(imp: BookingImport): BookingImport {
   return {
     ...imp,
-    flights: uniqueBy(imp.flights, (f) => key(f.booking_ref, f.flight_number, f.depart_at, f.direction)),
-    stays: uniqueBy(imp.stays, (s) => key(s.booking_ref, s.hotel_name, s.check_in)),
-    transfers: uniqueBy(imp.transfers, (t) => key(t.booking_ref, t.kind, t.provider, t.pickup_at)),
+    flights: uniqueByRef(imp.flights, (f) => key(f.booking_ref, f.direction, f.flight_number, f.depart_at)),
+    stays: uniqueByRef(imp.stays, (s) => key(s.booking_ref, s.hotel_name, s.check_in, s.check_out)),
+    transfers: uniqueByRef(imp.transfers, (t) =>
+      key(t.booking_ref, t.kind, t.provider, t.pickup_location, t.pickup_at, t.dropoff_location),
+    ),
   };
 }
 

@@ -78,6 +78,32 @@ describe("dedupeBookings", () => {
     expect(out.flights).toHaveLength(2);
   });
 
+  it("never merges bookings without a booking number, however alike", () => {
+    const blank = { direction: "outbound" as const, airline: "", flight_number: "", from_airport: "", to_airport: "", depart_at: "" };
+    const out = dedupeBookings({
+      ...base,
+      flights: [blank, { ...blank }],
+      stays: [
+        { hotel_name: "", address: "", check_in: "", check_out: "", booking_ref: "" },
+        { hotel_name: "", address: "", check_in: "", check_out: "", booking_ref: "  " },
+      ],
+    });
+    expect(out.flights).toHaveLength(2);
+    expect(out.stays).toHaveLength(2);
+  });
+
+  it("keeps two transfers on one booking number from different pickup points", () => {
+    const t = { kind: "transfer", provider: "Shuttle", pickup_at: "2026-11-15T10:00", booking_ref: "T1" };
+    const out = dedupeBookings({
+      ...base,
+      transfers: [
+        { ...t, pickup_location: "CDG" },
+        { ...t, pickup_location: "Hotel" },
+      ],
+    });
+    expect(out.transfers).toHaveLength(2);
+  });
+
   it("keeps two stays in the same hotel on different dates", () => {
     const imp = documentsSource.toImport({
       scans: [{ bookings: [hotel("Hotel Roma", "H1", "2026-11-15"), hotel("Hotel Roma", "H1", "2026-11-20")] }],
