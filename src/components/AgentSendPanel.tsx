@@ -104,6 +104,8 @@ export function AgentSendPanel({
     let cancelled = false;
     (async () => {
       if (!tripId || !userId) return;
+      // Inputs stay hidden until this load fills them, so nothing typed is overwritten.
+      setState("loading");
       const [{ data: t }, { data: role }, { data: client }, { data: account }] = await Promise.all([
         supabase.from("trips").select("*").eq("id", tripId).maybeSingle(),
         supabase.rpc("trip_role", { _trip_id: tripId }),

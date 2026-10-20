@@ -55,7 +55,7 @@ describe("agentTripStatus", () => {
   });
 
   it("a new trip is 'טיוטה' until the agent sends it, then 'נשלח' (sending turns sharing on)", () => {
-    // What a trip from /agent/new looks like after opening /agent/send but before tapping send:
+    // What a trip from /agency/new looks like after opening its send screen but before tapping send:
     // opening the send screen changes nothing (not shared, no invite, nobody joined).
     const fresh = row({ is_shared: false, members_joined: 0, members_pending: 0, needs_attention: ["not_joined"] });
     expect(AGENT_STATUS_LABEL[agentTripStatus(fresh, TODAY)]).toBe("טיוטה");

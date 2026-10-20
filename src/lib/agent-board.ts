@@ -1,4 +1,4 @@
-// The agent's trip list (/agent): one status per trip, the "needs handling"
+// The agent's trip list (/agency): one status per trip, the "needs handling"
 // notes and search, all derived from an agent_trip_board() row (migration 022).
 import type { AgentAttentionFlag, AgentTripBoardRow } from "./types";
 import { tripPhase } from "./trip-dates";
