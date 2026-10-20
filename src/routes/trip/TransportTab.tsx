@@ -406,6 +406,15 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
   const saveTransfer = async () => {
     if (!editingTransfer) return;
     const d = editingTransfer;
+    // A time without its date would be dropped silently (partsToIso needs the date).
+    if ((d.pickup_hour || d.pickup_minute) && !d.pickup_date) {
+      toast.error("בחרו גם תאריך איסוף");
+      return;
+    }
+    if (d.kind === "car_rental" && (d.return_hour || d.return_minute) && !d.return_date) {
+      toast.error("בחרו גם תאריך החזרה");
+      return;
+    }
     const pickup_at = partsToIso(d.pickup_date, d.pickup_hour, d.pickup_minute);
     const return_at = d.kind === "car_rental" ? partsToIso(d.return_date, d.return_hour, d.return_minute) : null;
     if (pickup_at && return_at && return_at < pickup_at) {
