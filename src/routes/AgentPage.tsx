@@ -165,12 +165,14 @@ function rowView(row: AgentTripBoardRow, today: Date) {
     name: row.client_name?.trim() || row.title,
     dates: dateRangeHeb(row.start_date, row.end_date, today),
     counters: boardCounters(row),
+    /** The agency's booking number, as "הזמנה X" (migration 025). */
+    ref: row.external_ref?.trim() ? `הזמנה ${row.external_ref.trim()}` : null,
   };
 }
 
 function BoardRow({ row, today }: { row: AgentTripBoardRow; today: Date }) {
   const v = rowView(row, today);
-  const meta = [row.destination, v.dates].filter(Boolean).join(" · ");
+  const meta = [row.destination, v.dates, v.ref].filter(Boolean).join(" · ");
   return (
     <Link to={`/agency/trips/${row.id}`} className="flex items-center gap-3 py-3 ps-4 pe-2 transition-colors active:bg-muted/70">
       <Flag destination={row.destination} fallback="✈️" className="w-[36px] text-[26px]" />
@@ -227,9 +229,9 @@ function BoardTable({ rows, today }: { rows: AgentTripBoardRow[]; today: Date })
                     <Flag destination={row.destination} fallback="✈️" className="w-[28px] shrink-0 text-[22px]" />
                     <span className="min-w-0">
                       <span className="type-headline block truncate [unicode-bidi:plaintext]">{v.name}</span>
-                      {row.client_name?.trim() && (
+                      {(row.client_name?.trim() || v.ref) && (
                         <span className="type-footnote block truncate text-muted-foreground [unicode-bidi:plaintext]">
-                          {row.title}
+                          {[row.client_name?.trim() ? row.title : null, v.ref].filter(Boolean).join(" · ")}
                         </span>
                       )}
                     </span>

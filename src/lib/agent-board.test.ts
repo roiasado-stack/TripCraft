@@ -22,6 +22,8 @@ function row(patch: Partial<AgentTripBoardRow> = {}): AgentTripBoardRow {
     end_date: "2026-11-09",
     client_name: "משפחת לוי",
     client_phone: "050-1234567",
+    source: "documents",
+    external_ref: null,
     is_shared: true,
     share_slug: "abcdef1234567890",
     image_url: null,
@@ -156,6 +158,10 @@ describe("matchesBoardQuery", () => {
     expect(matchesBoardQuery(row(), "")).toBe(true);
     expect(matchesBoardQuery(row(), "   ")).toBe(true);
     expect(matchesBoardQuery(row({ client_name: null }), "כהן")).toBe(false);
+  });
+  it("finds a trip by the agency's booking number (migration 025)", () => {
+    expect(matchesBoardQuery(row({ external_ref: "TLV-4471" }), "tlv-4471")).toBe(true);
+    expect(matchesBoardQuery(row({ external_ref: null }), "4471")).toBe(false);
   });
   it("ignores extra spaces in the query", () => {
     expect(matchesBoardQuery(row(), "  משפחת   לוי ")).toBe(true);

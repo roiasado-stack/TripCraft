@@ -1,22 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Check, FileUp, Plus, Trash2, X } from "lucide-react";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button, Field, GroupedList, Input } from "@/components/ui";
 import { ImportBookings, personKey, type BookingsImportResult } from "@/components/ImportBookings";
-import { insertTripWithDrafts, uploadSourceDocs } from "@/lib/create-trip";
+import { createImportedTrip, uploadSourceDocs } from "@/lib/create-trip";
+import { documentsSource } from "@/lib/agency-import";
 import {
-  bookingsToDrafts,
   collectSourceDocs,
   countHe,
   joinHebrew,
   travellerToDraft,
-  type FlightDraft,
   type PartDraft,
   type StayDraft,
-  type TransferDraft,
   isTripLimitError,
   TRIP_LIMIT_MESSAGE,
 } from "@/lib/trip-drafts";
@@ -28,7 +25,8 @@ const STEP_LABELS = ["מסמכים", "בדיקה", "שליחה"];
 /**
  * "New trip from documents" (agency beta, phase 2): 1) the documents, through
  * the existing ImportBookings scan; 2) one review screen with the client;
- * 3) /agency/trips/:id/send. Creation goes through the same insert as the wizard.
+ * 3) /agency/trips/:id/send. The trip is created by createImportedTrip from the
+ * documents import source (agency-import.ts), which also records where it came from.
  */
 export default function AgentNewTripPage() {
   const { user } = useAuth();
@@ -45,11 +43,23 @@ export default function AgentNewTripPage() {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [travellers, setTravellers] = useState<PartDraft[]>([]);
-  const [flights, setFlights] = useState<FlightDraft[]>([]);
-  const [stays, setStays] = useState<StayDraft[]>([]);
-  const [transfers, setTransfers] = useState<TransferDraft[]>([]);
+  // Every scan as returned; the bookings come from them through the documents import source.
+  const [scans, setScans] = useState<BookingsImportResult[]>([]);
 
   const phoneInvalid = clientPhone.trim() !== "" && !normalizePhone(clientPhone);
+  // A voucher scanned twice counts (and is created) once: dedupeBookings.
+  const imp = documentsSource.toImport({
+    scans,
+    client: { name: clientName, phone: clientPhone },
+    trip: {
+      title: title.trim() || `טיול ל${destination.split(",")[0].trim()}`,
+      destination: destination.trim(),
+      start_date: startDate,
+      end_date: endDate,
+    },
+    travellers,
+  });
+  const { flights, stays, transfers } = imp;
 
   /** Scanned and reviewed bookings → this screen's drafts. A second import adds to the first. */
   const onImported = (r: BookingsImportResult) => {
@@ -62,10 +72,7 @@ export default function AgentNewTripPage() {
     const have = new Set(travellers.map((t) => personKey(t.name)));
     const fresh = r.travellers.filter((t) => !have.has(personKey(t.name)));
     if (fresh.length) setTravellers((prev) => [...prev, ...fresh.map(travellerToDraft)]);
-    const d = bookingsToDrafts(r);
-    setFlights((prev) => [...prev, ...d.flights]);
-    setStays((prev) => [...prev, ...d.stays]);
-    setTransfers((prev) => [...prev, ...d.transfers]);
+    setScans((prev) => [...prev, r]);
     setStep(1);
   };
 
@@ -95,26 +102,13 @@ export default function AgentNewTripPage() {
     let tripId: string;
     let failedChildren = 0;
     let savedStays: StayDraft[] = [];
+    let clientError = false;
     try {
-      const res = await insertTripWithDrafts({
-        userId: user.id,
-        fields: {
-          title: title.trim() || `טיול ל${destination.split(",")[0].trim()}`,
-          destination: destination.trim(),
-          start_date: startDate || null,
-          end_date: endDate || null,
-          trip_type: "family",
-          budget_level: "mid",
-          cover_emoji: "🌴",
-        },
-        participants: travellers,
-        flights,
-        stays,
-        transfers,
-      });
+      const res = await createImportedTrip(user.id, imp, { trip_type: "family", budget_level: "mid", cover_emoji: "🌴" });
       tripId = res.trip.id;
       failedChildren = res.failedChildren;
       savedStays = res.savedStays;
+      clientError = res.clientError;
     } catch (e) {
       console.error(e);
       toast.error(
@@ -127,14 +121,7 @@ export default function AgentNewTripPage() {
     }
 
     // ---- The trip exists from here on: report problems, never offer "create" again. ----
-    const name = clientName.trim();
-    const phone = clientPhone.trim();
-    const [{ error: clientError }, failedDocs] = await Promise.all([
-      name || phone
-        ? supabase.from("trip_clients").insert({ trip_id: tripId, client_name: name || null, client_phone: phone || null })
-        : Promise.resolve({ error: null }),
-      uploadSourceDocs(user.id, tripId, collectSourceDocs(flights, savedStays, transfers)),
-    ]);
+    const failedDocs = await uploadSourceDocs(user.id, tripId, collectSourceDocs(flights, savedStays, transfers));
     toast.success("הטיול נוצר ✈️");
     if (clientError) toast.error("פרטי הלקוח לא נשמרו — אפשר להוסיף אותם במסך השליחה.");
     if (failedChildren) toast.error("חלק מההזמנות או הנוסעים לא נשמרו — כדאי לבדוק בטיול.");

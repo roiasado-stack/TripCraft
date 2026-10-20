@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { CalendarDays, ChevronRight, ExternalLink, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { ItineraryItem, TripClient } from "@/lib/types";
-import { Card, Spinner } from "@/components/ui";
+import { Badge, Card, Input, Spinner } from "@/components/ui";
+import { useToast } from "@/hooks/use-toast";
+import { EXTERNAL_REF_MAX, IMPORT_SOURCE_LABEL, isImportSource, normalizeExternalRef } from "@/lib/agency-import";
 import { Flag } from "@/components/Flag";
 import { AgentSendPanel } from "@/components/AgentSendPanel";
 import { dateRangeHeb, parseLocalDate, tripLength, dayCount } from "@/lib/trip-dates";
@@ -107,6 +109,7 @@ export default function AgencyTripPage() {
               פתיחה באפליקציית הטיול
             </a>
           </Card>
+          <BookingRefField tripId={trip.id} client={client} onSaved={reloadClient} />
         </section>
 
         {/* Sending: the side column on desktop (stays in view), right after the details on a phone. */}
@@ -159,6 +162,77 @@ export default function AgencyTripPage() {
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Where the trip came from and the agency's own booking number (migration 025),
+ * owner-only on trip_clients. The number is saved when the field loses focus;
+ * it is what a future import from the agency's system will match the trip by.
+ */
+function BookingRefField({
+  tripId,
+  client,
+  onSaved,
+}: {
+  tripId: string;
+  client: TripClient | null;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const stored = client?.external_ref ?? "";
+  const [value, setValue] = useState(stored);
+  const [saving, setSaving] = useState(false);
+  // A reload (after the send panel saved the client) brings the stored value back in.
+  useEffect(() => setValue(stored), [stored]);
+
+  const save = async () => {
+    const next = normalizeExternalRef(value);
+    if (value.trim().length > EXTERNAL_REF_MAX) {
+      toast.error(`מספר ההזמנה ארוך מדי (עד ${EXTERNAL_REF_MAX} תווים)`);
+      return;
+    }
+    if (next === (client?.external_ref ?? null)) {
+      setValue(next ?? "");
+      return;
+    }
+    setSaving(true);
+    // Upsert: a trip may not have a client row yet; a new one reads as 'manual'.
+    const { error } = await supabase.from("trip_clients").upsert({ trip_id: tripId, external_ref: next });
+    setSaving(false);
+    if (error) {
+      console.error(error);
+      toast.error("מספר ההזמנה לא נשמר");
+      return;
+    }
+    toast.success(next ? "מספר ההזמנה נשמר" : "מספר ההזמנה הוסר");
+    onSaved();
+  };
+
+  const source = client && isImportSource(client.source) ? client.source : null;
+  return (
+    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-4">
+      <label className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <span className="type-footnote px-1 font-semibold text-muted-foreground">מספר ההזמנה אצלכם</span>
+        <Input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={() => void save()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+          disabled={saving}
+          dir="ltr"
+          placeholder="לדוגמה: TLV-4471"
+          maxLength={EXTERNAL_REF_MAX + 20}
+        />
+      </label>
+      {source && (
+        <Badge tone="muted" className="self-start py-1 sm:self-center">
+          {IMPORT_SOURCE_LABEL[source]}
+        </Badge>
+      )}
     </div>
   );
 }
