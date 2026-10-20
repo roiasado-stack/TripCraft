@@ -380,11 +380,12 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
       phone: editingStay.phone.trim() || null,
       notes: editingStay.notes.trim() || null,
     };
-    const { error } = editingStay.id
-      ? await supabase.from("stays").update(payload).eq("id", editingStay.id)
-      : await supabase.from("stays").insert(payload);
+    // RLS hides a row the caller may no longer change: 0 rows, no error. Count the rows back.
+    const { data, error } = editingStay.id
+      ? await supabase.from("stays").update(payload).eq("id", editingStay.id).select("id")
+      : await supabase.from("stays").insert(payload).select("id");
     setSaving(false);
-    if (error) {
+    if (error || !(data as unknown[] | null)?.length) {
       toast.error("השמירה נכשלה");
       return;
     }
@@ -394,8 +395,9 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
   };
 
   const removeStay = async (s: Stay) => {
-    const { error } = await supabase.from("stays").delete().eq("id", s.id);
-    if (error) {
+    // RLS hides a row the caller may no longer change: 0 rows deleted, no error.
+    const { data, error } = await supabase.from("stays").delete().eq("id", s.id).select("id");
+    if (error || !(data as unknown[] | null)?.length) {
       toast.error("המחיקה נכשלה");
       return;
     }
@@ -434,11 +436,11 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
       phone: d.phone.trim() || null,
       notes: d.notes.trim() || null,
     };
-    const { error } = d.id
-      ? await supabase.from("transfers").update(payload).eq("id", d.id)
-      : await supabase.from("transfers").insert(payload);
+    const { data, error } = d.id
+      ? await supabase.from("transfers").update(payload).eq("id", d.id).select("id")
+      : await supabase.from("transfers").insert(payload).select("id");
     setSaving(false);
-    if (error) {
+    if (error || !(data as unknown[] | null)?.length) {
       toast.error("השמירה נכשלה");
       return;
     }
@@ -448,8 +450,8 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
   };
 
   const removeTransfer = async (t: Transfer) => {
-    const { error } = await supabase.from("transfers").delete().eq("id", t.id);
-    if (error) {
+    const { data, error } = await supabase.from("transfers").delete().eq("id", t.id).select("id");
+    if (error || !(data as unknown[] | null)?.length) {
       toast.error("המחיקה נכשלה");
       return;
     }
