@@ -105,6 +105,23 @@ for (const file of src) {
     fail(join(ROOT, "supabase/functions/generate/index.ts"), 0, "photo-filter-sync", "NOT_A_PHOTO differs from src/lib/photo-url.ts — keep the two identical");
 }
 
+// Every Claude call says whether the model thinks. Current models think by
+// default: in `ask` ~75% of output tokens were hidden thinking (the answer's
+// first word waited ~6s), and a 40-token translation came back empty. A
+// Messages API request is a `model: …MODEL` object with `messages` within a few
+// lines; `thinking:` must sit between the two.
+for (const file of walk(join(ROOT, "supabase/functions"), [".ts"])) {
+  const lines = readFileSync(file, "utf8").split(/\r?\n/);
+  lines.forEach((line, i) => {
+    if (!/\bmodel:\s*\w*MODEL\b/.test(line)) return;
+    const rest = lines.slice(i, i + 15);
+    const end = rest.findIndex((l) => /\bmessages\b/.test(l));
+    if (end < 0) return; // not a Messages API request (e.g. the embeddings call)
+    if (!rest.slice(0, end + 1).some((l) => /\bthinking:/.test(l)))
+      fail(file, i + 1, "explicit-thinking", "Claude call without `thinking:` — models think by default; set it (disabled/adaptive) before `messages`");
+  });
+}
+
 // 2. package.json ------------------------------------------------------------------
 {
   const file = join(ROOT, "package.json");

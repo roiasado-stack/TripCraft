@@ -140,6 +140,9 @@ placeholder or disabled.
   Hebrew queries to English first (`translateHebrewQuery`) since Nominatim searches Hebrew badly.
   Wikimedia images carry CC licenses (e.g. CC BY-SA): each image shows an ⓘ link to its file page
   (author + license) via `wikimediaFilePage` in `MediaCard`, plus the `/credits` page.
+- Every Claude call sets `thinking` explicitly (`npm run rules` fails otherwise): current models think
+  by default, which made the agent's first word wait ~6s. `ask` runs with thinking off (`THINKING` in
+  `ask/prompt.ts`, shared with `evals/run.ts`); check a change there with `npm run evals`.
 - Repeated AI presses don't duplicate: `generate` lists the trip's existing suggestions/itinerary
   in the prompt and drops items whose normalized title (`normalizeTitle`) already exists.
 

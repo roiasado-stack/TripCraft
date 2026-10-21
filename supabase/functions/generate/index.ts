@@ -25,6 +25,11 @@ const MAX_TOKENS = 16000;
 const EXTRACTION_OUTPUT_CONFIG = { effort: "low" } as const;
 // Voucher scans: multi-page family e-tickets need every page read; low effort skimmed and dropped passengers/segments.
 const VOUCHER_OUTPUT_CONFIG = { effort: "medium" } as const;
+// Every model call states its thinking (npm run rules checks it): claude-sonnet-5
+// thinks by default. Scans and trip generation keep it — voucher reading at low
+// effort already dropped passengers; the one-line translations don't need it.
+const THINKING_ON = { type: "adaptive" } as const;
+const THINKING_OFF = { type: "disabled" } as const;
 
 // claude-sonnet-5 pricing (Anthropic API).
 const PRICE_PER_MTOK_INPUT_USD = 2.0;
@@ -701,6 +706,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           model: MODEL,
           max_tokens: MAX_TOKENS,
+          thinking: THINKING_ON,
           output_config: EXTRACTION_OUTPUT_CONFIG,
           messages: [{ role: "user", content }],
         }),
@@ -850,6 +856,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
         body: JSON.stringify({
           model: MODEL,
           max_tokens: MAX_TOKENS,
+          thinking: THINKING_ON,
           output_config: VOUCHER_OUTPUT_CONFIG,
           messages: [{ role: "user", content }],
         }),
@@ -1100,6 +1107,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
           body: JSON.stringify({
             model: MODEL,
             max_tokens: MAX_TOKENS,
+            thinking: THINKING_OFF,
             output_config: EXTRACTION_OUTPUT_CONFIG,
             messages: [{
               role: "user",
@@ -1249,6 +1257,7 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
           body: JSON.stringify({
             model: MODEL,
             max_tokens: MAX_TOKENS,
+            thinking: THINKING_OFF,
             output_config: EXTRACTION_OUTPUT_CONFIG,
             messages: [{
               role: "user",
@@ -1355,6 +1364,7 @@ Never answer with the article of the surrounding city, region or country — e.g
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,
+        thinking: THINKING_ON,
         messages: [{ role: "user", content: buildPrompt(body, existing) }],
       }),
     });

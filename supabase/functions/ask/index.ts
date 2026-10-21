@@ -337,6 +337,8 @@ async function kosherLookup(opts: {
         body: JSON.stringify({
           model: MODEL,
           max_tokens: 40,
+          // Thinking on spent all 40 tokens on "איה נאפה" and returned no name at all.
+          thinking: THINKING,
           messages: [{
             role: "user",
             content: `Translate this Hebrew travel destination to its English place name, as you would type it into a map search (e.g. "Milan, Italy"). Reply with the name only: "${q}"`,
