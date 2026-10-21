@@ -185,6 +185,8 @@ type Body = {
   confirm_action?: PendingAction;
   /** Kosher places and Shabbat times for the screens (no model call). */
   kosher?: { city?: string; shabbat_only?: boolean };
+  /** Answer as server-sent events (text/event-stream) instead of one JSON body. */
+  stream?: boolean;
 };
 
 function json(payload: unknown, status = 200): Response {
@@ -583,6 +585,8 @@ Deno.serve(async (req) => {
   // against the caps in flight (see generate/index.ts). logRun replaces it with
   // the real row; finally deletes it if no model call happened.
   let reservation: string | null = null;
+  // Set once a streamed answer starts: the stream then cleans the reservation up itself.
+  let streamOwnsReservation = false;
 
   try {
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -997,12 +1001,56 @@ Deno.serve(async (req) => {
       return { ok: true, answer, pendingActions };
     };
 
-    const outcome = await converse(() => {}, () => {}, req.signal);
-    if (!outcome.ok) return json({ error: outcome.error, detail: outcome.detail }, 502);
-    return json({ ok: true, answer: outcome.answer, cards: [], pendingActions: outcome.pendingActions });
+    if (!body.stream) {
+      const outcome = await converse(() => {}, () => {}, req.signal);
+      if (!outcome.ok) return json({ error: outcome.error, detail: outcome.detail }, 502);
+      return json({ ok: true, answer: outcome.answer, cards: [], pendingActions: outcome.pendingActions });
+    }
+
+    // Streaming (AskTab): every refusal above is still a JSON status code, so
+    // the client maps errors exactly as before; from here on the response is
+    // `delta` / `tool` events, then one `done` or `error`. The stream now owns
+    // the reservation: a client that goes away aborts the model call, and the
+    // row is still replaced or deleted below.
+    streamOwnsReservation = true;
+    const abort = new AbortController();
+    const encoder = new TextEncoder();
+    let closed = false;
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (event: string, data: unknown) => {
+          if (closed) return;
+          try {
+            controller.enqueue(encoder.encode(sseFrame(event, data)));
+          } catch {
+            closed = true;
+          }
+        };
+        try {
+          const outcome = await converse((text) => send("delta", { text }), (name) => send("tool", { name }), abort.signal);
+          if (outcome.ok) send("done", { answer: outcome.answer, cards: [], pendingActions: outcome.pendingActions });
+          else send("error", { error: outcome.error });
+        } catch (e) {
+          send("error", { error: e instanceof Error ? e.message : "unknown" });
+        } finally {
+          if (reservation) await adminDb()?.from("agent_runs").delete().eq("id", reservation);
+          if (!closed) {
+            closed = true;
+            controller.close();
+          }
+        }
+      },
+      cancel() {
+        closed = true;
+        abort.abort();
+      },
+    });
+    return new Response(stream, {
+      headers: { ...cors, "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache" },
+    });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "unknown" }, 500);
   } finally {
-    if (reservation) await adminDb()?.from("agent_runs").delete().eq("id", reservation);
+    if (reservation && !streamOwnsReservation) await adminDb()?.from("agent_runs").delete().eq("id", reservation);
   }
 });

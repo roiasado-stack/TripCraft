@@ -29,6 +29,10 @@ export default function AskTab() {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
+  /** The answer while it is being written (null before its first word), and
+      the tool the agent is running, if any. Cleared once the row is saved. */
+  const [streamText, setStreamText] = useState<string | null>(null);
+  const [toolRunning, setToolRunning] = useState<string | null>(null);
   const [added, setAdded] = useState<Record<string, boolean>>({});
   const [resolved, setResolved] = useState<Record<string, "confirmed" | "dismissed">>({});
   /** Last failure, kept in the thread — the toast is gone in 3.6s but the
@@ -56,7 +60,12 @@ export default function AskTab() {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, thinking]);
+  }, [messages, thinking, toolRunning]);
+
+  // While the answer streams, follow it without smooth-scroll animations piling up.
+  useEffect(() => {
+    if (streamText) endRef.current?.scrollIntoView({ block: "end" });
+  }, [streamText]);
 
   const send = async (text: string) => {
     const question = text.trim();
@@ -80,29 +89,42 @@ export default function AskTab() {
       .single();
     if (userRow) setMessages((m) => [...m, userRow as TripChatMessage]);
 
-    const res = await askAgent(trip, question, history);
-    setThinking(false);
-    inFlight.current = false;
+    const res = await askAgent(trip, question, history, {
+      onText: (soFar) => {
+        setToolRunning(null);
+        setStreamText(soFar);
+      },
+      onTool: setToolRunning,
+    });
+    setToolRunning(null);
 
     if (!res.ok) {
+      setThinking(false);
+      setStreamText(null);
+      inFlight.current = false;
       const message = aiErrorMessage(res.error, "הסוכן לא הצליח לענות. נסו שוב.");
       setFailed({ question, message });
       toast.error(message);
       return;
     }
 
-    const { data: botRow } = await supabase
-      .from("trip_chat_messages")
-      .insert({
-        trip_id: trip.id,
-        role: "assistant",
-        content: res.answer,
-        cards: res.cards ?? [],
-        pending_actions: res.pendingActions ?? [],
-      })
-      .select()
-      .single();
-    if (botRow) setMessages((m) => [...m, botRow as TripChatMessage]);
+    // The streamed bubble stays up until the saved row replaces it, so the
+    // answer never blinks out in between.
+    const answer = {
+      trip_id: trip.id,
+      role: "assistant" as const,
+      content: res.answer ?? "",
+      cards: res.cards ?? [],
+      pending_actions: res.pendingActions ?? [],
+    };
+    const { data: botRow } = await supabase.from("trip_chat_messages").insert(answer).select().single();
+    // A failed save still shows the answer (and its cards) for this visit.
+    const shown = (botRow as TripChatMessage | null) ??
+      ({ ...answer, id: `unsaved-${Date.now()}`, created_at: new Date().toISOString() } as unknown as TripChatMessage);
+    setMessages((m) => [...m, shown]);
+    setStreamText(null);
+    setThinking(false);
+    inFlight.current = false;
   };
 
   const confirmPending = async (action: PendingAction, key: string) => {
@@ -365,14 +387,29 @@ export default function AskTab() {
             );
           })}
 
-          {thinking && (
+          {streamText !== null && (
+            <div className="flex justify-end">
+              <div className="w-full max-w-[85%]">
+                <div className="type-body whitespace-pre-wrap rounded-3xl rounded-ee-lg bg-card px-4 py-2.5 text-card-foreground [overflow-wrap:anywhere]">
+                  {richText(streamText)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {thinking && (streamText === null || toolRunning) && (
             <div className="flex justify-end">
               <div
                 role="status"
-                aria-label="הסוכן חושב…"
+                aria-label={toolRunning ? toolLabel(toolRunning) : "הסוכן חושב…"}
                 className="flex items-center gap-1 rounded-3xl rounded-ee-lg bg-card px-4 py-3.5"
               >
-                <span className="sr-only">הסוכן חושב…</span>
+                {toolRunning && (
+                  <span className="type-footnote me-1.5 text-muted-foreground" aria-hidden>
+                    {toolLabel(toolRunning)}
+                  </span>
+                )}
+                <span className="sr-only">{toolRunning ? toolLabel(toolRunning) : "הסוכן חושב…"}</span>
                 {[0, 1, 2].map((i) => (
                   <span
                     key={i}
@@ -449,6 +486,11 @@ export default function AskTab() {
       </Modal>
     </div>
   );
+}
+
+/** What the agent is doing while a tool runs (find_kosher can take a few seconds). */
+function toolLabel(name: string): string {
+  return name === "find_kosher" ? "בודק כשרות וזמני שבת…" : "הסוכן חושב…";
 }
 
 /**
