@@ -10,6 +10,42 @@
 export const MODEL = "claude-haiku-5-5";
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
+// claude-haiku-5-5 pricing (Anthropic API, prompts up to 100k tokens — ours are
+// far below). Writing the prompt cache costs 1.25x input, reading it 0.1x.
+export const PRICE_PER_MTOK_INPUT_USD = 0.1;
+export const PRICE_PER_MTOK_OUTPUT_USD = 0.5;
+
+/** Per model call in the agent loop. Answers are told to stay near 70 words
+ *  (~250 Hebrew tokens); this leaves room for a list plus a tool call's input. */
+export const MAX_OUTPUT_TOKENS = 1024;
+
+/**
+ * claude-haiku-5-5 thinks by default (effort medium): measured on the screen's
+ * starter questions, ~75% of output tokens were hidden thinking, and the
+ * answer's first word waited for all of it (4.1s avg vs 2.3s off). The evals
+ * hold with it off (evals/run.ts uses this same constant). Allowed at effort
+ * high or below, which is the default here.
+ */
+export const THINKING = { type: "disabled" } as const;
+
+export type Usage = {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+};
+
+/**
+ * Dollar cost of one response's `usage`. Cached prompt tokens are reported
+ * apart from `input_tokens`, so counting only that field (as we used to)
+ * under-reported every follow-up question and let spend slip past the caps.
+ */
+export function usageCostUsd(u: Usage): number {
+  const n = (v: number | undefined) => Number(v ?? 0) || 0;
+  const inputEquivalent = n(u.input_tokens) + n(u.cache_creation_input_tokens) * 1.25 + n(u.cache_read_input_tokens) * 0.1;
+  return (inputEquivalent / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (n(u.output_tokens) / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+}
+
 export type Participant = {
   name: string;
   age: number | null;
@@ -116,7 +152,7 @@ export const TOOLS = [
   {
     name: "find_kosher",
     description:
-      "מחפש מידע על כשרות, זמני שבת וחג, בתי חב״ד ובתי כנסת ליד יעד הטיול. מחזיר שלוש רמות אמינות: מאגר מאומת (עם מקור ותאריך), מקומות שמסומנים כשרים במפה (OpenStreetMap / Google — לא מאומתים), או \"אין מידע\". זמני שבת וחג הם חישוב אוטומטי של Hebcal לתאריכי הטיול. אין לו גישה כללית לאינטרנט.",
+      "מחפש מידע על כשרות, זמני שבת וחג, בתי חב״ד ובתי כנסת ליד יעד הטיול. מחזיר שלוש רמות אמינות: מאגר מאומת (עם מקור ותאריך), מקומות שמסומנים כשרים במפה (OpenStreetMap / Google — לא מאומתים), או \"אין מידע\". זמני שבת וחג הם חישוב אוטומטי של Hebcal לתאריכי הטיול. אין לו גישה כללית לאינטרנט. החיפוש לוקח כמה שניות: קרא לו רק כשהשאלה עצמה מזכירה כשרות, שבת, חג, חב״ד או בית כנסת, או כשאחד המשתתפים שומר כשרות — לא לשאלה רגילה על אוכל או מסעדות.",
     input_schema: {
       type: "object",
       properties: {
@@ -130,6 +166,10 @@ export const TOOLS = [
     },
   },
 ] as const;
+
+/** Appended to INSTRUCTIONS for a participant, who isn't offered add_to_itinerary. */
+export const PARTICIPANT_NOTE =
+  "- מי שכותב לך הוא משתתף בטיול, ורק בעל הטיול יכול לשנות את המסלול. אם מבקשים ממך להוסיף למסלול, כתוב לו בגוף שני שאת המסלול משנה בעל הטיול, והצע לשמור את זה ברשימת ההמלצות (add_suggestion).";
 
 /** Compact Hebrew snapshot of the trip, used as the agent's system context. */
 export function buildSnapshot(
@@ -194,7 +234,8 @@ export const INSTRUCTIONS = `אתה סוכן נסיעות ישראלי שמלו�
 - אינך מקור מוסמך לייעוץ בטיחות, משפטי, רפואי או דרישות ויזה/כניסה למדינה. לשאלות כאלה, אמור זאת במפורש והפנה לבדוק מול גורם רשמי (שגרירות, רופא, איש מקצוע) — אל תענה מהזיכרון שלך כאילו זה מידע מוסמך, גם אם אתה חושב שאתה יודע את התשובה.
 - ענה תמיד בהקשר של הטיול שמתואר למטה — היעד, התאריכים, המשתתפים והגילאים שלהם.
 - אם צוינה כשרות או צמחונות אצל מישהו מהמשתתפים, התייחס לזה בכל המלצה על אוכל — ולשאלות כשרות ספציפיות, השתמש בכלי find_kosher.
-- תשובה קצרה וקונקרטית. 2-5 משפטים, בלי הקדמות ובלי "אשמח לעזור".
+- תשובה קצרה וקונקרטית: עד 70 מילים בדרך כלל, 2-4 משפטים. רשימה רק כשמבקשים כמה אפשרויות או מסלול — אז עד 4 פריטים, שורה קצרה לכל אחד. בלי הקדמות, בלי "אשמח לעזור", בלי לחזור על השאלה ובלי משפט סיכום בסוף. המשתמש קורא בטלפון. בתשובה על כשרות או שבת מותר להאריך כמה שצריך כדי לציין ליד כל מקום את רמת האמינות והמקור.
+- כשאתה צריך כלי, קרא לו מיד, בלי לכתוב קודם משפט כמו "אבדוק" ובלי להסביר מה אתה עומד לעשות.
 - מקומות אמיתיים בלבד. אם אתה לא בטוח שמקום קיים או פתוח — אמור זאת במפורש במקום להמציא.
 - אין לך גישה לאינטרנט ולא למחירים, שעות פתיחה, מזג אוויר או תנועה עדכניים. אם נשאלת על אחד מאלה — אמור בפירוש שאין לך את המידע העדכני, ואל תציע הערכה כללית במקום, אפילו "בדרך כלל".
 - אל תציע מחדש מקומות שכבר מופיעים ברשימת ההמלצות השמורות.
@@ -202,7 +243,7 @@ export const INSTRUCTIONS = `אתה סוכן נסיעות ישראלי שמלו�
 - ענה בטקסט חופשי רגיל בעברית — אל תחזיר JSON ואל תעטוף את התשובה במבנה כלשהו. בלי Markdown: בלי כוכביות, כותרות או טבלאות. הטקסט שאתה כותב הוא התשובה שהמשתמש רואה.
 
 כלים העומדים לרשותך:
-- find_kosher — לכל שאלה על כשרות, שבת או חג (זמני כניסה/יציאה), בית חב״ד או בית כנסת ביעד. תמיד קרא לכלי הזה לשאלות כאלה במקום לענות מהזיכרון שלך. אם הכלי מחזיר שאין מידע — אמור זאת במפורש למשתמש, אל תנחש ואל תמציא שם מקום. אם הוא מבקש עיר ספציפית — שאל את המשתמש באיזו עיר.
+- find_kosher — לכל שאלה על כשרות, שבת או חג (זמני כניסה/יציאה), בית חב״ד או בית כנסת ביעד, או על אוכל כשמישהו מהמשתתפים שומר כשרות. לשאלה רגילה על אוכל או מקומות כשאף משתתף לא שומר כשרות — אל תקרא לו. תמיד קרא לכלי הזה לשאלות כאלה במקום לענות מהזיכרון שלך. אם הכלי מחזיר שאין מידע — אמור זאת במפורש למשתמש, אל תנחש ואל תמציא שם מקום. אם הוא מבקש עיר ספציפית — שאל את המשתמש באיזו עיר.
   שלוש רמות אמינות, ואסור להעלות רמה:
   * "מאומת" — רק פריט שהכלי סימן tier=verified. ציין את המקור ואת תאריך הבדיקה.
   * "נמצא במפה — לא מאומת, יש לוודא השגחה" — כל מקום מ-OpenStreetMap או Google, וכל פריט ישן שהכלי סימן tier=unverified. כתוב את הניסוח הזה ליד המקום. לעולם אל תכתוב שמקום כזה "כשר" או "מסעדה כשרה".
@@ -210,4 +251,4 @@ export const INSTRUCTIONS = `אתה סוכן נסיעות ישראלי שמלו�
   אל תקרא למקום "כשר" בשום מקרה בלי מקור מהכלי. זמני שבת וחג מהכלי (shabbat_times) הם חישוב אוטומטי: כשנשאלת עליהם, מסור את השעות עצמן בדיוק כפי שהן (אל תסתפק בקישור), וציין שיש לבדוק מול בית חב״ד או רב מקומי.
 - add_to_itinerary — כשאתה ממליץ על משהו קונקרטי שמתאים להוספה למסלול (עם תאריך מתאריכי הטיול).
 - add_suggestion — כשאתה ממליץ על מקום או פעילות שמתאימים להוספה לרשימת ההמלצות, בלי תאריך מסוים.
-כשאתה קורא ל-add_to_itinerary או add_suggestion: הפעולה לא נכתבת מיד, המשתמש עדיין צריך לאשר אותה בכרטיס שיוצג לו. אל תגיד "הוספתי" — תגיד שהכנת הצעה, או פשוט תן את התשובה שלך והכרטיס יופיע לצידה.`;
+כשאתה קורא ל-add_to_itinerary או add_suggestion: כתוב את ההמלצה פעם אחת, וקרא לכלי באותה תשובה. הפעולה לא נכתבת מיד, המשתמש עדיין צריך לאשר אותה בכרטיס שיוצג לו. אל תגיד "הוספתי" — תגיד שהכנת הצעה, או פשוט תן את התשובה שלך והכרטיס יופיע לצידה.`;

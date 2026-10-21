@@ -1,4 +1,5 @@
-import { supabase } from "./supabase";
+import { functionsUrl, publishableKey, supabase } from "./supabase";
+import { createSseParser } from "./sse";
 import type { AgentCard, KosherLookup, Participant, PendingAction, Trip } from "./types";
 
 export type TuneOption = "more_kids" | "calmer" | "cheaper" | "more_active";
@@ -188,23 +189,81 @@ export type AskResult = {
   pendingActions?: PendingAction[];
 };
 
+type AskPayload = { answer?: string; cards?: AgentCard[]; pendingActions?: PendingAction[] };
+
+function askResult(res: AskPayload | null | undefined): AskResult {
+  if (!res?.answer) return { ok: false, error: "empty_answer" };
+  return { ok: true, answer: res.answer, cards: res.cards ?? [], pendingActions: res.pendingActions ?? [] };
+}
+
 /**
  * Calls the `ask` Supabase Edge Function — the conversational agent.
  * It answers in Hebrew about this specific trip and may return cards the caller
  * can insert into `suggestions` / `itinerary_items`. The function itself writes
  * nothing; persisting the conversation is the caller's job.
+ *
+ * The answer streams: `onText` gets the whole text so far as it is written,
+ * `onTool` the name of a tool the agent is running (find_kosher can take a few
+ * seconds) and the text so far, without any "let me check" lead-in to it. This is a plain fetch because `functions.invoke` reads the whole
+ * body before returning. Refusals (403/429…) still arrive as JSON with a
+ * status code, and a function deployed before streaming answers with one JSON
+ * body, so both map exactly as they did through invoke.
  */
-export async function askAgent(trip: Trip, message: string, history: AskTurn[]): Promise<AskResult> {
+export async function askAgent(
+  trip: Trip,
+  message: string,
+  history: AskTurn[],
+  handlers: { onText?: (soFar: string) => void; onTool?: (name: string, soFar: string) => void } = {},
+): Promise<AskResult> {
+  let res: Response;
   try {
-    const { data, error } = await supabase.functions.invoke("ask", {
-      body: { trip_id: trip.id, message, history },
+    const { data } = await supabase.auth.getSession();
+    res = await fetch(`${functionsUrl}/ask`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: publishableKey,
+        Authorization: `Bearer ${data.session?.access_token ?? publishableKey}`,
+      },
+      body: JSON.stringify({ trip_id: trip.id, message, history, stream: true }),
     });
-    if (error) return { ok: false, error: await mapInvokeError(error) };
-    const res = data as { answer?: string; cards?: AgentCard[]; pendingActions?: PendingAction[] };
-    if (!res?.answer) return { ok: false, error: "empty_answer" };
-    return { ok: true, answer: res.answer, cards: res.cards ?? [], pendingActions: res.pendingActions ?? [] };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "unknown" };
+  } catch {
+    // Same as invoke's FunctionsFetchError: missing or unreachable.
+    return { ok: false, error: "not_deployed" };
+  }
+  try {
+    if (!res.ok) return { ok: false, error: await mapInvokeError({ context: res }) };
+    if (!(res.headers.get("content-type") ?? "").includes("text/event-stream") || !res.body) {
+      return askResult((await res.json()) as AskPayload);
+    }
+
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+    const parser = createSseParser();
+    let text = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      for (const ev of parser.push(value)) {
+        const data = JSON.parse(ev.data) as { text?: string; name?: string; error?: string } & AskPayload;
+        if (ev.event === "delta" && data.text) {
+          text += data.text;
+          handlers.onText?.(text);
+        } else if (ev.event === "tool" && data.name) {
+          if (typeof data.answer === "string") text = data.answer;
+          handlers.onTool?.(data.name, text);
+        } else if (ev.event === "done") {
+          reader.cancel().catch(() => {});
+          return askResult(data);
+        } else if (ev.event === "error") {
+          reader.cancel().catch(() => {});
+          return { ok: false, error: data.error ?? "unknown" };
+        }
+      }
+    }
+    // The connection closed before `done`: nothing usable to save.
+    return { ok: false, error: "stream_interrupted" };
+  } catch {
+    return { ok: false, error: "stream_interrupted" };
   }
 }
 

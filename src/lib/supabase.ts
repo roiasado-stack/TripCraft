@@ -3,6 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 
+/** For the one call that can't go through `supabase.functions.invoke` (a streamed answer). */
+export const functionsUrl = `${url ?? "https://placeholder.supabase.co"}/functions/v1`;
+export const publishableKey = key ?? "placeholder-anon-key";
+
 /** True when the app has been pointed at a real Supabase project. */
 export const isSupabaseConfigured = Boolean(url && key);
 

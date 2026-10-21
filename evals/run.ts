@@ -20,7 +20,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
-import { buildSnapshot, INSTRUCTIONS, MODEL, TOOLS } from "../supabase/functions/ask/prompt.ts";
+import { buildSnapshot, INSTRUCTIONS, MAX_OUTPUT_TOKENS, MODEL, THINKING, TOOLS } from "../supabase/functions/ask/prompt.ts";
 import {
   FIXTURE_CHECKLIST_OPEN,
   FIXTURE_FLIGHTS,
@@ -215,7 +215,8 @@ async function askOnce(client: Anthropic, system: string, question: string) {
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 2000,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      thinking: THINKING,
       system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
       tools: TOOLS as unknown as Anthropic.Tool[],
       messages,
@@ -307,6 +308,7 @@ async function main() {
   const correctRefusalRate = refusal.length ? refusal.filter((r) => r.pass).length / refusal.length : 0;
   const hallucinationRate = results.length ? results.filter((r) => r.hallucinated).length / results.length : 0;
   const avgLatencyMs = results.length ? results.reduce((s, r) => s + r.latencyMs, 0) / results.length : 0;
+  const avgOutputTokens = results.length ? results.reduce((s, r) => s + r.outputTokens, 0) / results.length : 0;
   const totalCostUsd = results.reduce((s, r) => s + r.costUsd, 0);
   const avgCostUsd = results.length ? totalCostUsd / results.length : 0;
 
@@ -319,6 +321,7 @@ async function main() {
       correctRefusalRate: round(correctRefusalRate),
       hallucinationRate: round(hallucinationRate),
       avgLatencyMs: Math.round(avgLatencyMs),
+      avgOutputTokens: Math.round(avgOutputTokens),
       avgCostUsd: round(avgCostUsd, 6),
       totalCostUsd: round(totalCostUsd, 6),
     },
@@ -335,6 +338,7 @@ async function main() {
   console.log(`correct-refusal rate:          ${pct(correctRefusalRate)}  (gate ≥ ${pct(MIN_CORRECT_REFUSAL_RATE)})`);
   console.log(`hallucination rate:            ${pct(hallucinationRate)}  (gate ≤ ${pct(MAX_HALLUCINATION_RATE)})`);
   console.log(`avg response time:             ${Math.round(avgLatencyMs)}ms`);
+  console.log(`avg output tokens:             ${Math.round(avgOutputTokens)}`);
   console.log(`avg cost / question:           $${avgCostUsd.toFixed(6)}`);
   console.log(`total cost (${results.length} questions):        $${totalCostUsd.toFixed(4)}`);
 
