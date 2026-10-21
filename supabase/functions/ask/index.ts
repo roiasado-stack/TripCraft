@@ -43,6 +43,7 @@ import {
   matchKnowledgeDestination,
   MAX_OUTPUT_TOKENS,
   MODEL,
+  PARTICIPANT_NOTE,
   THINKING,
   TOOLS,
   type Participant,
@@ -918,7 +919,7 @@ Deno.serve(async (req) => {
               system: [
                 {
                   type: "text",
-                  text: `${INSTRUCTIONS}\n\n--- פרטי הטיול ---\n${snapshot.text}`,
+                  text: `${INSTRUCTIONS}${canEditItinerary ? "" : `\n${PARTICIPANT_NOTE}`}\n\n--- פרטי הטיול ---\n${snapshot.text}`,
                   cache_control: { type: "ephemeral" },
                 },
               ],
@@ -983,6 +984,15 @@ Deno.serve(async (req) => {
                 errorMessage: `diag: geo=${k.geo} shabbat=${k.shabbat?.days.length ?? "none"} google=${k.google} osm=${k.osm_failed ? "failed" : k.places.length} curated=${k.curated.length}`,
               });
               toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(kosherToolResult(k)) });
+            } else if (block.name === "add_to_itinerary" && !canEditItinerary) {
+              // Not offered to participants, but the model can still name it: no card
+              // they could never approve (confirm_action would refuse it anyway).
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: block.id,
+                content: JSON.stringify({ error: "המשתמש משתתף ואינו יכול להוסיף למסלול. הצע add_suggestion במקום." }),
+                is_error: true,
+              });
             } else if (block.name === "add_to_itinerary" || block.name === "add_suggestion") {
               pendingActions.push({ tool: block.name, id: block.id, input });
               await logRun({
@@ -996,7 +1006,12 @@ Deno.serve(async (req) => {
               toolResults.push({
                 type: "tool_result",
                 tool_use_id: block.id,
-                content: JSON.stringify({ status: "queued_for_user_approval" }),
+                // The card shows next to the text already written; a second "I prepared a
+                // suggestion" paragraph would only repeat it.
+                content: JSON.stringify({
+                  status: "queued_for_user_approval",
+                  note: "הכרטיס יוצג למשתמש ליד מה שכבר כתבת. אם כבר ענית — אל תכתוב עוד טקסט.",
+                }),
               });
             } else {
               toolResults.push({
