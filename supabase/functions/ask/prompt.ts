@@ -10,6 +10,32 @@
 export const MODEL = "claude-haiku-5-5";
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
+// claude-haiku-5-5 pricing (Anthropic API, prompts up to 100k tokens — ours are
+// far below). Writing the prompt cache costs 1.25x input, reading it 0.1x.
+export const PRICE_PER_MTOK_INPUT_USD = 0.1;
+export const PRICE_PER_MTOK_OUTPUT_USD = 0.5;
+
+/** Per model call in the agent loop. */
+export const MAX_OUTPUT_TOKENS = 2000;
+
+export type Usage = {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+};
+
+/**
+ * Dollar cost of one response's `usage`. Cached prompt tokens are reported
+ * apart from `input_tokens`, so counting only that field (as we used to)
+ * under-reported every follow-up question and let spend slip past the caps.
+ */
+export function usageCostUsd(u: Usage): number {
+  const n = (v: number | undefined) => Number(v ?? 0) || 0;
+  const inputEquivalent = n(u.input_tokens) + n(u.cache_creation_input_tokens) * 1.25 + n(u.cache_read_input_tokens) * 0.1;
+  return (inputEquivalent / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (n(u.output_tokens) / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+}
+
 export type Participant = {
   name: string;
   age: number | null;

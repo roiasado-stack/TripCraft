@@ -20,7 +20,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
-import { buildSnapshot, INSTRUCTIONS, MODEL, TOOLS } from "../supabase/functions/ask/prompt.ts";
+import { buildSnapshot, INSTRUCTIONS, MAX_OUTPUT_TOKENS, MODEL, TOOLS } from "../supabase/functions/ask/prompt.ts";
 import {
   FIXTURE_CHECKLIST_OPEN,
   FIXTURE_FLIGHTS,
@@ -215,7 +215,7 @@ async function askOnce(client: Anthropic, system: string, question: string) {
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 2000,
+      max_tokens: MAX_OUTPUT_TOKENS,
       system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
       tools: TOOLS as unknown as Anthropic.Tool[],
       messages,

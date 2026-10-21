@@ -36,7 +36,18 @@
  */
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { ANTHROPIC_URL, buildSnapshot, INSTRUCTIONS, matchKnowledgeDestination, MODEL, TOOLS, type Participant } from "./prompt.ts";
+import {
+  ANTHROPIC_URL,
+  buildSnapshot,
+  INSTRUCTIONS,
+  matchKnowledgeDestination,
+  MAX_OUTPUT_TOKENS,
+  MODEL,
+  TOOLS,
+  type Participant,
+  type Usage,
+  usageCostUsd,
+} from "./prompt.ts";
 import {
   type CuratedItem,
   geocodeDestination,
@@ -65,13 +76,6 @@ const MAX_HISTORY = 12;
 /** Bounds worst-case cost/latency of one question — find_kosher can chain a
  *  couple of times, but the loop must not run indefinitely. */
 const MAX_TOOL_ITERATIONS = 4;
-
-// claude-haiku-5-5 pricing (Anthropic API, prompts up to 100k tokens — ours are
-// far below). Update alongside evals/run.ts's copy of the same numbers if
-// pricing changes — they're two different runtimes (Deno vs Node) so this
-// isn't shared as one constant.
-const PRICE_PER_MTOK_INPUT_USD = 0.1;
-const PRICE_PER_MTOK_OUTPUT_USD = 0.5;
 
 // Per-user, per-day. Protects the single shared ANTHROPIC_API_KEY from a
 // runaway bug or one user's abuse — this is the guard the double-send bug
@@ -333,10 +337,7 @@ async function kosherLookup(opts: {
       });
       if (!res.ok) return q;
       const payload = await res.json();
-      const usage = payload?.usage ?? {};
-      result.translate_cost_usd +=
-        (Number(usage.input_tokens ?? 0) / 1_000_000) * PRICE_PER_MTOK_INPUT_USD +
-        (Number(usage.output_tokens ?? 0) / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+      result.translate_cost_usd += usageCostUsd(payload?.usage ?? {});
       const text = (payload?.content ?? []).filter((b: { type: string }) => b.type === "text").map((b: { text: string }) => b.text).join(" ");
       return text.split("\n")[0].replace(/["׳״]/g, "").trim().slice(0, 100) || q;
     } catch {
@@ -476,6 +477,95 @@ function kosherToolResult(k: KosherLookup): Record<string, unknown> {
   };
 }
 
+class LlmError extends Error {}
+
+type ClaudeTurn = {
+  // deno-lint-ignore no-explicit-any
+  content: any[];
+  stopReason: string | null;
+  usage: Usage;
+};
+
+/**
+ * One Messages API call with `stream: true`. Text deltas go to onText as they
+ * arrive (so the client sees the answer being written); the content blocks
+ * are reassembled — tool_use input from its JSON deltas — for the tool loop.
+ */
+async function streamClaude(
+  apiKey: string,
+  payload: Record<string, unknown>,
+  onText: (text: string) => void,
+  signal: AbortSignal,
+): Promise<ClaudeTurn> {
+  const res = await fetch(ANTHROPIC_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ ...payload, stream: true }),
+    signal,
+  });
+  if (!res.ok || !res.body) throw new LlmError(await res.text());
+
+  // deno-lint-ignore no-explicit-any
+  const blocks: any[] = [];
+  const toolJson: Record<number, string> = {};
+  const usage: Usage = {};
+  let stopReason: string | null = null;
+  let buffer = "";
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value.replace(/\r\n/g, "\n");
+    let cut: number;
+    while ((cut = buffer.indexOf("\n\n")) >= 0) {
+      const frame = buffer.slice(0, cut);
+      buffer = buffer.slice(cut + 2);
+      const data = frame
+        .split("\n")
+        .filter((l) => l.startsWith("data:"))
+        .map((l) => l.slice(5).trimStart())
+        .join("\n");
+      if (!data) continue;
+      const ev = JSON.parse(data);
+      const i = ev.index as number;
+      switch (ev.type) {
+        case "message_start":
+          Object.assign(usage, ev.message?.usage ?? {});
+          break;
+        case "content_block_start":
+          blocks[i] = { ...ev.content_block };
+          if (ev.content_block?.type === "text") blocks[i].text = ev.content_block.text ?? "";
+          if (ev.content_block?.type === "tool_use") toolJson[i] = "";
+          break;
+        case "content_block_delta":
+          if (ev.delta?.type === "text_delta" && blocks[i]) {
+            blocks[i].text += ev.delta.text;
+            onText(ev.delta.text);
+          } else if (ev.delta?.type === "input_json_delta") {
+            toolJson[i] = (toolJson[i] ?? "") + ev.delta.partial_json;
+          }
+          break;
+        case "content_block_stop":
+          if (blocks[i]?.type === "tool_use") blocks[i].input = toolJson[i] ? JSON.parse(toolJson[i]) : {};
+          break;
+        case "message_delta":
+          stopReason = ev.delta?.stop_reason ?? stopReason;
+          // Its usage counts are cumulative for the message.
+          Object.assign(usage, ev.usage ?? {});
+          break;
+        case "error":
+          throw new LlmError(JSON.stringify(ev.error ?? ev));
+      }
+    }
+  }
+  return { content: blocks.filter(Boolean), stopReason, usage };
+}
+
+/** The `ask` stream's wire format: `event: <name>` + one JSON `data:` line. */
+function sseFrame(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
 function mapUrlFor(location: unknown, destination: string): string | null {
   const loc = typeof location === "string" ? location.trim() : "";
   if (!loc) return null;
@@ -485,6 +575,9 @@ function mapUrlFor(location: unknown, destination: string): string | null {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  // Phase timings for the `ask` row's diag line, in ms since the request arrived.
+  const t0 = Date.now();
+  const at = () => Date.now() - t0;
 
   // Estimated usage row held while the model runs, so parallel questions count
   // against the caps in flight (see generate/index.ts). logRun replaces it with
@@ -510,13 +603,25 @@ Deno.serve(async (req) => {
     );
 
     const body = (await req.json()) as Body;
+    const isConversation = !body.kosher && !body.confirm_action;
+
+    // A question's spend check reads only the caller's own totals, so it runs
+    // alongside the role check instead of after it; nothing is reserved or
+    // sent to the model until both have passed.
+    const userLookup = supabase.auth.getUser();
+    const capCheck = isConversation
+      ? userLookup
+          .then(async ({ data }) => ({ cap: await overDailyCap(supabase, data.user?.is_anonymous === true), at: at() }))
+          // Fails closed, like every other unreadable total.
+          .catch(() => ({ cap: "day" as const, at: at() }))
+      : null;
 
     // Role check, shared by the branches below (migration 015). Viewers can
     // read the trip but not use the agent; RLS would also refuse their writes,
     // but checking here keeps them from spending the API budget at all. The
     // kosher lookup is read-only trip information, so viewers get it too.
     const [{ data: auth }, { data: trip }, { data: role }] = await Promise.all([
-      supabase.auth.getUser(),
+      userLookup,
       supabase
         .from("trips")
         .select("id, user_id, destination, trip_type, budget_level, start_date, end_date, notes")
@@ -530,6 +635,7 @@ Deno.serve(async (req) => {
     }
     const canEditItinerary = role === "owner" || role === "editor";
     const isAnonymous = auth.user.is_anonymous === true;
+    const tAuth = at();
 
     const logRun = async (fields: {
       kind: string;
@@ -681,184 +787,219 @@ Deno.serve(async (req) => {
     const message = (body.message ?? "").trim();
     if (!message) return json({ error: "empty_message" }, 400);
 
-    const cap = await overDailyCap(supabase, isAnonymous);
-    if (cap) {
-      return json({ error: cap === "month" ? "monthly_cap_reached" : "daily_cap_reached" }, 429);
+    const loadSnapshot = async () => {
+      const [participants, itinerary, stays, flights, suggestions, checklist] = await Promise.all([
+        supabase.from("participants").select("name, age, age_range, preferences").eq("trip_id", body.trip_id),
+        supabase
+          .from("itinerary_items")
+          .select("day_date, start_time, title")
+          .eq("trip_id", body.trip_id)
+          .order("day_date")
+          .order("sort_order"),
+        supabase.from("stays").select("hotel_name, address, check_in, check_out").eq("trip_id", body.trip_id),
+        supabase.from("flights").select("direction, from_airport, to_airport, depart_at").eq("trip_id", body.trip_id),
+        supabase.from("suggestions").select("title").eq("trip_id", body.trip_id),
+        supabase
+          .from("checklist_items")
+          .select("id", { count: "exact", head: true })
+          .eq("trip_id", body.trip_id)
+          .eq("is_done", false),
+      ]);
+      const text = buildSnapshot(
+        trip,
+        (participants.data as Participant[]) ?? [],
+        (itinerary.data as Record<string, unknown>[]) ?? [],
+        (stays.data as Record<string, unknown>[]) ?? [],
+        (flights.data as Record<string, unknown>[]) ?? [],
+        (suggestions.data as Record<string, unknown>[]) ?? [],
+        checklist.count ?? 0,
+      );
+      return { text, at: at() };
+    };
+
+    // The cap check (started above) and the reservation run alongside the
+    // snapshot reads; the model is only called once all of them are done.
+    const reserve = async () => {
+      const { cap, at: tCap } = await capCheck!;
+      if (cap) return { cap, tCap, tReserve: tCap };
+      // Held estimate (about 4x the measured average question) until the real cost is logged.
+      const { data: held } = (await adminDb()
+        ?.from("agent_runs")
+        .insert({ trip_id: body.trip_id, user_id: auth.user.id, kind: "ask", cost_usd: 0.02, status: "pending" })
+        .select("id")
+        .single()) ?? { data: null };
+      if (held) reservation = (held as { id: string }).id;
+      return { cap: null, tCap, tReserve: at() };
+    };
+    const [gate, snapshot] = await Promise.all([reserve(), loadSnapshot()]);
+    if (gate.cap) {
+      return json({ error: gate.cap === "month" ? "monthly_cap_reached" : "daily_cap_reached" }, 429);
     }
-    // Held estimate (about 4x the measured average question) until the real cost is logged.
-    const { data: held } = (await adminDb()
-      ?.from("agent_runs")
-      .insert({ trip_id: body.trip_id, user_id: auth.user.id, kind: "ask", cost_usd: 0.02, status: "pending" })
-      .select("id")
-      .single()) ?? { data: null };
-    if (held) reservation = (held as { id: string }).id;
-
-    const [participants, itinerary, stays, flights, suggestions, checklist] = await Promise.all([
-      supabase.from("participants").select("name, age, age_range, preferences").eq("trip_id", body.trip_id),
-      supabase
-        .from("itinerary_items")
-        .select("day_date, start_time, title")
-        .eq("trip_id", body.trip_id)
-        .order("day_date")
-        .order("sort_order"),
-      supabase.from("stays").select("hotel_name, address, check_in, check_out").eq("trip_id", body.trip_id),
-      supabase.from("flights").select("direction, from_airport, to_airport, depart_at").eq("trip_id", body.trip_id),
-      supabase.from("suggestions").select("title").eq("trip_id", body.trip_id),
-      supabase
-        .from("checklist_items")
-        .select("id", { count: "exact", head: true })
-        .eq("trip_id", body.trip_id)
-        .eq("is_done", false),
-    ]);
-
-    const snapshot = buildSnapshot(
-      trip,
-      (participants.data as Participant[]) ?? [],
-      (itinerary.data as Record<string, unknown>[]) ?? [],
-      (stays.data as Record<string, unknown>[]) ?? [],
-      (flights.data as Record<string, unknown>[]) ?? [],
-      (suggestions.data as Record<string, unknown>[]) ?? [],
-      checklist.count ?? 0,
-    );
 
     const history = (body.history ?? [])
       .filter((t) => (t.role === "user" || t.role === "assistant") && t.content?.trim())
       .slice(-MAX_HISTORY)
       .map((t) => ({ role: t.role, content: t.content }));
 
-    // deno-lint-ignore no-explicit-any
-    const convo: any[] = [...history, { role: "user", content: message }];
-    const pendingActions: PendingAction[] = [];
-    let finalAnswer = "";
-    let totalInputTokens = 0;
-    let totalOutputTokens = 0;
-    const runStart = Date.now();
-    let llmError: string | null = null;
+    type Outcome =
+      | { ok: true; answer: string; pendingActions: PendingAction[] }
+      | { ok: false; error: string; detail?: string };
 
-    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-      const llm = await fetch(ANTHROPIC_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          max_tokens: 2000,
-          // The snapshot is stable for the whole conversation, so cache it: on
-          // follow-up turns the cached prefix costs ~10%. Snapshots shorter than
-          // the minimum cacheable prefix simply won't cache — that is harmless.
-          system: [
-            {
-              type: "text",
-              text: `${INSTRUCTIONS}\n\n--- פרטי הטיול ---\n${snapshot}`,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
-          // Participants can't write the itinerary, so the agent isn't offered
-          // a card they could never approve.
-          tools: canEditItinerary ? TOOLS : TOOLS.filter((t) => t.name !== "add_to_itinerary"),
-          messages: convo,
-        }),
-      });
-
-      if (!llm.ok) {
-        llmError = await llm.text();
-        break;
-      }
-
-      const payload = await llm.json();
-      const usage = payload?.usage ?? {};
-      totalInputTokens += Number(usage.input_tokens ?? 0);
-      totalOutputTokens += Number(usage.output_tokens ?? 0);
-
+    /**
+     * The tool loop. Every model call streams; onText gets the answer as it is
+     * written, onTool the name of a tool about to run. The answer is the text
+     * of every round joined, which is exactly what a streaming client showed.
+     */
+    const converse = async (
+      onText: (text: string) => void,
+      onTool: (name: string) => void,
+      signal: AbortSignal,
+    ): Promise<Outcome> => {
       // deno-lint-ignore no-explicit-any
-      const content: any[] = Array.isArray(payload?.content) ? payload.content : [];
-      const textBlock = content
-        .filter((b) => b.type === "text")
-        .map((b) => b.text)
-        .join("\n")
-        .trim();
-      if (textBlock) finalAnswer = textBlock;
+      const convo: any[] = [...history, { role: "user", content: message }];
+      const pendingActions: PendingAction[] = [];
+      let answer = "";
+      let totalInputTokens = 0;
+      let totalOutputTokens = 0;
+      let costUsd = 0;
+      let tFirstText: number | null = null;
+      let iterations = 0;
+      let lastStop: string | null = null;
+      let failure: string | null = null;
+      const runStart = Date.now();
 
-      const toolUseBlocks = content.filter((b) => b.type === "tool_use");
-      if (payload?.stop_reason !== "tool_use" || toolUseBlocks.length === 0) break;
-
-      convo.push({ role: "assistant", content });
-      // deno-lint-ignore no-explicit-any
-      const toolResults: any[] = [];
-
-      for (const block of toolUseBlocks) {
-        const input = (block.input ?? {}) as Record<string, unknown>;
-        if (block.name === "find_kosher") {
-          const toolStart = Date.now();
-          const k = await kosherLookup({
-            supabase,
+      try {
+        for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+          iterations = iteration + 1;
+          let roundHasText = false;
+          const turn = await streamClaude(
             apiKey,
-            voyageKey,
-            trip,
-            userId: auth.user.id,
-            isAnonymous,
-            city: typeof input.city === "string" ? input.city : "",
-            query: String(input.query ?? "").trim().slice(0, 500),
-            wantPlaces: true,
-            wantShabbat: true,
-          });
-          await logRun({
-            kind: "tool_find_kosher",
-            inputTokens: k.voyage_tokens,
-            outputTokens: 0,
-            costUsd: (k.voyage_tokens / 1_000_000) * VOYAGE_PRICE_PER_MTOK_USD + k.translate_cost_usd,
-            latencyMs: Date.now() - toolStart,
-            status: "ok",
-            errorMessage: `diag: geo=${k.geo} shabbat=${k.shabbat?.days.length ?? "none"} google=${k.google} osm=${k.osm_failed ? "failed" : k.places.length} curated=${k.curated.length}`,
-          });
-          toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(kosherToolResult(k)) });
-        } else if (block.name === "add_to_itinerary" || block.name === "add_suggestion") {
-          pendingActions.push({ tool: block.name, id: block.id, input });
-          await logRun({
-            kind: `tool_${block.name}`,
-            inputTokens: 0,
-            outputTokens: 0,
-            costUsd: 0,
-            latencyMs: 0,
-            status: "ok",
-          });
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: JSON.stringify({ status: "queued_for_user_approval" }),
-          });
-        } else {
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: JSON.stringify({ error: "unknown_tool" }),
-            is_error: true,
-          });
+            {
+              model: MODEL,
+              max_tokens: MAX_OUTPUT_TOKENS,
+              // The snapshot is stable for the whole conversation, so cache it: on
+              // follow-up turns the cached prefix costs ~10%. Snapshots shorter than
+              // the minimum cacheable prefix simply won't cache — that is harmless.
+              system: [
+                {
+                  type: "text",
+                  text: `${INSTRUCTIONS}\n\n--- פרטי הטיול ---\n${snapshot.text}`,
+                  cache_control: { type: "ephemeral" },
+                },
+              ],
+              // Participants can't write the itinerary, so the agent isn't offered
+              // a card they could never approve.
+              tools: canEditItinerary ? TOOLS : TOOLS.filter((t) => t.name !== "add_to_itinerary"),
+              messages: convo,
+            },
+            (text) => {
+              if (!roundHasText) {
+                roundHasText = true;
+                tFirstText ??= at();
+                // A new round's text starts a new paragraph.
+                if (answer.trim()) {
+                  answer += "\n\n";
+                  onText("\n\n");
+                }
+              }
+              answer += text;
+              onText(text);
+            },
+            signal,
+          );
+          lastStop = turn.stopReason;
+          totalInputTokens += Number(turn.usage.input_tokens ?? 0) + Number(turn.usage.cache_read_input_tokens ?? 0) +
+            Number(turn.usage.cache_creation_input_tokens ?? 0);
+          totalOutputTokens += Number(turn.usage.output_tokens ?? 0);
+          costUsd += usageCostUsd(turn.usage);
+
+          const toolUseBlocks = turn.content.filter((b) => b.type === "tool_use");
+          if (turn.stopReason !== "tool_use" || toolUseBlocks.length === 0) break;
+
+          convo.push({ role: "assistant", content: turn.content });
+          // deno-lint-ignore no-explicit-any
+          const toolResults: any[] = [];
+
+          for (const block of toolUseBlocks) {
+            const input = (block.input ?? {}) as Record<string, unknown>;
+            if (block.name === "find_kosher") {
+              onTool(block.name);
+              const toolStart = Date.now();
+              const k = await kosherLookup({
+                supabase,
+                apiKey,
+                voyageKey,
+                trip,
+                userId: auth.user.id,
+                isAnonymous,
+                city: typeof input.city === "string" ? input.city : "",
+                query: String(input.query ?? "").trim().slice(0, 500),
+                wantPlaces: true,
+                wantShabbat: true,
+              });
+              await logRun({
+                kind: "tool_find_kosher",
+                inputTokens: k.voyage_tokens,
+                outputTokens: 0,
+                costUsd: (k.voyage_tokens / 1_000_000) * VOYAGE_PRICE_PER_MTOK_USD + k.translate_cost_usd,
+                latencyMs: Date.now() - toolStart,
+                status: "ok",
+                errorMessage: `diag: geo=${k.geo} shabbat=${k.shabbat?.days.length ?? "none"} google=${k.google} osm=${k.osm_failed ? "failed" : k.places.length} curated=${k.curated.length}`,
+              });
+              toolResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(kosherToolResult(k)) });
+            } else if (block.name === "add_to_itinerary" || block.name === "add_suggestion") {
+              pendingActions.push({ tool: block.name, id: block.id, input });
+              await logRun({
+                kind: `tool_${block.name}`,
+                inputTokens: 0,
+                outputTokens: 0,
+                costUsd: 0,
+                latencyMs: 0,
+                status: "ok",
+              });
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: block.id,
+                content: JSON.stringify({ status: "queued_for_user_approval" }),
+              });
+            } else {
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: block.id,
+                content: JSON.stringify({ error: "unknown_tool" }),
+                is_error: true,
+              });
+            }
+          }
+          convo.push({ role: "user", content: toolResults });
         }
+      } catch (e) {
+        failure = signal.aborted ? "client_disconnected" : e instanceof Error ? e.message : "unknown";
       }
-      convo.push({ role: "user", content: toolResults });
-    }
 
-    const latencyMs = Date.now() - runStart;
-    const costUsd =
-      (totalInputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (totalOutputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+      // Times are ms since the request arrived: role check done, cap read,
+      // reservation written, snapshot read, first answer text, end of loop.
+      const diag = `diag: auth=${tAuth} cap=${gate.tCap} reserve=${gate.tReserve} snapshot=${snapshot.at} ` +
+        `ttft=${tFirstText ?? "none"} end=${at()} iters=${iterations} stop=${lastStop ?? "none"}`;
+      const run = { kind: "ask", inputTokens: totalInputTokens, outputTokens: totalOutputTokens, costUsd, latencyMs: Date.now() - runStart };
 
-    if (llmError) {
-      await logRun({ kind: "ask", inputTokens: totalInputTokens, outputTokens: totalOutputTokens, costUsd, latencyMs, status: "error", errorMessage: llmError });
-      return json({ error: "llm_failed", detail: llmError }, 502);
-    }
+      if (failure) {
+        await logRun({ ...run, status: "error", errorMessage: `${failure} | ${diag}` });
+        return { ok: false, error: signal.aborted ? "client_disconnected" : "llm_failed", detail: failure };
+      }
+      answer = answer.trim();
+      if (!answer) {
+        await logRun({ ...run, status: "error", errorMessage: `no_final_answer | ${diag}` });
+        answer = "לא הצלחתי לגבש תשובה הפעם. נסה לנסח את השאלה אחרת.";
+      } else {
+        await logRun({ ...run, status: "ok", errorMessage: diag });
+      }
+      return { ok: true, answer, pendingActions };
+    };
 
-    if (!finalAnswer) {
-      await logRun({ kind: "ask", inputTokens: totalInputTokens, outputTokens: totalOutputTokens, costUsd, latencyMs, status: "error", errorMessage: "no_final_answer" });
-      finalAnswer = "לא הצלחתי לגבש תשובה הפעם. נסה לנסח את השאלה אחרת.";
-    } else {
-      await logRun({ kind: "ask", inputTokens: totalInputTokens, outputTokens: totalOutputTokens, costUsd, latencyMs, status: "ok" });
-    }
-
-    return json({ ok: true, answer: finalAnswer, cards: [], pendingActions });
+    const outcome = await converse(() => {}, () => {}, req.signal);
+    if (!outcome.ok) return json({ error: outcome.error, detail: outcome.detail }, 502);
+    return json({ ok: true, answer: outcome.answer, cards: [], pendingActions: outcome.pendingActions });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "unknown" }, 500);
   } finally {
