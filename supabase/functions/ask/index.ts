@@ -948,7 +948,9 @@ Deno.serve(async (req) => {
 
           const toolUseBlocks = turn.content.filter((b) => b.type === "tool_use");
           if (turn.stopReason !== "tool_use" || toolUseBlocks.length === 0) break;
-          if (toolUseBlocks.some((b) => b.name === "find_kosher")) answer = answerBeforeRound;
+          // A round that only looks something up: its text was a lead-in ("אבדוק…"). A round
+          // that also proposes a card keeps its text — that is the answer the card belongs to.
+          if (toolUseBlocks.every((b) => b.name === "find_kosher")) answer = answerBeforeRound;
 
           convo.push({ role: "assistant", content: turn.content });
           // deno-lint-ignore no-explicit-any
