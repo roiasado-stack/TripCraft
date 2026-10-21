@@ -94,7 +94,10 @@ export default function AskTab() {
         setToolRunning(null);
         setStreamText(soFar);
       },
-      onTool: setToolRunning,
+      onTool: (name, soFar) => {
+        setToolRunning(name);
+        setStreamText(soFar.trim() ? soFar : null);
+      },
     });
     setToolRunning(null);
 

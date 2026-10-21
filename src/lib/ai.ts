@@ -204,7 +204,7 @@ function askResult(res: AskPayload | null | undefined): AskResult {
  *
  * The answer streams: `onText` gets the whole text so far as it is written,
  * `onTool` the name of a tool the agent is running (find_kosher can take a few
- * seconds). This is a plain fetch because `functions.invoke` reads the whole
+ * seconds) and the text so far, without any "let me check" lead-in to it. This is a plain fetch because `functions.invoke` reads the whole
  * body before returning. Refusals (403/429…) still arrive as JSON with a
  * status code, and a function deployed before streaming answers with one JSON
  * body, so both map exactly as they did through invoke.
@@ -213,7 +213,7 @@ export async function askAgent(
   trip: Trip,
   message: string,
   history: AskTurn[],
-  handlers: { onText?: (soFar: string) => void; onTool?: (name: string) => void } = {},
+  handlers: { onText?: (soFar: string) => void; onTool?: (name: string, soFar: string) => void } = {},
 ): Promise<AskResult> {
   let res: Response;
   try {
@@ -249,7 +249,8 @@ export async function askAgent(
           text += data.text;
           handlers.onText?.(text);
         } else if (ev.event === "tool" && data.name) {
-          handlers.onTool?.(data.name);
+          if (typeof data.answer === "string") text = data.answer;
+          handlers.onTool?.(data.name, text);
         } else if (ev.event === "done") {
           reader.cancel().catch(() => {});
           return askResult(data);

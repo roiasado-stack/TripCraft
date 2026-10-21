@@ -43,6 +43,7 @@ import {
   matchKnowledgeDestination,
   MAX_OUTPUT_TOKENS,
   MODEL,
+  THINKING,
   TOOLS,
   type Participant,
   type Usage,
@@ -76,6 +77,11 @@ const MAX_HISTORY = 12;
 /** Bounds worst-case cost/latency of one question — find_kosher can chain a
  *  couple of times, but the loop must not run indefinitely. */
 const MAX_TOOL_ITERATIONS = 4;
+/** Longest replayed history turn (characters). */
+const MAX_HISTORY_TURN_CHARS = 4000;
+/** Held per question while the model runs (about 4x the measured average), and
+ *  the least a failed or abandoned question is logged at. */
+const RESERVED_ASK_USD = 0.02;
 
 // Per-user, per-day. Protects the single shared ANTHROPIC_API_KEY from a
 // runaway bug or one user's abuse — this is the guard the double-send bug
@@ -492,12 +498,15 @@ type ClaudeTurn = {
  * One Messages API call with `stream: true`. Text deltas go to onText as they
  * arrive (so the client sees the answer being written); the content blocks
  * are reassembled — tool_use input from its JSON deltas — for the tool loop.
+ * `usage` is filled in as events arrive, so a call cut off midway (the client
+ * left, the stream broke) still reports the input it was billed for.
  */
 async function streamClaude(
   apiKey: string,
   payload: Record<string, unknown>,
   onText: (text: string) => void,
   signal: AbortSignal,
+  usage: Usage,
 ): Promise<ClaudeTurn> {
   const res = await fetch(ANTHROPIC_URL, {
     method: "POST",
@@ -510,7 +519,6 @@ async function streamClaude(
   // deno-lint-ignore no-explicit-any
   const blocks: any[] = [];
   const toolJson: Record<number, string> = {};
-  const usage: Usage = {};
   let stopReason: string | null = null;
   let buffer = "";
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -548,7 +556,15 @@ async function streamClaude(
           }
           break;
         case "content_block_stop":
-          if (blocks[i]?.type === "tool_use") blocks[i].input = toolJson[i] ? JSON.parse(toolJson[i]) : {};
+          if (blocks[i]?.type === "tool_use") {
+            // Input cut off by max_tokens isn't valid JSON; that round stops
+            // with "max_tokens", so the tool never runs on the empty input.
+            try {
+              blocks[i].input = toolJson[i] ? JSON.parse(toolJson[i]) : {};
+            } catch {
+              blocks[i].input = {};
+            }
+          }
           break;
         case "message_delta":
           stopReason = ev.delta?.stop_reason ?? stopReason;
@@ -560,7 +576,8 @@ async function streamClaude(
       }
     }
   }
-  return { content: blocks.filter(Boolean), stopReason, usage };
+  // An empty text block can't be sent back in the next round (400).
+  return { content: blocks.filter((b) => b && !(b.type === "text" && !b.text)), stopReason, usage };
 }
 
 /** The `ask` stream's wire format: `event: <name>` + one JSON `data:` line. */
@@ -829,13 +846,19 @@ Deno.serve(async (req) => {
       // Held estimate (about 4x the measured average question) until the real cost is logged.
       const { data: held } = (await adminDb()
         ?.from("agent_runs")
-        .insert({ trip_id: body.trip_id, user_id: auth.user.id, kind: "ask", cost_usd: 0.02, status: "pending" })
+        .insert({ trip_id: body.trip_id, user_id: auth.user.id, kind: "ask", cost_usd: RESERVED_ASK_USD, status: "pending" })
         .select("id")
         .single()) ?? { data: null };
       if (held) reservation = (held as { id: string }).id;
       return { cap: null, tCap, tReserve: at() };
     };
-    const [gate, snapshot] = await Promise.all([reserve(), loadSnapshot()]);
+    // allSettled: a failed snapshot must not return before the reservation
+    // insert has landed, or the finally below would miss deleting it.
+    const [gateResult, snapshotResult] = await Promise.allSettled([reserve(), loadSnapshot()]);
+    if (gateResult.status === "rejected") throw gateResult.reason;
+    if (snapshotResult.status === "rejected") throw snapshotResult.reason;
+    const gate = gateResult.value;
+    const snapshot = snapshotResult.value;
     if (gate.cap) {
       return json({ error: gate.cap === "month" ? "monthly_cap_reached" : "daily_cap_reached" }, 429);
     }
@@ -843,7 +866,8 @@ Deno.serve(async (req) => {
     const history = (body.history ?? [])
       .filter((t) => (t.role === "user" || t.role === "assistant") && t.content?.trim())
       .slice(-MAX_HISTORY)
-      .map((t) => ({ role: t.role, content: t.content }));
+      // Each replayed turn is capped: the history is client-supplied input we pay for.
+      .map((t) => ({ role: t.role, content: String(t.content).slice(0, MAX_HISTORY_TURN_CHARS) }));
 
     type Outcome =
       | { ok: true; answer: string; pendingActions: PendingAction[] }
@@ -851,21 +875,22 @@ Deno.serve(async (req) => {
 
     /**
      * The tool loop. Every model call streams; onText gets the answer as it is
-     * written, onTool the name of a tool about to run. The answer is the text
-     * of every round joined, which is exactly what a streaming client showed.
+     * written, onTool a tool about to run plus the answer so far. The answer is
+     * the text of every round joined, except a round that only led into a
+     * find_kosher lookup ("אבדוק…"): its text is dropped, and onTool hands the
+     * client the answer without it.
      */
     const converse = async (
       onText: (text: string) => void,
-      onTool: (name: string) => void,
+      onTool: (name: string, answerSoFar: string) => void,
       signal: AbortSignal,
     ): Promise<Outcome> => {
       // deno-lint-ignore no-explicit-any
       const convo: any[] = [...history, { role: "user", content: message }];
       const pendingActions: PendingAction[] = [];
       let answer = "";
-      let totalInputTokens = 0;
-      let totalOutputTokens = 0;
-      let costUsd = 0;
+      // Per model call, filled while it streams, so a call cut off midway is still counted.
+      const rounds: { usage: Usage; chars: number }[] = [];
       let tFirstText: number | null = null;
       let iterations = 0;
       let lastStop: string | null = null;
@@ -876,11 +901,15 @@ Deno.serve(async (req) => {
         for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
           iterations = iteration + 1;
           let roundHasText = false;
+          const answerBeforeRound = answer;
+          const round = { usage: {} as Usage, chars: 0 };
+          rounds.push(round);
           const turn = await streamClaude(
             apiKey,
             {
               model: MODEL,
               max_tokens: MAX_OUTPUT_TOKENS,
+              thinking: THINKING,
               // The snapshot is stable for the whole conversation, so cache it: on
               // follow-up turns the cached prefix costs ~10%. Snapshots shorter than
               // the minimum cacheable prefix simply won't cache — that is harmless.
@@ -907,18 +936,17 @@ Deno.serve(async (req) => {
                 }
               }
               answer += text;
+              round.chars += text.length;
               onText(text);
             },
             signal,
+            round.usage,
           );
           lastStop = turn.stopReason;
-          totalInputTokens += Number(turn.usage.input_tokens ?? 0) + Number(turn.usage.cache_read_input_tokens ?? 0) +
-            Number(turn.usage.cache_creation_input_tokens ?? 0);
-          totalOutputTokens += Number(turn.usage.output_tokens ?? 0);
-          costUsd += usageCostUsd(turn.usage);
 
           const toolUseBlocks = turn.content.filter((b) => b.type === "tool_use");
           if (turn.stopReason !== "tool_use" || toolUseBlocks.length === 0) break;
+          if (toolUseBlocks.some((b) => b.name === "find_kosher")) answer = answerBeforeRound;
 
           convo.push({ role: "assistant", content: turn.content });
           // deno-lint-ignore no-explicit-any
@@ -927,7 +955,7 @@ Deno.serve(async (req) => {
           for (const block of toolUseBlocks) {
             const input = (block.input ?? {}) as Record<string, unknown>;
             if (block.name === "find_kosher") {
-              onTool(block.name);
+              onTool(block.name, answer);
               const toolStart = Date.now();
               const k = await kosherLookup({
                 supabase,
@@ -985,7 +1013,17 @@ Deno.serve(async (req) => {
       // reservation written, snapshot read, first answer text, end of loop.
       const diag = `diag: auth=${tAuth} cap=${gate.tCap} reserve=${gate.tReserve} snapshot=${snapshot.at} ` +
         `ttft=${tFirstText ?? "none"} end=${at()} iters=${iterations} stop=${lastStop ?? "none"}`;
-      const run = { kind: "ask", inputTokens: totalInputTokens, outputTokens: totalOutputTokens, costUsd, latencyMs: Date.now() - runStart };
+      // A call that never reached message_delta has no output count yet: estimate
+      // it from the streamed text (~2 Hebrew characters per token).
+      const outputOf = (r: { usage: Usage; chars: number }) => Number(r.usage.output_tokens ?? 0) || Math.ceil(r.chars / 2);
+      const inputTokens = rounds.reduce((n, r) => n + Number(r.usage.input_tokens ?? 0) +
+        Number(r.usage.cache_read_input_tokens ?? 0) + Number(r.usage.cache_creation_input_tokens ?? 0), 0);
+      const outputTokens = rounds.reduce((n, r) => n + outputOf(r), 0);
+      let costUsd = rounds.reduce((n, r) => n + usageCostUsd({ ...r.usage, output_tokens: outputOf(r) }), 0);
+      // A failed or abandoned question never logs less than what was held for it:
+      // hanging up mid-answer must not make a question free against the caps.
+      if (failure) costUsd = Math.max(costUsd, RESERVED_ASK_USD);
+      const run = { kind: "ask", inputTokens, outputTokens, costUsd, latencyMs: Date.now() - runStart };
 
       if (failure) {
         await logRun({ ...run, status: "error", errorMessage: `${failure} | ${diag}` });
@@ -1027,7 +1065,7 @@ Deno.serve(async (req) => {
           }
         };
         try {
-          const outcome = await converse((text) => send("delta", { text }), (name) => send("tool", { name }), abort.signal);
+          const outcome = await converse((text) => send("delta", { text }), (name, answer) => send("tool", { name, answer }), abort.signal);
           if (outcome.ok) send("done", { answer: outcome.answer, cards: [], pendingActions: outcome.pendingActions });
           else send("error", { error: outcome.error });
         } catch (e) {
