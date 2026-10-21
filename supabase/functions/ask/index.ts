@@ -77,7 +77,7 @@ const MAX_HISTORY = 12;
 /** Bounds worst-case cost/latency of one question — find_kosher can chain a
  *  couple of times, but the loop must not run indefinitely. */
 const MAX_TOOL_ITERATIONS = 4;
-/** Longest replayed history turn (characters). */
+/** Longest question or replayed history turn (characters). */
 const MAX_HISTORY_TURN_CHARS = 4000;
 /** Held per question while the model runs (about 4x the measured average), and
  *  the least a failed or abandoned question is logged at. */
@@ -805,7 +805,7 @@ Deno.serve(async (req) => {
     }
 
     // --- Branch 2: conversation turn (may call tools) ------------------------
-    const message = (body.message ?? "").trim();
+    const message = (body.message ?? "").trim().slice(0, MAX_HISTORY_TURN_CHARS);
     if (!message) return json({ error: "empty_message" }, 400);
 
     const loadSnapshot = async () => {
@@ -849,7 +849,9 @@ Deno.serve(async (req) => {
         .insert({ trip_id: body.trip_id, user_id: auth.user.id, kind: "ask", cost_usd: RESERVED_ASK_USD, status: "pending" })
         .select("id")
         .single()) ?? { data: null };
-      if (held) reservation = (held as { id: string }).id;
+      // No held row, no model call: in-flight questions must count against the caps.
+      if (!held) return { cap: "day" as const, tCap, tReserve: at() };
+      reservation = (held as { id: string }).id;
       return { cap: null, tCap, tReserve: at() };
     };
     // allSettled: a failed snapshot must not return before the reservation
@@ -1013,9 +1015,9 @@ Deno.serve(async (req) => {
       // reservation written, snapshot read, first answer text, end of loop.
       const diag = `diag: auth=${tAuth} cap=${gate.tCap} reserve=${gate.tReserve} snapshot=${snapshot.at} ` +
         `ttft=${tFirstText ?? "none"} end=${at()} iters=${iterations} stop=${lastStop ?? "none"}`;
-      // A call that never reached message_delta has no output count yet: estimate
-      // it from the streamed text (~2 Hebrew characters per token).
-      const outputOf = (r: { usage: Usage; chars: number }) => Number(r.usage.output_tokens ?? 0) || Math.ceil(r.chars / 2);
+      // A call cut off before message_delta only has message_start's placeholder
+      // output count: estimate it from the streamed text (~2 Hebrew chars a token).
+      const outputOf = (r: { usage: Usage; chars: number }) => Math.max(Number(r.usage.output_tokens ?? 0) || 0, Math.ceil(r.chars / 2));
       const inputTokens = rounds.reduce((n, r) => n + Number(r.usage.input_tokens ?? 0) +
         Number(r.usage.cache_read_input_tokens ?? 0) + Number(r.usage.cache_creation_input_tokens ?? 0), 0);
       const outputTokens = rounds.reduce((n, r) => n + outputOf(r), 0);
