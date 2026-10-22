@@ -290,17 +290,29 @@ SELECT pg_temp.check('push_throttle_claim: a client can''t call it',
   pg_temp.try($$SELECT public.push_throttle_claim('join:x', interval '1 second')$$) = -1);
 RESET ROLE;
 
--- 4. A shared phone: claim_push_subscription hands the device to whoever claims it ------------
+-- 4. claim_push_subscription: a shared browser follows the new account; a stolen URL doesn't --
 SELECT pg_temp.login(pg_temp.id('viewer'));
 SELECT pg_temp.check('claim: user A registers a device',
   public.claim_push_subscription('https://fcm.googleapis.com/fcm/send/shared-phone', 'KEY-A', 'AUTH-A', 'phone') IS NOT NULL);
+SELECT pg_temp.check('claim: A re-claims their own device with new keys',
+  pg_temp.try($$SELECT public.claim_push_subscription('https://fcm.googleapis.com/fcm/send/shared-phone', 'KEY-A2', 'AUTH-A2', 'phone')$$) = 1);
+SELECT public.claim_push_subscription('https://fcm.googleapis.com/fcm/send/shared-phone', 'KEY-A2', 'AUTH-A2', 'phone');
 RESET ROLE;
 SELECT pg_temp.login(pg_temp.id('editor'));
-SELECT pg_temp.check('claim: user B claims the same endpoint',
-  public.claim_push_subscription('https://fcm.googleapis.com/fcm/send/shared-phone', 'KEY-B', 'AUTH-B') IS NOT NULL);
-SELECT pg_temp.check('claim: B now sees the device, with B''s keys',
+SELECT pg_temp.check('claim: another account''s endpoint with different keys is refused',
+  pg_temp.try($$SELECT public.claim_push_subscription('https://fcm.googleapis.com/fcm/send/shared-phone', 'JUNK', 'JUNK')$$) = -1);
+SELECT pg_temp.check('claim: with only one of the two keys matching, still refused',
+  pg_temp.try($$SELECT public.claim_push_subscription('https://fcm.googleapis.com/fcm/send/shared-phone', 'KEY-A2', 'JUNK')$$) = -1);
+RESET ROLE;
+SELECT pg_temp.check('claim: after the refused attempts the row is still A''s, keys unchanged',
+  (SELECT user_id = pg_temp.id('viewer') AND p256dh = 'KEY-A2' AND auth = 'AUTH-A2'
+   FROM public.push_subscriptions WHERE endpoint = 'https://fcm.googleapis.com/fcm/send/shared-phone'));
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('claim: the same browser (same keys) signed in as B moves the device to B',
+  public.claim_push_subscription('https://fcm.googleapis.com/fcm/send/shared-phone', 'KEY-A2', 'AUTH-A2') IS NOT NULL);
+SELECT pg_temp.check('claim: B now sees the device',
   (SELECT p256dh FROM public.push_subscriptions
-   WHERE endpoint = 'https://fcm.googleapis.com/fcm/send/shared-phone') = 'KEY-B');
+   WHERE endpoint = 'https://fcm.googleapis.com/fcm/send/shared-phone') = 'KEY-A2');
 RESET ROLE;
 SELECT pg_temp.check('claim: one row for the endpoint, owned by B',
   (SELECT array_agg(user_id) FROM public.push_subscriptions

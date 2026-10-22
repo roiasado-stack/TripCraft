@@ -86,9 +86,11 @@ CREATE POLICY "own subscriptions update" ON public.push_subscriptions FOR UPDATE
 CREATE POLICY "own subscriptions delete" ON public.push_subscriptions FOR DELETE TO authenticated
   USING (user_id = auth.uid());
 
--- Register this device for the caller. The endpoint is a capability only the
--- browser holding it knows; whoever presents it gets the device. The endpoint
--- CHECK above still applies (23514). Returns the row id.
+-- Register this device for the caller. A new endpoint, or the caller's own, is
+-- written as given. Another account's endpoint moves to the caller only with the
+-- same p256dh and auth (the same browser, now signed in as someone else);
+-- otherwise 42501 'endpoint_taken' and the row is untouched. The endpoint CHECK
+-- above still applies (23514). Returns the row id.
 CREATE OR REPLACE FUNCTION public.claim_push_subscription(
   p_endpoint TEXT, p_p256dh TEXT, p_auth TEXT, p_user_agent TEXT DEFAULT NULL)
 RETURNS UUID LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -102,7 +104,14 @@ BEGIN
   ON CONFLICT (endpoint) DO UPDATE
     SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth,
         user_agent = EXCLUDED.user_agent, created_at = now(), last_ok_at = NULL
+    -- Own device: keys may change. Someone else's: only the browser itself, which
+    -- holds the same keys, can move it — knowing the endpoint URL isn't enough.
+    WHERE s.user_id = EXCLUDED.user_id
+       OR (s.p256dh = EXCLUDED.p256dh AND s.auth = EXCLUDED.auth)
   RETURNING s.id INTO sid;
+  IF sid IS NULL THEN
+    RAISE EXCEPTION 'endpoint_taken' USING ERRCODE = '42501';
+  END IF;
   RETURN sid;
 END;
 $$;
@@ -306,9 +315,16 @@ WHERE p.pronamespace = 'public'::regnamespace
                     'push_on_trip_update', 'push_on_member_pending', 'push_throttle_claim')
   AND (has_function_privilege('anon', p.oid, 'EXECUTE') OR has_function_privilege('authenticated', p.oid, 'EXECUTE'))
 UNION ALL
-SELECT 'claim_push_subscription grants wrong', ''
-WHERE has_function_privilege('anon', 'public.claim_push_subscription(text, text, text, text)', 'EXECUTE')
-   OR NOT has_function_privilege('authenticated', 'public.claim_push_subscription(text, text, text, text)', 'EXECUTE')
+SELECT 'claim_push_subscription callable by anon', p.oid::regprocedure::text
+FROM pg_proc p
+WHERE p.pronamespace = 'public'::regnamespace AND p.proname = 'claim_push_subscription'
+  AND has_function_privilege('anon', p.oid, 'EXECUTE')
+UNION ALL
+SELECT 'claim_push_subscription not callable by authenticated', ''
+WHERE NOT has_function_privilege('authenticated', 'public.claim_push_subscription(text, text, text, text)', 'EXECUTE')
+UNION ALL
+SELECT 'claim_push_subscription takes over an endpoint without the keys', ''
+WHERE pg_get_functiondef('public.claim_push_subscription(text, text, text, text)'::regprocedure) NOT LIKE '%endpoint_taken%'
 UNION ALL
 SELECT 'SECURITY DEFINER without search_path', p.oid::regprocedure::text
 FROM pg_proc p
