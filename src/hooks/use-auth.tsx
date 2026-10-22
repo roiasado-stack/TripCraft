@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { reclaimThisDevice, unsubscribeOnSignOut } from "@/lib/push";
 import type { AppRole, Profile } from "@/lib/types";
 
 type AuthState = {
@@ -139,6 +140,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [clearProfileAndRoles, loadProfileAndRoles, switchTo]);
 
+  // A push subscription already in this browser belongs to whoever is signed in now.
+  const pushUserId = session?.user && !session.user.is_anonymous ? session.user.id : null;
+  useEffect(() => {
+    if (pushUserId) void reclaimThisDevice();
+  }, [pushUserId]);
+
   const value: AuthState = {
     session,
     user: session?.user ?? null,
@@ -189,6 +196,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) await loadProfileAndRoles(session.user.id);
     },
     signOut: async () => {
+      // One browser, two accounts: the next one must not get this one's pushes.
+      // Needs the session (RLS), so it runs first; time-boxed, never blocks.
+      await unsubscribeOnSignOut();
       await supabase.auth.signOut();
       clearProfileAndRoles();
     },
