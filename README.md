@@ -187,6 +187,13 @@ npm run build
 
 אחרי הפריסה, הוסף את הדומיין ל-Redirect URLs ב-Supabase.
 
+### גרסה קפואה וסביבת פיתוח (מ-22.10.2026)
+
+- **מה שבאוויר = הענף `production`.** פורסים לייצור רק ממנו: `git switch production`, ואז `npx.cmd vercel build --prod` ו-`npx.cmd vercel deploy --prebuilt --prod`. כל הקפאה מסומנת בתג `prod-YYYY-MM-DD` (הראשון: `prod-2026-10-22`, שהוא commit ‏`4a1d4ee` עם migrations עד 024).
+- **פיתוח = `agent-chat` וענפי פיצ'רים.** הם לא נפרסים לייצור. גרסה עוברת לייצור כך: מוזגים את `agent-chat` לתוך `production`, מדביקים את ה-migrations החדשות ב-SQL Editor של הייצור לפי הסדר, פורסים, ומוסיפים תג חדש.
+- **תיקון דחוף לייצור:** מתקנים בענף שיוצא מ-`production`, ממזגים ל-`production` וגם ל-`agent-chat`.
+- **מסד נתונים לפיתוח:** פרויקט Supabase נפרד, `TripCraft-dev` ‏(`xneydbffncoqowtgkhxv`, בחינם). `npm run dev -- --mode devcloud` מריץ מולו (`.env.devcloud`, ב-`.claude/launch.json`: "tripcraft-devcloud", פורט 5176). בדיקות RLS עדיין רצות מול Docker המקומי (`npm run test:db`). לא שמים שם נתונים אמיתיים של לקוחות.
+
 ### התקנה כאפליקציה בטלפון
 
 האפליקציה mobile-first ועובדת מצוין דרך הדפדפן. בטלפון: **שתף → הוסף למסך הבית** — היא נפתחת במסך מלא בלי סרגל כתובת, עם השם והאייקון של TripCraft.

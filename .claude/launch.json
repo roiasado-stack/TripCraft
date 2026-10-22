@@ -31,6 +31,20 @@
         "scripts/dev-phone.mjs"
       ],
       "port": 5175
+    },
+    {
+      "name": "tripcraft-devcloud",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--mode",
+        "devcloud",
+        "--port",
+        "5176"
+      ],
+      "port": 5176
     }
   ]
 }

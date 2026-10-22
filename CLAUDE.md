@@ -19,7 +19,10 @@ npm run build      # tsc -b && vite build
 Local Supabase (Docker Desktop) for anything touching RLS or Edge Functions:
 `npx supabase start`, then apply `supabase/schema.sql` and every `supabase/migrations/0NN_*.sql`
 in order with `docker exec -i supabase_db_tripcraft psql -U postgres -d postgres < file` (the CLI's own
-migration runner is off in `supabase/config.toml` on purpose). `.claude/launch.json` → "tripcraft-local"
+migration runner is off in `supabase/config.toml` on purpose).
+Production runs the `production` branch (frozen, tagged `prod-YYYY-MM-DD`); development happens on `agent-chat`
+and feature branches and is never deployed to prod from there. A cloud dev database, `TripCraft-dev`
+(`xneydbffncoqowtgkhxv`), backs `--mode devcloud` (launch.json "tripcraft-devcloud"). Release steps are in README. `.claude/launch.json` → "tripcraft-local"
 runs Vite on :5174 against it via `.env.localstack`. Test accounts belong there, never in production.
 
 ## Tests and gates
