@@ -89,18 +89,43 @@ async function claimRow(sub: PushSubscription) {
 }
 
 /**
- * On app open, signed in (not a demo user): if this browser already has a push
- * subscription, make sure it belongs to the current account — after an account
- * switch whose sign-out cleanup didn't finish, it would still be the previous
- * user's. Best effort; silent.
+ * Whose is this browser's push subscription? "other" = a row exists that the
+ * signed-in user can't see (RLS: own rows only), i.e. a previous account's;
+ * "unknown" when the lookup itself failed — never act on that.
  */
-export async function reclaimThisDevice(): Promise<void> {
+async function deviceOwner(sub: PushSubscription): Promise<"mine" | "other" | "unknown"> {
+  const { data, error } = await supabase.from("push_subscriptions").select("id").eq("endpoint", sub.endpoint).maybeSingle();
+  if (error) return "unknown";
+  return data ? "mine" : "other";
+}
+
+/**
+ * On sign-in (not a demo user): a push subscription this browser still holds
+ * for someone else — a previous account whose sign-out cleanup didn't finish,
+ * or whose session ended without one — is dropped, never claimed. The new user
+ * turns notifications on themselves. Browser-only; best effort, silent.
+ */
+export async function releaseForeignSubscription(): Promise<void> {
   try {
-    if (notificationPermission() !== "granted") return;
     const sub = await browserSubscription();
-    if (sub) await claimRow(sub);
+    if (sub && (await deviceOwner(sub)) === "other") await sub.unsubscribe();
   } catch {
     // Nothing to do — Settings still shows this device's real state.
+  }
+}
+
+/**
+ * The session ended without our sign-out (token expired or revoked, signed out
+ * in another tab): stop this browser getting the account's pushes. No session
+ * is needed — the row is left for notify to delete when the push service
+ * reports the endpoint gone (404/410). Best effort, silent.
+ */
+export async function dropBrowserSubscription(): Promise<void> {
+  try {
+    const sub = await browserSubscription();
+    await sub?.unsubscribe();
+  } catch {
+    // Ignore.
   }
 }
 
@@ -109,8 +134,7 @@ export async function isSubscribedHere(): Promise<boolean> {
   const sub = await browserSubscription();
   if (!sub) return false;
   // RLS returns own rows only: another account's row on this browser reads as "off".
-  const { data } = await supabase.from("push_subscriptions").select("id").eq("endpoint", sub.endpoint).maybeSingle();
-  return !!data;
+  return (await deviceOwner(sub)) === "mine";
 }
 
 export type SubscribeResult = "ok" | "no-key" | "denied" | "dismissed" | "unsupported" | "error";
