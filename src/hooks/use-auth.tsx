@@ -198,7 +198,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut: async () => {
       // One browser, two accounts: the next one must not get this one's pushes.
       // Needs the session (RLS), so it runs first; time-boxed, never blocks.
-      await unsubscribeOnSignOut();
+      // A demo session never subscribed; unsubscribing it would kill the real user's browser subscription.
+      const { data: { session: current } } = await supabase.auth.getSession();
+      if (!current?.user?.is_anonymous) await unsubscribeOnSignOut();
       await supabase.auth.signOut();
       clearProfileAndRoles();
     },

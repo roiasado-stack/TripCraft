@@ -61,8 +61,7 @@ export function notificationPermission(): NotificationPermission | "unavailable"
 
 async function registration(): Promise<ServiceWorkerRegistration | null> {
   if (!("serviceWorker" in navigator)) return null;
-  const existing = await navigator.serviceWorker.getRegistration();
-  if (existing) return existing;
+  // register() is idempotent; ready waits for a worker that is still installing, or subscribe() throws.
   await navigator.serviceWorker.register("/sw.js");
   return navigator.serviceWorker.ready;
 }

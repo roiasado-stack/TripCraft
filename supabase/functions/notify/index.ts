@@ -3,13 +3,18 @@
  *
  * Two callers:
  *   1. The database (migration 026). The triggers on trip_updates and
- *      trip_members call this through pg_net with the shared secret in
- *      `x-notify-secret` and a body of `{ type: "update" | "join", id }`.
+ *      trip_members call this through pg_net with a body of
+ *      `{ type: "update" | "join", id, ts, nonce }` and
+ *      `x-notify-signature` = hex HMAC-SHA256(raw body, NOTIFY_SECRET). The
+ *      secret itself is never sent (pg_net's queue is readable by clients, see
+ *      026). A bad signature, a ts more than 5 minutes off, or a nonce seen
+ *      before → 401.
  *      Who gets the push is decided in SQL by push_recipients_for_update /
  *      push_recipients_for_join (service role only, covered by
  *      supabase/tests/09_web_push.sql) — this file never widens that list.
  *   2. A signed-in user, `{ type: "test" }` with their JWT: a test push to
- *      their own devices only. Demo (anonymous) users are refused.
+ *      their own devices only, one per 30 seconds (429 otherwise). Demo
+ *      (anonymous) users are refused.
  *
  * The payload is `{ title, body, url }` (Hebrew). Web push encrypts it end to
  * end, so the push services (Google, Apple, Mozilla, Microsoft) can't read it.
@@ -48,18 +53,23 @@ function clip(s: string, max = MAX_BODY): string {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
-/** Constant-time comparison of the shared secret. */
-async function sameSecret(given: string, expected: string): Promise<boolean> {
+/** How far the database's ts may be from now. */
+const MAX_SKEW_SECONDS = 5 * 60;
+
+/** HMAC-SHA256(raw, secret) == hex signature; crypto.subtle.verify compares in constant time. */
+async function validSignature(raw: string, signatureHex: string, secret: string): Promise<boolean> {
+  if (!/^[0-9a-f]{64}$/.test(signatureHex)) return false;
   const enc = new TextEncoder();
-  const [a, b] = await Promise.all([
-    crypto.subtle.digest("SHA-256", enc.encode(given)),
-    crypto.subtle.digest("SHA-256", enc.encode(expected)),
-  ]);
-  const x = new Uint8Array(a);
-  const y = new Uint8Array(b);
-  let diff = 0;
-  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
-  return diff === 0;
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  const sig = new Uint8Array(signatureHex.match(/../g)!.map((h) => parseInt(h, 16)));
+  return crypto.subtle.verify("HMAC", key, sig, enc.encode(raw));
+}
+
+/** Stamps `key` unless it was stamped within `window` (push_throttle, migration 026). */
+async function throttleClaim(admin: SupabaseClient, key: string, window: string): Promise<boolean> {
+  const { data, error } = await admin.rpc("push_throttle_claim", { p_key: key, p_window: window });
+  if (error) throw new Error(`push_throttle_claim: ${error.message}`);
+  return data === true;
 }
 
 async function updatePayload(admin: SupabaseClient, updateId: string): Promise<Payload | null> {
@@ -114,7 +124,8 @@ async function send(admin: SupabaseClient, subs: Subscription[], payload: Payloa
         await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           text,
-          { TTL: TTL_SECONDS },
+          // A push service that accepts the connection and then stalls must not hold the batch past the wall-clock limit.
+          { TTL: TTL_SECONDS, timeout: 8000 },
         );
         ok.push(s.id);
       } catch (e) {
@@ -148,9 +159,11 @@ Deno.serve(async (req) => {
     return json(500, { error: "not_configured" });
   }
 
-  let body: { type?: unknown; id?: unknown };
+  // Raw text first: the signature covers these exact bytes.
+  const raw = await req.text();
+  let body: { type?: unknown; id?: unknown; ts?: unknown; nonce?: unknown };
   try {
-    body = await req.json();
+    body = JSON.parse(raw);
   } catch {
     return json(400, { error: "bad_json" });
   }
@@ -172,6 +185,7 @@ Deno.serve(async (req) => {
       const user = auth?.user;
       if (!user) return json(401, { error: "unauthorized" });
       if (user.is_anonymous) return json(403, { error: "anonymous_not_allowed" });
+      if (!(await throttleClaim(admin, `test:${user.id}`, "30 seconds"))) return json(429, { error: "too_soon" });
       const { data: subs } = await admin
         .from("push_subscriptions")
         .select("id, endpoint, p256dh, auth")
@@ -186,13 +200,18 @@ Deno.serve(async (req) => {
       return json(200, { ok: true, ...result });
     }
 
-    // From the database: the shared secret, or nothing happens.
-    if (!(await sameSecret(req.headers.get("x-notify-secret") ?? "", secret))) {
+    // From the database: a valid, fresh, never-seen signed call, or nothing happens.
+    if (!(await validSignature(raw, req.headers.get("x-notify-signature") ?? "", secret))) {
       return json(401, { error: "unauthorized" });
     }
-    if ((type !== "update" && type !== "join") || typeof body.id !== "string") {
+    if (
+      (type !== "update" && type !== "join") || typeof body.id !== "string" ||
+      typeof body.ts !== "number" || typeof body.nonce !== "string"
+    ) {
       return json(400, { error: "bad_request" });
     }
+    if (Math.abs(Date.now() / 1000 - body.ts) > MAX_SKEW_SECONDS) return json(401, { error: "stale" });
+    if (!(await throttleClaim(admin, `nonce:${body.nonce}`, "1 day"))) return json(401, { error: "replayed" });
 
     const userIds = await recipients(admin, type, body.id);
     if (!userIds.length) return json(200, { ok: true, sent: 0, removed: 0, failed: 0 });

@@ -20,7 +20,15 @@ SELECT vault.create_secret('TEST-NOTIFY-SECRET', 'notify_secret');
 -- Calls queued for one row id (pg_net's queue; nothing is sent from a rolled-back transaction).
 CREATE FUNCTION pg_temp.queued(p_type TEXT, p_id UUID) RETURNS INT LANGUAGE sql AS $$
   SELECT count(*)::int FROM net.http_request_queue q
-  WHERE convert_from(q.body, 'UTF8')::jsonb = jsonb_build_object('type', p_type, 'id', p_id)
+  WHERE convert_from(q.body, 'UTF8')::jsonb @> jsonb_build_object('type', p_type, 'id', p_id)
+$$;
+-- Calls of one type queued after a queue id (a marker taken before the action).
+CREATE FUNCTION pg_temp.queued_since(p_type TEXT, p_marker BIGINT) RETURNS INT LANGUAGE sql AS $$
+  SELECT count(*)::int FROM net.http_request_queue q
+  WHERE q.id > p_marker AND convert_from(q.body, 'UTF8')::jsonb ->> 'type' = p_type
+$$;
+CREATE FUNCTION pg_temp.queue_marker() RETURNS BIGINT LANGUAGE sql AS $$
+  SELECT coalesce(max(id), 0) FROM net.http_request_queue
 $$;
 CREATE FUNCTION pg_temp.update_recipients(p_id UUID) RETURNS TEXT LANGUAGE sql AS $$
   SELECT coalesce(string_agg(i.k, ',' ORDER BY i.k), '')
@@ -116,7 +124,7 @@ SELECT pg_temp.check('recipient functions: not executable by authenticated or an
   AND NOT has_function_privilege('authenticated', 'public.push_recipients_for_join(uuid)', 'EXECUTE')
   AND NOT has_function_privilege('anon', 'public.push_recipients_for_update(uuid)', 'EXECUTE')
   AND NOT has_function_privilege('anon', 'public.push_recipients_for_join(uuid)', 'EXECUTE')
-  AND NOT has_function_privilege('authenticated', 'public.queue_push(text, uuid)', 'EXECUTE'));
+  AND NOT has_function_privilege('authenticated', 'public.queue_push(text, uuid, text, interval)', 'EXECUTE'));
 SELECT pg_temp.check('recipient functions: service_role can execute them',
   has_function_privilege('service_role', 'public.push_recipients_for_update(uuid)', 'EXECUTE')
   AND has_function_privilege('service_role', 'public.push_recipients_for_join(uuid)', 'EXECUTE'));
@@ -124,7 +132,7 @@ SELECT pg_temp.login(pg_temp.id('owner'));
 SELECT pg_temp.check('recipient functions: the owner calling one is refused',
   pg_temp.try($$SELECT public.push_recipients_for_update(gen_random_uuid())$$) = -1);
 SELECT pg_temp.check('queue_push: a client can''t queue a call',
-  pg_temp.try($$SELECT public.queue_push('update', gen_random_uuid())$$) = -1);
+  pg_temp.try($$SELECT public.queue_push('update', gen_random_uuid(), 'k', interval '1 second')$$) = -1);
 RESET ROLE;
 
 -- 2. A trip update: the other members only ------------------------------------------------------
@@ -134,10 +142,29 @@ INSERT INTO public.trip_updates (id, trip_id, title) VALUES (pg_temp.id('upd1'),
 RESET ROLE;
 SELECT pg_temp.check('update: the owner and active members get it — not the author, pending, removed or a stranger',
   pg_temp.update_recipients(pg_temp.id('upd1')) = 'editor,owner,viewer');
-SELECT pg_temp.check('update: the insert queued one call to notify, with the secret',
-  pg_temp.queued('update', pg_temp.id('upd1')) = 1
-  AND (SELECT headers ->> 'x-notify-secret' FROM net.http_request_queue q
-       WHERE convert_from(q.body, 'UTF8')::jsonb ->> 'id' = pg_temp.id('upd1')::text) = 'TEST-NOTIFY-SECRET');
+SELECT pg_temp.check('update: the insert queued one call to notify',
+  pg_temp.queued('update', pg_temp.id('upd1')) = 1);
+SELECT pg_temp.check('queued call: signed with HMAC-SHA256 of the exact body, with a ts and a nonce',
+  (SELECT q.headers ->> 'x-notify-signature'
+          = encode(extensions.hmac(convert_from(q.body, 'UTF8'), 'TEST-NOTIFY-SECRET', 'sha256'), 'hex')
+          AND convert_from(q.body, 'UTF8')::jsonb ?& ARRAY['ts', 'nonce']
+   FROM net.http_request_queue q
+   WHERE convert_from(q.body, 'UTF8')::jsonb ->> 'id' = pg_temp.id('upd1')::text));
+-- pg_net's own grants let clients read net.http_request_queue, and postgres can't
+-- revoke them (026 header) — so the queue must never hold the secret.
+SELECT pg_temp.check('queued call: the secret itself is nowhere in the queue',
+  NOT EXISTS (SELECT 1 FROM net.http_request_queue q
+              WHERE q.headers::text LIKE '%TEST-NOTIFY-SECRET%'
+                 OR convert_from(q.body, 'UTF8') LIKE '%TEST-NOTIFY-SECRET%'));
+
+-- Update throttle: one call per author per trip per minute.
+CREATE TEMP TABLE marker ON COMMIT DROP AS SELECT pg_temp.queue_marker() AS v;
+SELECT pg_temp.login(pg_temp.id('editor'));
+INSERT INTO public.trip_updates (trip_id, title) VALUES (pg_temp.id('trip'), 'first');
+INSERT INTO public.trip_updates (trip_id, title) VALUES (pg_temp.id('trip'), 'second');
+RESET ROLE;
+SELECT pg_temp.check('update throttle: two updates back to back by the same author queue 1 call',
+  pg_temp.queued_since('update', (SELECT v FROM marker)) = 1);
 
 INSERT INTO public.trip_notification_mutes (user_id, trip_id) VALUES (pg_temp.id('viewer'), pg_temp.id('trip'));
 SELECT pg_temp.check('update: a member who muted the trip is left out',
@@ -238,7 +265,66 @@ SELECT pg_temp.check('no members: nothing at all was queued for the lone trip',
                 SELECT id::text FROM public.trip_updates WHERE trip_id = pg_temp.id('lone_trip')
                 UNION ALL SELECT id::text FROM public.trip_members WHERE trip_id = pg_temp.id('lone_trip'))));
 
--- 4. Without the Vault secrets (a local DB) the triggers do nothing and never fail ---------------
+-- Join throttle: leave and re-join through the same approval link 3× → at most one push.
+INSERT INTO auth.users (id, email, aud, role, is_anonymous) VALUES
+  ('00000000-0000-0000-0000-0000000000b4', 'rejoiner@test.local', 'authenticated', 'authenticated', false);
+INSERT INTO ids VALUES ('rejoiner', '00000000-0000-0000-0000-0000000000b4');
+UPDATE marker SET v = pg_temp.queue_marker();
+SELECT pg_temp.login(pg_temp.id('rejoiner'));
+SELECT public.accept_trip_invite('push-approval-token');
+DELETE FROM public.trip_members WHERE user_id = pg_temp.id('rejoiner');
+SELECT public.accept_trip_invite('push-approval-token');
+DELETE FROM public.trip_members WHERE user_id = pg_temp.id('rejoiner');
+SELECT public.accept_trip_invite('push-approval-token');
+RESET ROLE;
+SELECT pg_temp.check('join throttle: the re-joiner is pending again after the third join',
+  (SELECT status FROM public.trip_members WHERE user_id = pg_temp.id('rejoiner')) = 'pending');
+SELECT pg_temp.check('join throttle: leave + re-join 3× queues one join call, not three',
+  pg_temp.queued_since('join', (SELECT v FROM marker)) = 1);
+
+-- No client can read the throttle.
+SELECT pg_temp.login(pg_temp.id('rejoiner'));
+SELECT pg_temp.check('push_throttle: a client can''t read it',
+  pg_temp.try($$SELECT * FROM public.push_throttle$$) = -1);
+SELECT pg_temp.check('push_throttle_claim: a client can''t call it',
+  pg_temp.try($$SELECT public.push_throttle_claim('join:x', interval '1 second')$$) = -1);
+RESET ROLE;
+
+-- 4. A shared phone: claim_push_subscription hands the device to whoever claims it ------------
+SELECT pg_temp.login(pg_temp.id('viewer'));
+SELECT pg_temp.check('claim: user A registers a device',
+  public.claim_push_subscription('https://fcm.googleapis.com/fcm/send/shared-phone', 'KEY-A', 'AUTH-A', 'phone') IS NOT NULL);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('claim: user B claims the same endpoint',
+  public.claim_push_subscription('https://fcm.googleapis.com/fcm/send/shared-phone', 'KEY-B', 'AUTH-B') IS NOT NULL);
+SELECT pg_temp.check('claim: B now sees the device, with B''s keys',
+  (SELECT p256dh FROM public.push_subscriptions
+   WHERE endpoint = 'https://fcm.googleapis.com/fcm/send/shared-phone') = 'KEY-B');
+RESET ROLE;
+SELECT pg_temp.check('claim: one row for the endpoint, owned by B',
+  (SELECT array_agg(user_id) FROM public.push_subscriptions
+   WHERE endpoint = 'https://fcm.googleapis.com/fcm/send/shared-phone') = ARRAY[pg_temp.id('editor')]);
+SELECT pg_temp.login(pg_temp.id('viewer'));
+SELECT pg_temp.check('claim: A no longer sees it',
+  NOT EXISTS (SELECT 1 FROM public.push_subscriptions
+              WHERE endpoint = 'https://fcm.googleapis.com/fcm/send/shared-phone'));
+SELECT pg_temp.check('claim: an endpoint outside the push services is refused',
+  pg_temp.try($$SELECT public.claim_push_subscription('https://evil.example.com/x', 'k', 'a')$$) = -1);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('demo'), true);
+SELECT pg_temp.check('claim: a demo user is refused',
+  pg_temp.try($$SELECT public.claim_push_subscription('https://fcm.googleapis.com/fcm/send/shared-phone', 'k', 'a')$$) = -1);
+RESET ROLE;
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('claim: anon can''t call it',
+  pg_temp.try($$SELECT public.claim_push_subscription('https://fcm.googleapis.com/fcm/send/anon', 'k', 'a')$$) = -1);
+RESET ROLE;
+SELECT pg_temp.check('claim: the demo and anon attempts left the device with B',
+  (SELECT user_id FROM public.push_subscriptions
+   WHERE endpoint = 'https://fcm.googleapis.com/fcm/send/shared-phone') = pg_temp.id('editor'));
+
+-- 5. Without the Vault secrets (a local DB) the triggers do nothing and never fail ---------------
 DELETE FROM vault.secrets WHERE name IN ('notify_url', 'notify_secret');
 INSERT INTO ids VALUES ('upd4', '20000000-0000-0000-0000-000000000004');
 SELECT pg_temp.login(pg_temp.id('participant'));
@@ -250,3 +336,9 @@ INSERT INTO public.trip_updates (id, trip_id, title, created_by)
   VALUES (pg_temp.id('upd4'), pg_temp.id('trip'), 'x', pg_temp.id('participant'));
 SELECT pg_temp.check('no vault secrets: nothing queued',
   pg_temp.queued('update', pg_temp.id('upd4')) = 0);
+SELECT pg_temp.login(pg_temp.id('joiner2'));
+INSERT INTO public.trip_updates (trip_id, title) VALUES (pg_temp.id('trip'), 'unconfigured');
+RESET ROLE;
+SELECT pg_temp.check('no vault secrets: the throttle isn''t stamped, so the first real push still goes out',
+  NOT EXISTS (SELECT 1 FROM public.push_throttle
+              WHERE key = format('update:%s:%s', pg_temp.id('trip'), pg_temp.id('joiner2'))));
