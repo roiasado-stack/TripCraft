@@ -25,7 +25,8 @@
  *   supabase functions deploy notify --no-verify-jwt
  *   supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:...
  *   supabase secrets set NOTIFY_SECRET=<the same value as the Vault secret 'notify_secret'>
- * Keys: `npx web-push generate-vapid-keys` (the public key also goes to the client).
+ * Keys: a P-256 key pair in base64url, e.g. `npx web-push generate-vapid-keys`; the
+ * public key is also the client's VITE_VAPID_PUBLIC_KEY.
  */
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";

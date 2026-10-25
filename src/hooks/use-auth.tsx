@@ -140,6 +140,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(({ data: { session: current } }) => {
       if (!active) return;
+      // Opened with no session (it expired while the app was closed): whoever subscribed here is gone.
+      if (!current) void dropBrowserSubscription();
       track(current);
       setSession(current);
       if (current?.user) loadProfileAndRoles(current.user.id);

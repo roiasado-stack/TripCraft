@@ -10,8 +10,9 @@
 --                             with the server's VAPID key, so it must never be an
 --                             arbitrary URL a user typed in.
 --    claim_push_subscription  what the client calls to register a device: upserts by
---                             endpoint and hands it to the caller, so a phone shared
---                             by two accounts follows whoever turned pushes on last.
+--                             endpoint; another account's endpoint moves to the caller
+--                             only with the same keys (the same browser), otherwise
+--                             42501 endpoint_taken.
 -- 2. notification_settings    one row per user: trip_updates / join_requests (default on).
 -- 3. trip_notification_mutes  mute one trip; only a trip the user can see.
 -- 4. push_recipients_for_update(update_id) / push_recipients_for_join(member_id)

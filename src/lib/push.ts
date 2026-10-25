@@ -76,7 +76,8 @@ async function browserSubscription(): Promise<PushSubscription | null> {
  * Saves this device for the signed-in user. Not a plain upsert: an endpoint is
  * per browser profile, so on a shared device the row may still belong to the
  * previous account (invisible under RLS, and UNIQUE). claim_push_subscription
- * (SECURITY DEFINER) upserts by endpoint and hands the row to the caller.
+ * (SECURITY DEFINER) upserts by endpoint; another account's row moves to the
+ * caller only when this browser presents the same keys (else 42501 endpoint_taken).
  */
 async function claimRow(sub: PushSubscription) {
   const json = sub.toJSON();
