@@ -386,6 +386,11 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# The database calls notify through pg_net without a user JWT; the function
+# checks the shared secret (or, for a test push, the user's JWT) itself.
+[functions.notify]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

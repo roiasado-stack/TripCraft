@@ -11,6 +11,7 @@ import { TripHeader } from "@/components/TripHeader";
 import { TripUpdates } from "@/components/TripUpdates";
 import { PhotoAlbumCard } from "@/components/PhotoAlbumCard";
 import { GuideCard } from "@/components/GuideCard";
+import { TripMuteRow } from "@/components/TripMuteRow";
 import { GroupedList, ListRow, Spinner } from "@/components/ui";
 import { formatDateTimeHeb, itineraryCategory } from "@/lib/trip-options";
 import {
@@ -365,7 +366,8 @@ export default function HomeTab() {
         </GroupedList>
       )}
 
-      <div className="mt-6 overflow-hidden rounded-2xl bg-card">
+      <div className="mt-6 divide-y divide-separator overflow-hidden rounded-2xl bg-card">
+        <TripMuteRow tripId={trip.id} />
         <button
           type="button"
           onClick={duplicate}
