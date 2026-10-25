@@ -8,7 +8,7 @@ Supabase for auth/DB/storage. Setup steps live in README.md — don't duplicate 
 ```
 npm run dev        # Vite on :5173 (preview via .claude/launch.json, name "tripcraft")
 npm run check      # the gate: typecheck · lint · rules · test · build — run it after edits
-npm run test:db    # RLS / who-sees-what tests against the LOCAL Docker DB (after any supabase/ change)
+npm run test:db    # RLS / who-sees-what tests in a throwaway DB built from schema.sql + migrations (local Docker; after any supabase/ change)
 npm run typecheck  # tsc -b --noEmit
 npm run lint       # ESLint, bug rules only (hooks, unreachable code…) — no style rules
 npm run rules      # scripts/check-rules.mjs: this file's rules (RTL, hex, imports, migrations)
