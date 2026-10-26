@@ -83,11 +83,14 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
   useEffect(() => {
     if (!en) return;
     const root = document.documentElement;
+    const title = document.title;
     root.lang = "en";
     root.dir = "ltr";
+    document.title = en.pageTitle;
     return () => {
       root.lang = "he";
       root.dir = "rtl";
+      document.title = title;
     };
   }, [en]);
 

@@ -14,6 +14,7 @@ export function isEnglishShare(search: string): boolean {
 }
 
 export const SHARE_EN = {
+  pageTitle: "TripCraft · Your trip",
   loading: "Loading trip…",
   notFoundTitle: "This trip isn't available",
   notFoundBody: "The link may be wrong, or sharing was turned off.",
