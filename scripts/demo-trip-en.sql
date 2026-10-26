@@ -3,7 +3,7 @@
 -- shows it in English at /share/<slug>?lang=en.
 --
 -- How to run: paste the whole file into the SQL Editor (or psql) and run it.
--- Change the email on the first line only; it must be an ACTIVE agent (its
+-- Change the email in v_email below only; it must be an ACTIVE agent (its
 -- agency branding shows on the page). The last statement returns the link.
 --
 -- Safe to run again: the trip has a fixed id derived from the owner, so a rerun
@@ -14,21 +14,20 @@
 --
 -- Remove it:  DELETE FROM trips WHERE id = md5('tripcraft-demo-en:' || '<owner uuid>')::uuid;
 
-SELECT set_config('demo.email', 'Tripcraft26@gmail.com', false);
-
 DO $$
 DECLARE
+  v_email TEXT := 'Tripcraft26@gmail.com';
   v_owner UUID;
   v_trip UUID;
   d0 DATE := current_date + 21;  -- arrival day; the trip is d0 .. d0 + 4
 BEGIN
-  SELECT u.id INTO v_owner FROM auth.users u WHERE lower(u.email) = lower(current_setting('demo.email'));
+  SELECT u.id INTO v_owner FROM auth.users u WHERE lower(u.email) = lower(v_email);
   IF v_owner IS NULL THEN
-    RAISE EXCEPTION 'no user with email %', current_setting('demo.email');
+    RAISE EXCEPTION 'no user with email %', v_email;
   END IF;
   IF NOT (public.has_role(v_owner, 'agent')
           AND EXISTS (SELECT 1 FROM agent_accounts a WHERE a.user_id = v_owner AND a.status = 'active')) THEN
-    RAISE EXCEPTION '% is not an active agent', current_setting('demo.email');
+    RAISE EXCEPTION '% is not an active agent', v_email;
   END IF;
   v_trip := md5('tripcraft-demo-en:' || v_owner)::uuid;
 
@@ -47,6 +46,10 @@ BEGIN
     is_shared = true, is_showcase = false, image_url = EXCLUDED.image_url,
     photos_album_url = EXCLUDED.photos_album_url, notes = EXCLUDED.notes
   WHERE trips.user_id = v_owner;
+  -- Belt and braces: never touch the rows of a trip someone else owns.
+  IF NOT EXISTS (SELECT 1 FROM trips WHERE id = v_trip AND user_id = v_owner) THEN
+    RAISE EXCEPTION 'trip % belongs to another user', v_trip;
+  END IF;
 
   DELETE FROM flights WHERE trip_id = v_trip;
   DELETE FROM stays WHERE trip_id = v_trip;
@@ -95,9 +98,8 @@ BEGIN
     (v_trip, 'Welcome to Rome!', 'Everything for the trip is on this page. Message us any time.', 'info', false);
 END $$;
 
--- The link to send (append nothing: ?lang=en is already on it).
-SELECT 'https://tripcraft-lac.vercel.app/share/' || t.share_slug || '?lang=en' AS english_link,
+-- The link to send (?lang=en is already on it). One row per agent that has the demo.
+SELECT u.email, 'https://tripcraft-lac.vercel.app/share/' || t.share_slug || '?lang=en' AS english_link,
        t.start_date, t.end_date
 FROM trips t
-JOIN auth.users u ON t.id = md5('tripcraft-demo-en:' || u.id)::uuid
-WHERE lower(u.email) = lower(current_setting('demo.email'));
+JOIN auth.users u ON t.id = md5('tripcraft-demo-en:' || u.id)::uuid;
