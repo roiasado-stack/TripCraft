@@ -1,17 +1,19 @@
 import { ExternalLink, MapPin, Navigation } from "lucide-react";
 import { directionsUrl, isSafeHttpUrl } from "@/lib/maps";
 import { cn } from "@/lib/utils";
+import { useShareEnglish } from "@/hooks/use-share-english";
 
 /** Small inline "open in maps" affordance. Renders nothing without a target. */
 export function MapLink({
   url,
-  label = "מפה",
+  label,
   className,
 }: {
   url: string | null | undefined;
   label?: string;
   className?: string;
 }) {
+  const en = useShareEnglish();
   if (!url || !isSafeHttpUrl(url)) return null;
   return (
     <a
@@ -26,7 +28,7 @@ export function MapLink({
       )}
     >
       <MapPin className="size-3.5" />
-      {label}
+      {label ?? en?.map ?? "מפה"}
     </a>
   );
 }

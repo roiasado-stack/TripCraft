@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Plane, Wand2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +17,15 @@ import { AGENCY_LOGO_BUCKET, isAgencyLogoPath, safeAgencyColor } from "@/lib/age
 import { cn } from "@/lib/utils";
 import { resolveMapUrl } from "@/lib/maps";
 import { LegalLinks } from "@/routes/LegalPages";
+import { ShareEnglishContext } from "@/hooks/use-share-english";
+import {
+  formatDateEn,
+  formatDateTimeEn,
+  formatDayEn,
+  isEnglishShare,
+  SHARE_EN,
+  SUGGESTION_KINDS_EN,
+} from "@/lib/share-english";
 import {
   daysBetween,
   formatDateTimeHeb,
@@ -28,6 +37,18 @@ import {
 } from "@/lib/trip-options";
 
 export default function SharePage() {
+  // `?lang=en` shows this page in English for agencies abroad (share-english.ts).
+  const en = isEnglishShare(useLocation().search) ? SHARE_EN : null;
+  return (
+    <ShareEnglishContext.Provider value={en}>
+      <div lang={en ? "en" : undefined} dir={en ? "ltr" : undefined}>
+        <SharedTrip en={en} />
+      </div>
+    </ShareEnglishContext.Provider>
+  );
+}
+
+function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
   const { slug } = useParams();
   const [shared, setShared] = useState<SharedTripPayload | null>(null);
   const [trying, setTrying] = useState(false);
@@ -57,6 +78,24 @@ export default function SharePage() {
   };
   const [state, setState] = useState<"loading" | "ready" | "notfound">("loading");
 
+  // Toasts and overlays render outside this page's wrapper, so the document
+  // itself turns English while the page is open, and back to Hebrew after.
+  useEffect(() => {
+    if (!en) return;
+    const root = document.documentElement;
+    const title = document.title;
+    root.lang = "en";
+    root.dir = "ltr";
+    document.title = en.pageTitle;
+    return () => {
+      root.lang = "he";
+      root.dir = "rtl";
+      document.title = title;
+    };
+  }, [en]);
+
+  const fmtDate = en ? formatDateEn : formatHeb;
+
   useEffect(() => {
     (async () => {
       if (!slug) return;
@@ -72,13 +111,13 @@ export default function SharePage() {
     })();
   }, [slug]);
 
-  if (state === "loading") return <FullSpinner label="טוען טיול…" />;
+  if (state === "loading") return <FullSpinner label={en?.loading ?? "טוען טיול…"} />;
   if (state === "notfound" || !shared)
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
         <div className="text-5xl">🔒</div>
-        <h1 className="type-title">הטיול לא זמין</h1>
-        <p className="type-footnote text-muted-foreground">ייתכן שהקישור שגוי או שהשיתוף בוטל.</p>
+        <h1 className="type-title">{en?.notFoundTitle ?? "הטיול לא זמין"}</h1>
+        <p className="type-footnote text-muted-foreground">{en?.notFoundBody ?? "ייתכן שהקישור שגוי או שהשיתוף בוטל."}</p>
       </div>
     );
 
@@ -113,12 +152,12 @@ export default function SharePage() {
           {agencyLogo && (
             <img
               src={agencyLogo}
-              alt={agencyName ? `הלוגו של ${agencyName}` : "הלוגו של הסוכנות"}
+              alt={en?.agencyLogo(agencyName) ?? (agencyName ? `הלוגו של ${agencyName}` : "הלוגו של הסוכנות")}
               className="size-12 shrink-0 rounded-xl object-contain"
             />
           )}
           <div className="min-w-0 flex-1">
-            <div className="type-footnote text-muted-foreground">הטיול שלכם מאת</div>
+            <div className="type-footnote text-muted-foreground">{en?.tripBy ?? "הטיול שלכם מאת"}</div>
             {agencyName && (
               <div className="type-headline truncate [unicode-bidi:plaintext]">{agencyName}</div>
             )}
@@ -152,14 +191,16 @@ export default function SharePage() {
         </p>
         {trip.start_date && (
           <p className="type-footnote mt-2 font-semibold text-white">
-            {formatHeb(trip.start_date)}
-            {trip.end_date ? ` – ${formatHeb(trip.end_date)}` : ""} {duration ? `· ${duration} ימים` : ""}
+            {fmtDate(trip.start_date)}
+            {trip.end_date ? ` – ${fmtDate(trip.end_date)}` : ""}{" "}
+            {duration ? `· ${en?.days(duration) ?? `${duration} ימים`}` : ""}
           </p>
         )}
         </div>
       </div>
 
-      {trip.is_showcase && (
+      {/* "Try it yourself" opens the full app, which is Hebrew only. */}
+      {trip.is_showcase && !en && (
         <div className="mt-4 flex flex-col gap-2 rounded-2xl bg-card p-5 text-center text-card-foreground">
           <div className="type-headline">רוצים לנסות בעצמכם?</div>
           <p className="type-footnote text-muted-foreground">
@@ -181,7 +222,7 @@ export default function SharePage() {
 
       {/* flights */}
       {flights.length > 0 && (
-        <Section title="טיסות">
+        <Section title={en?.flights ?? "טיסות"}>
           <GroupedList>
             {flights.map((f) => (
               <div key={f.id} className="flex items-center gap-3 px-4 py-3">
@@ -190,10 +231,10 @@ export default function SharePage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   {/* Route reads left-to-right like a boarding pass. */}
-                  <div dir="ltr" className="type-headline truncate text-end">
+                  <div dir="ltr" className={cn("type-headline truncate", en ? "text-start" : "text-end")}>
                     <bdi>{f.from_airport || "—"}</bdi> → <bdi>{f.to_airport || "—"}</bdi>
                   </div>
-                  {f.depart_at && <div className="type-footnote text-muted-foreground">{formatDateTimeHeb(f.depart_at)}</div>}
+                  {f.depart_at && <div className="type-footnote text-muted-foreground">{(en ? formatDateTimeEn : formatDateTimeHeb)(f.depart_at)}</div>}
                 </div>
                 {(f.airline || f.flight_number) && (
                   <span dir="auto" className="type-footnote max-w-[40%] shrink-0 truncate text-muted-foreground">
@@ -208,7 +249,7 @@ export default function SharePage() {
 
       {/* stays */}
       {stays.length > 0 && (
-        <Section title="לינה">
+        <Section title={en?.stays ?? "לינה"}>
           <GroupedList>
             {stays.map((st) => (
               <div key={st.id} className="flex items-start gap-3 px-4 py-3">
@@ -223,7 +264,7 @@ export default function SharePage() {
                   )}
                   {(st.check_in || st.check_out) && (
                     <div className="type-footnote text-muted-foreground">
-                      {[st.check_in, st.check_out].filter(Boolean).map((d) => formatHeb(d)).join(" – ")}
+                      {[st.check_in, st.check_out].filter(Boolean).map((d) => fmtDate(d)).join(" – ")}
                     </div>
                   )}
                 </div>
@@ -236,7 +277,7 @@ export default function SharePage() {
 
       {/* itinerary */}
       {sortedDays.length > 0 && itinerary.length > 0 && (
-        <Section title="מסלול">
+        <Section title={en?.itinerary ?? "מסלול"}>
           <div className="flex flex-col gap-5">
             {sortedDays.map((day, idx) => {
               const dayItems = itinerary.filter((i) => i.day_date === day);
@@ -244,8 +285,8 @@ export default function SharePage() {
               return (
                 <div key={day}>
                   <div className="mb-1.5 flex items-baseline gap-2 px-1">
-                    <span className="type-footnote font-semibold text-primary">יום {idx + 1}</span>
-                    <h3 className="type-headline">{formatDayHeb(day)}</h3>
+                    <span className="type-footnote font-semibold text-primary">{en?.day(idx + 1) ?? `יום ${idx + 1}`}</span>
+                    <h3 className="type-headline">{(en ? formatDayEn : formatDayHeb)(day)}</h3>
                   </div>
                   <GroupedList>
                     {dayItems.map((it) => {
@@ -282,7 +323,7 @@ export default function SharePage() {
 
       {/* suggestions */}
       {suggestions.length > 0 && (
-        <Section title="מומלצים">
+        <Section title={en?.suggestions ?? "מומלצים"}>
           <GroupedList>
             {suggestions.map((sg) => {
               const kind = SUGGESTION_KINDS.find((k) => k.value === sg.kind);
@@ -295,7 +336,7 @@ export default function SharePage() {
                     <div className="type-headline [overflow-wrap:anywhere]">
                       <bdi>{sg.title}</bdi>
                     </div>
-                    {kind && <div className="type-footnote text-muted-foreground">{kind.label}</div>}
+                    {kind && <div className="type-footnote text-muted-foreground">{en ? SUGGESTION_KINDS_EN[kind.value] : kind.label}</div>}
                     {sg.description && (
                       <p className="type-footnote mt-0.5 text-muted-foreground [overflow-wrap:anywhere]">{sg.description}</p>
                     )}
@@ -312,10 +353,10 @@ export default function SharePage() {
 
       {/* On an agent's page TripCraft stays a quiet credit, not an invitation. */}
       {isAgencyPage ? (
-        <p className="mt-8 text-center text-xs text-muted-foreground">נבנה עם TripCraft</p>
+        <p className="mt-8 text-center text-xs text-muted-foreground">{en?.builtWith ?? "נבנה עם"} TripCraft</p>
       ) : (
         <p className="mt-8 text-center text-xs text-muted-foreground">
-          נבנה עם <span className="font-bold">TripCraft</span> 🌴
+          {en?.builtWith ?? "נבנה עם"} <span className="font-bold">TripCraft</span> 🌴
         </p>
       )}
       <LegalLinks className="mt-2" />

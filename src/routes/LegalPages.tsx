@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import { LEGAL, isPlaceholder } from "@/lib/legal";
 import { cn } from "@/lib/utils";
+import { useShareEnglish } from "@/hooks/use-share-english";
 
 /*
  * Public legal pages: /terms, /privacy, /credits, /accessibility.
@@ -65,11 +66,13 @@ function LegalLayout({ title, children }: { title: string; children: ReactNode }
 
 /** Footer row linking every legal page — used on the auth, settings and share pages. */
 export function LegalLinks({ className }: { className?: string }) {
+  // On the English share page the labels are English; the pages stay Hebrew.
+  const en = useShareEnglish()?.legal;
   const links = [
-    { to: "/terms", label: "תנאי שימוש" },
-    { to: "/privacy", label: "מדיניות פרטיות" },
-    { to: "/accessibility", label: "הצהרת נגישות" },
-    { to: "/credits", label: "קרדיטים ורישיונות" },
+    { to: "/terms", label: en?.terms ?? "תנאי שימוש" },
+    { to: "/privacy", label: en?.privacy ?? "מדיניות פרטיות" },
+    { to: "/accessibility", label: en?.accessibility ?? "הצהרת נגישות" },
+    { to: "/credits", label: en?.credits ?? "קרדיטים ורישיונות" },
   ];
   return (
     <nav className={cn("flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground", className)}>
