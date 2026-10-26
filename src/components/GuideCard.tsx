@@ -2,6 +2,7 @@ import { MessageCircle, UserRound } from "lucide-react";
 import type { Trip } from "@/lib/types";
 import { whatsappUrl } from "@/lib/maps";
 import { cn } from "@/lib/utils";
+import { useShareEnglish } from "@/hooks/use-share-english";
 
 /** Guide contact for an organized trip — renders nothing without a name. */
 export function GuideCard({
@@ -11,6 +12,7 @@ export function GuideCard({
   trip: Pick<Trip, "guide_name" | "guide_phone">;
   className?: string;
 }) {
+  const en = useShareEnglish();
   if (!trip.guide_name) return null;
   const wa = whatsappUrl(trip.guide_phone);
 
@@ -20,7 +22,7 @@ export function GuideCard({
         <UserRound className="size-5" />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="type-footnote text-muted-foreground">מדריך הטיול</div>
+        <div className="type-footnote text-muted-foreground">{en?.guide ?? "מדריך הטיול"}</div>
         {/* The guide's full name matters more than one line — let it wrap. */}
         <div className="type-headline line-clamp-2 [overflow-wrap:anywhere]">{trip.guide_name}</div>
       </div>
@@ -29,7 +31,7 @@ export function GuideCard({
           href={wa}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={`וואטסאפ ל${trip.guide_name}`}
+          aria-label={en?.whatsappTo(trip.guide_name) ?? `וואטסאפ ל${trip.guide_name}`}
           className="pressable grid size-11 shrink-0 place-items-center rounded-full bg-[#25D366] text-white"
         >
           <MessageCircle className="size-5" />

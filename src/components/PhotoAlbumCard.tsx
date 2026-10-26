@@ -6,6 +6,7 @@ import type { Trip } from "@/lib/types";
 import { isSafeHttpUrl } from "@/lib/maps";
 import { Button, Field, Input, Modal } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { useShareEnglish } from "@/hooks/use-share-english";
 
 /**
  * A single shared album link for the whole group (Google Photos, iCloud, etc.).
@@ -22,6 +23,7 @@ export function PhotoAlbumCard({
   className?: string;
 }) {
   const toast = useToast();
+  const en = useShareEnglish();
   const [url, setUrl] = useState(trip.photos_album_url ?? "");
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -62,7 +64,7 @@ export function PhotoAlbumCard({
           <Camera className="size-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="type-headline [overflow-wrap:anywhere]">אלבום התמונות המשותף</div>
+          <div className="type-headline [overflow-wrap:anywhere]">{en?.album ?? "אלבום התמונות המשותף"}</div>
           {safeUrl ? (
             <a
               href={safeUrl}
