@@ -179,6 +179,8 @@ type Body = {
   message?: string;
   history?: Turn[];
   confirm_action?: PendingAction;
+  /** The browser's IANA zone; flight times in the snapshot are shown in it (buildSnapshot). */
+  time_zone?: string;
   /** Kosher places and Shabbat times for the screens (no model call). */
   kosher?: { city?: string; shabbat_only?: boolean };
 };
@@ -719,6 +721,7 @@ Deno.serve(async (req) => {
       (flights.data as Record<string, unknown>[]) ?? [],
       (suggestions.data as Record<string, unknown>[]) ?? [],
       checklist.count ?? 0,
+      body.time_zone,
     );
 
     const history = (body.history ?? [])
