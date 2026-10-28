@@ -45,6 +45,9 @@ there are the business team; they never touch code.
 ## Language and layout
 
 - All user-facing strings are **Hebrew**, written inline in the JSX. No i18n layer — don't add one.
+  One approved exception (Roi, 2026-10-26): the public share page opens in English with `?lang=en`
+  for agencies abroad. Its English lives in `@/lib/share-english`, read via `useShareEnglish()` by the
+  components that render there; Hebrew stays inline. Don't extend it to other screens without asking.
 - `index.html` sets `lang="he" dir="rtl"` globally. For layout use logical Tailwind utilities
   (`ms-`/`me-`, `ps-`/`pe-`, `start-`/`end-`), not `ml-`/`mr-`/`left-`/`right-`. A few physical
   ones remain for purely decorative absolute positioning (blur blobs) — that case is fine.

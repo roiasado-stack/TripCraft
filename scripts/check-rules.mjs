@@ -28,6 +28,9 @@ const ALLOW = {
   hex: new Set(["#25D366", "#4285F4", "#34A853", "#FBBC05", "#EA4335", "#060f1e", "#f1f6fb", "#12b3b0"]),
   // Its check is a SELECT of today's total (a number), not a zero-rows query.
   migrationCheck: new Set(["014_app_daily_cap.sql"]),
+  // Shared by the whole app; its only Hebrew is the Modal close button, and no
+  // modal opens on the read-only share page.
+  shareEnglish: new Set(["src/components/ui.tsx"]),
 };
 
 // 1. Source files ----------------------------------------------------------------
@@ -88,6 +91,23 @@ for (const file of src) {
     if (/supabase\s*\.\s*from\(/.test(line))
       fail(file, i + 1, "share-rpc-only", "SharePage reads through get_shared_trip(slug) only — add fields there, not table reads");
   });
+}
+
+// The share page also opens in English (?lang=en). Every component it imports
+// that has Hebrew text must read useShareEnglish(), or that Hebrew leaks into
+// the English page — the kind of thing only a phone check caught (PR #21).
+{
+  const page = join(ROOT, "src/routes/SharePage.tsx");
+  const imports = [...readFileSync(page, "utf8").matchAll(/from ["']@\/((?:components|routes)\/[\w/-]+)["']/g)].map((m) => m[1]);
+  for (const mod of new Set(imports)) {
+    const rel = ["tsx", "ts"].map((e) => `src/${mod}.${e}`).find((p) => {
+      try { return statSync(join(ROOT, p)).isFile(); } catch { return false; }
+    });
+    if (!rel || ALLOW.shareEnglish.has(rel)) continue;
+    const code = readFileSync(join(ROOT, rel), "utf8").split(/\r?\n/).filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+    if (/[֐-׿]/.test(code) && !/useShareEnglish\(\)/.test(code))
+      fail(join(ROOT, rel), 0, "share-english", "rendered on the share page and has Hebrew text — use useShareEnglish() for its English (?lang=en)");
+  }
 }
 
 // The "is this a photo?" filter exists twice — in the app and in the generate

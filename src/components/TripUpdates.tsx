@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { can } from "@/lib/permissions";
 import { Button, Chip, Field, Input, Modal, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { useShareEnglish } from "@/hooks/use-share-english";
 
 const KINDS = [
   { value: "info", label: "מידע", icon: Info, cls: "bg-primary-soft text-secondary-foreground" },
@@ -44,6 +45,8 @@ export function TripUpdates({
 }) {
   const toast = useToast();
   const { user } = useAuth();
+  // English only reaches the read-only share page; the editing UI stays Hebrew.
+  const en = useShareEnglish();
   const canPost = editable && (role === undefined || can(role, "participate"));
   const canManage = (u: Omit<TripUpdate, "trip_id">) =>
     editable && (role === undefined || can(role, "edit") || (can(role, "participate") && u.created_by === user?.id));
@@ -122,7 +125,7 @@ export function TripUpdates({
       <div className="mb-1.5 flex min-h-11 items-center justify-between gap-2 ps-4">
         <h2 className="type-footnote flex items-center gap-1.5 font-semibold text-muted-foreground">
           <Megaphone className="size-4 text-accent" />
-          עדכונים חשובים
+          {en?.updates ?? "עדכונים חשובים"}
         </h2>
         {canPost && (
           <button
@@ -154,7 +157,7 @@ export function TripUpdates({
                   <div className="min-w-0 flex-1">
                     {/* items-start: the pin stays on the title's first line when it wraps. */}
                     <div className="flex items-start gap-1.5">
-                      {u.is_pinned && <Pin className="mt-1 size-3.5 shrink-0 fill-current text-accent" role="img" aria-label="נעוץ" />}
+                      {u.is_pinned && <Pin className="mt-1 size-3.5 shrink-0 fill-current text-accent" role="img" aria-label={en?.pinned ?? "נעוץ"} />}
                       <span className="type-headline min-w-0 [overflow-wrap:anywhere]">{u.title}</span>
                     </div>
                     {u.body && (
@@ -191,7 +194,7 @@ export function TripUpdates({
                 onClick={() => setShowAll(true)}
                 className="type-headline w-full px-4 py-3 text-start text-primary transition-colors active:bg-muted/70"
               >
-                הצגת כל {updates.length} העדכונים
+                {en?.showAllUpdates(updates.length) ?? `הצגת כל ${updates.length} העדכונים`}
               </button>
             )}
           </>

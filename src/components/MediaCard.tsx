@@ -3,6 +3,7 @@ import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PlacePhoto } from "@/lib/ai";
 import { isPhotoUrl } from "@/lib/photo-url";
+import { useShareEnglish } from "@/hooks/use-share-english";
 
 /**
  * Credits Google Places requires on its photos: the photographer (linked) and
@@ -60,9 +61,12 @@ export function wikimediaFilePage(url?: string | null): string | null {
  * never mistaken for the venue itself.
  */
 export function ImageCredit({ imageUrl, compact, illustrative }: { imageUrl: string; compact?: boolean; illustrative?: boolean }) {
+  const en = useShareEnglish();
   const page = wikimediaFilePage(imageUrl);
   if (!page) return null;
-  const label = illustrative ? "תמונה להמחשה, לא של המקום עצמו. מקור ורישיון" : "מקור התמונה ורישיון (ויקיפדיה)";
+  const label = illustrative
+    ? (en?.photoCreditIllustrative ?? "תמונה להמחשה, לא של המקום עצמו. מקור ורישיון")
+    : (en?.photoCredit ?? "מקור התמונה ורישיון (ויקיפדיה)");
   return (
     <a
       href={page}
@@ -77,7 +81,7 @@ export function ImageCredit({ imageUrl, compact, illustrative }: { imageUrl: str
       )}
     >
       <Info className={compact ? "size-3" : "size-3.5"} />
-      {illustrative && !compact && <span className="text-[11px] font-semibold">להמחשה</span>}
+      {illustrative && !compact && <span className="text-[11px] font-semibold">{en?.illustrative ?? "להמחשה"}</span>}
     </a>
   );
 }
