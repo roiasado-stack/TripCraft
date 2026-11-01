@@ -786,19 +786,24 @@ Deno.serve(async (req) => {
       const hintLabels: Record<string, string> = { flight: "טיסה", hotel: "מלון", car: "רכב/העברה" };
       const hintLine =
         body.hint && hintLabels[body.hint]
-          ? `המשתמש חושב שזהו אישור הזמנה מסוג "${hintLabels[body.hint]}", אך סווג לפי תוכן המסמך בפועל וזהה מחדש אם הוא טעה.\n\n`
+          ? `המשתמש חושב שזהו אישור הזמנה מסוג "${hintLabels[body.hint]}", אך סווג לפי תוכן המסמך בפועל, והחזר את כל ההזמנות שבו מכל הסוגים.\n\n`
           : "";
 
       content.push({
         type: "text",
-        text: `זהו את סוג מסמך ההזמנה המצורף (אישור טיסה / אישור מלון / אישור השכרת רכב או הסעה), וחלץ ממנו את הפרטים בדיוק כפי שהם מופיעים במסמך.
+        text: `זהו את ההזמנות שבמסמך המצורף (טיסות / מלונות / השכרת רכב או הסעות), וחלץ מהן את הפרטים בדיוק כפי שהם מופיעים במסמך.
 
 המסמך עשוי להשתרע על פני כמה עמודים — למשל כרטיס אלקטרוני נפרד לכל נוסע, או עמודים נפרדים לטיסת ההלוך ולטיסת החזור. קרא את כל העמודים עד הסוף, לא רק את הראשון, ואסוף את הפרטים מכולם.
 
-${hintLine}החזר JSON בלבד, ללא טקסט נוסף, באחד מהמבנים הבאים לפי סוג המסמך שזיהית בפועל:
+מסמך אחד יכול להכיל כמה הזמנות מסוגים שונים — למשל טיסות ושני מלונות באותו קובץ. החזר את כולן. גם הצעת מחיר, תוכנית טיול או סיכום הזמנה משולב ממערכת הזמנות (גם אם כתוב בו שהמקומות עוד לא הוזמנו) נחשבים: חלץ את הטיסות, המלונות והרכבים שמפורטים בו. התעלם מחלקים שאינם טיסה, מלון או רכב/הסעה (ביטוח, תנאי ביטול, מחירים).
 
-אם זו טיסה:
-{"doc_type":"flight","segments":[{"direction":"outbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null},{"direction":"inbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null}],"destination":"עיר, מדינה","passengers":[{"name":"שם הנוסע כפי שמודפס","type":"adult|child|infant|null","birth_date":null,"meal_code":null}]}
+${hintLine}החזר JSON בלבד, ללא טקסט נוסף, במבנה:
+{"bookings":[ ...הזמנה אחת או יותר... ],"destination":"עיר, מדינה","passengers":[{"name":"שם הנוסע כפי שמודפס","type":"adult|child|infant|null","birth_date":null,"meal_code":null}]}
+
+כל פריט ב-bookings הוא אחד מהבאים.
+
+טיסות (פריט אחד עם כל קטעי הטיסה שבמסמך):
+{"doc_type":"flight","segments":[{"direction":"outbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null},{"direction":"inbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null}]}
 
 segments (כל קטעי הטיסה שבמסמך):
 - פריט אחד לכל קטע טיסה: טיסת ההלוך, טיסת החזור, וכל רגל של טיסת המשך (קונקשן) כקטע נפרד. אל תחזיר רק את הטיסה הראשונה.
@@ -807,24 +812,26 @@ segments (כל קטעי הטיסה שבמסמך):
 - direction לכל קטע: "outbound" אם הקטע יוצא מישראל, "inbound" אם הוא נוחת בישראל; רגל של טיסת המשך מקבלת את הכיוון של המסלול שהיא חלק ממנו (הלוך או חזור). אם לא ברור, "outbound".
 - seats: המושבים של כל הנוסעים בקטע הזה, אם מודפסים.
 
-אם זה מלון:
-{"doc_type":"hotel","data":{"hotel_name":"שם המלון","address":null,"check_in":"YYYY-MM-DD","check_out":"YYYY-MM-DD","booking_ref":null,"phone":null,"url":null,"notes":null},"destination":"עיר, מדינה","passengers":[{"name":"שם האורח כפי שמודפס","type":null,"birth_date":null,"meal_code":null}]}
+מלון (פריט נפרד לכל מלון):
+{"doc_type":"hotel","data":{"hotel_name":"שם המלון","address":null,"check_in":"YYYY-MM-DD","check_out":"YYYY-MM-DD","booking_ref":null,"phone":null,"url":null,"notes":null}}
+- notes: סוג החדר ובסיס האירוח אם מודפסים (למשל "חדר דאבל דלוקס, ארוחת בוקר").
 
-אם זו השכרת רכב או הסעה:
-{"doc_type":"car","data":{"provider":"שם חברת ההשכרה או ההסעה","pickup_location":"נקודת איסוף","dropoff_location":null,"pickup_at":"YYYY-MM-DDTHH:MM:00","return_at":null,"booking_ref":null,"phone":null,"url":null,"notes":null},"destination":"עיר, מדינה","passengers":[{"name":"שם הנהג/הנוסע כפי שמודפס","type":null,"birth_date":null,"meal_code":null}]}
+השכרת רכב או הסעה (פריט נפרד לכל אחת):
+{"doc_type":"car","data":{"provider":"שם חברת ההשכרה או ההסעה","pickup_location":"נקודת איסוף","dropoff_location":null,"pickup_at":"YYYY-MM-DDTHH:MM:00","return_at":null,"booking_ref":null,"phone":null,"url":null,"notes":null}}
 
-אם המסמך אינו נראה כמו אישור הזמנה של טיסה/מלון/רכב, או שאי אפשר לזהות בבירור:
-{"doc_type":"unknown","data":null,"destination":null,"passengers":[]}
+אם אין במסמך אף טיסה, מלון או רכב/הסעה שאפשר לזהות בבירור:
+{"bookings":[],"destination":null,"passengers":[]}
 
 כללים:
-- כל שדה שלא מופיע במסמך בבירור — החזר null, אל תמציא ואל תנחש.
+- כל שדה שלא מופיע במסמך בבירור — החזר null, אל תמציא ואל תנחש. בהצעת מחיר בלי מספר הזמנה, booking_ref הוא null.
 - תאריכים/שעות: קרא בדיוק את מה שמודפס במסמך, ללא המרת אזור זמן.
 - שמות (חברת תעופה, מלון, ספק) — השאר בשפה שבה הם מופיעים במסמך (עברית או לועזית), אל תתרגם.
-- אם אתה לא בטוח בסוג המסמך — עדיף "unknown" מאשר סיווג שגוי.
+- אם אתה לא בטוח שחלק מסוים הוא הזמנה — השמט אותו, עדיף על פני הזמנה שגויה.
 
 destination (יעד הטיול שההזמנה מרמזת עליו):
 - בפורמט "עיר, מדינה" בעברית, למשל "רומא, איטליה".
 - מלון: העיר שבה נמצא המלון. טיסה: הקצה של המסלול שאינו בישראל (ביעד הסופי של מסלול ההלוך, במוצא של מסלול החזור — לא עיר של עצירת ביניים). רכב/הסעה: העיר של נקודת האיסוף.
+- כשיש במסמך כמה הזמנות: לפי המלון הראשון בטיול אם יש מלון, אחרת לפי הטיסה.
 - אם לא ניתן להסיק את העיר בבירור מהמסמך — null. אל תנחש.
 
 passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
@@ -874,13 +881,17 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
 
       const visionText = extractText(visionPayload);
       const parsedVision = extractJson(visionText);
-      const rawDocType = String(parsedVision?.doc_type ?? "unknown");
-      const docType = (["flight", "hotel", "car"].includes(rawDocType) ? rawDocType : "unknown") as
-        | "flight"
-        | "hotel"
-        | "car"
-        | "unknown";
-      const rawData = (parsedVision?.data ?? null) as Record<string, unknown> | null;
+      // One document may hold several bookings of different types (a booking
+      // platform's combined quote: flights + hotels). The model answers
+      // {bookings:[{doc_type, data|segments}…]}; the old single shape
+      // {doc_type, data, segments} is still accepted as one booking.
+      const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+      const rawBookings: Record<string, unknown>[] = Array.isArray(parsedVision?.bookings)
+        ? (parsedVision!.bookings as unknown[]).filter(isObj)
+        : parsedVision && typeof parsedVision.doc_type === "string"
+          ? [parsedVision]
+          : [];
+      const ofType = (t: string) => rawBookings.filter((b) => b.doc_type === t);
 
       // Small local helpers — every field lands as a trimmed string capped at a
       // sane length, or null. Never trust the model's null-ness claims blindly,
@@ -915,23 +926,21 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       });
 
       // Every flight segment in the document (outbound, return, connection
-      // legs). Falls back to a lone `data` object if the model answered in the
-      // old single-flight shape. A segment with neither a flight number nor
-      // both airports is noise and is dropped; an exact repeat (same flight
-      // number + departure — the same flight printed on each passenger's page)
-      // is kept once. Sorted by departure only when every segment has one,
-      // otherwise the model's (already chronological) order is kept.
+      // legs), across all flight bookings. Each booking falls back to a lone
+      // `data` object if the model answered in the old single-flight shape. A
+      // segment with neither a flight number nor both airports is noise and is
+      // dropped; an exact repeat (same flight number + departure — the same
+      // flight printed on each passenger's page) is kept once. Sorted by
+      // departure only when every segment has one, otherwise the model's
+      // (already chronological) order is kept.
       let segments: ReturnType<typeof sanitizeFlight>[] = [];
-      if (docType === "flight") {
-        const rawSegments: unknown[] =
-          Array.isArray(parsedVision?.segments) && (parsedVision!.segments as unknown[]).length
-            ? (parsedVision!.segments as unknown[])
-          : rawData
-            ? [rawData]
-            : [];
+      {
+        const rawSegments: unknown[] = ofType("flight").flatMap((b) =>
+          Array.isArray(b.segments) && b.segments.length ? (b.segments as unknown[]) : isObj(b.data) ? [b.data] : [],
+        );
         const seen = new Set<string>();
         segments = rawSegments
-          .filter((s): s is Record<string, unknown> => !!s && typeof s === "object" && !Array.isArray(s))
+          .filter(isObj)
           .map(sanitizeFlight)
           .filter((s) => s.flight_number || (s.from_airport && s.to_airport))
           .filter((s) => {
@@ -947,35 +956,53 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
         segments = segments.slice(0, 8);
       }
 
-      let data: Record<string, unknown> | null = null;
-      if (docType === "flight") {
-        data = segments[0] ?? null;
-      } else if (docType === "hotel" && rawData) {
-        data = {
-          hotel_name: str(rawData.hotel_name, 200) ?? "",
-          address: str(rawData.address, 300),
-          check_in: isoDate(rawData.check_in),
-          check_out: isoDate(rawData.check_out),
-          booking_ref: str(rawData.booking_ref, 60),
-          phone: str(rawData.phone, 40),
-          url: str(rawData.url, 500),
-          notes: str(rawData.notes, 500),
-        };
-      } else if (docType === "car" && rawData) {
-        data = {
-          provider: str(rawData.provider, 200),
-          pickup_location: str(rawData.pickup_location, 300),
-          dropoff_location: str(rawData.dropoff_location, 300),
-          pickup_at: isoDateTime(rawData.pickup_at),
-          return_at: isoDateTime(rawData.return_at),
-          booking_ref: str(rawData.booking_ref, 60),
-          phone: str(rawData.phone, 40),
-          url: str(rawData.url, 500),
-          notes: str(rawData.notes, 500),
-        };
-      }
+      // Hotels and cars, one record each. A record with nothing identifying
+      // (no name / provider and no date) is noise and is dropped.
+      const hotels = ofType("hotel")
+        .map((b) => (isObj(b.data) ? b.data : null))
+        .filter(isObj)
+        .map((d) => ({
+          hotel_name: str(d.hotel_name, 200) ?? "",
+          address: str(d.address, 300),
+          check_in: isoDate(d.check_in),
+          check_out: isoDate(d.check_out),
+          booking_ref: str(d.booking_ref, 60),
+          phone: str(d.phone, 40),
+          url: str(d.url, 500),
+          notes: str(d.notes, 500),
+        }))
+        .filter((h) => h.hotel_name || h.check_in)
+        .slice(0, 8);
+      const cars = ofType("car")
+        .map((b) => (isObj(b.data) ? b.data : null))
+        .filter(isObj)
+        .map((d) => ({
+          provider: str(d.provider, 200),
+          pickup_location: str(d.pickup_location, 300),
+          dropoff_location: str(d.dropoff_location, 300),
+          pickup_at: isoDateTime(d.pickup_at),
+          return_at: isoDateTime(d.return_at),
+          booking_ref: str(d.booking_ref, 60),
+          phone: str(d.phone, 40),
+          url: str(d.url, 500),
+          notes: str(d.notes, 500),
+        }))
+        .filter((c) => c.provider || c.pickup_at || c.pickup_location)
+        .slice(0, 4);
 
-      const finalDocType = data ? docType : "unknown";
+      // Every booking in the document, in the order flights → hotels → cars.
+      const items: { doc_type: "flight" | "hotel" | "car"; data: Record<string, unknown> }[] = [
+        ...segments.map((data) => ({ doc_type: "flight" as const, data })),
+        ...hotels.map((data) => ({ doc_type: "hotel" as const, data })),
+        ...cars.map((data) => ({ doc_type: "car" as const, data })),
+      ];
+
+      // `doc_type` / `data` keep their single-booking meaning for callers that
+      // read only those (ImportVoucher): the first booking of the type the user
+      // picked (`hint`), else the first booking.
+      const primary = items.find((it) => it.doc_type === body.hint) ?? items[0] ?? null;
+      const finalDocType = (primary?.doc_type ?? "unknown") as "flight" | "hotel" | "car" | "unknown";
+      const data = primary?.data ?? null;
 
       // Trip destination the booking implies ("עיר, מדינה", Hebrew) — optional,
       // only meaningful alongside a recognized booking.
@@ -1059,11 +1086,12 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
             ? `unknown_doc: stop=${visionPayload?.stop_reason} blocks=${(visionPayload?.content ?? []).map((b: { type?: string }) => b?.type).join(",")} text=${visionText.slice(0, 300)}`
             : undefined,
       });
-      // `segments` / `destination` / `passengers` are additive — `data` stays the
-      // first flight segment for any caller that only reads doc_type/data.
-      // Non-flight documents (and unknown) always get `segments: []`.
+      // `items` (every booking in the file), `segments`, `destination` and
+      // `passengers` are additive — `doc_type`/`data` stay one booking for any
+      // caller that only reads those. `segments` is every flight segment when
+      // that booking is a flight, otherwise [].
       const outSegments = finalDocType === "flight" ? segments : [];
-      return new Response(JSON.stringify({ ok: true, doc_type: finalDocType, data, segments: outSegments, destination, passengers }), {
+      return new Response(JSON.stringify({ ok: true, doc_type: finalDocType, data, segments: outSegments, items, destination, passengers }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
