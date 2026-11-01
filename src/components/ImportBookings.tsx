@@ -7,10 +7,11 @@ import { Badge, Button, Card, Field, Input, Modal } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { AGE_RANGES, prefLabel } from "@/lib/trip-options";
 import type { ParsedParticipant } from "@/lib/import-participants";
+import { scanSummary, scannedRecords, type ScannedRecord } from "@/lib/voucher-scan";
 import {
   blankCar,
+  blankFlight,
   blankHotel,
-  flightSegmentsFrom,
   type VoucherCarData,
   type VoucherData,
   type VoucherDocType,
@@ -126,7 +127,6 @@ function ageOn(birth: string, onDate: string): number | null {
 }
 
 const TYPE_LABEL: Record<PassengerType, string> = { adult: "מבוגר", child: "ילד", infant: "תינוק" };
-const DOC_LABEL: Record<VoucherDocType, string> = { flight: "טיסה", hotel: "מלון", car: "רכב / העברה" };
 const DOC_EMOJI: Record<VoucherDocType, string> = { flight: "✈️", hotel: "🏨", car: "🚗" };
 
 /** Date-part (YYYY-MM-DD) of a server date/datetime. The `voucher` extraction
@@ -166,10 +166,12 @@ function pickDestination(items: ScanItem[]): string {
   const priority: Record<VoucherDocType, number> = { hotel: 2, car: 1, flight: 0 };
   const tally = new Map<string, { count: number; pri: number }>();
   for (const it of items) {
-    const first = liveBookings(it)[0];
-    if (!it.destination || !first) continue;
+    // A file may mix types (a combined quote): rank it by its strongest booking.
+    const live = liveBookings(it);
+    if (!it.destination || !live.length) continue;
+    const pri = Math.max(...live.map((b) => priority[b.docType]));
     const cur = tally.get(it.destination) ?? { count: 0, pri: -1 };
-    tally.set(it.destination, { count: cur.count + 1, pri: Math.max(cur.pri, priority[first.docType]) });
+    tally.set(it.destination, { count: cur.count + 1, pri: Math.max(cur.pri, pri) });
   }
   const best = [...tally.entries()].sort((a, b) => b[1].count - a[1].count || b[1].pri - a[1].pri)[0];
   return best?.[0] ?? "";
@@ -305,8 +307,8 @@ export function ImportBookings({
   const patchItem = (id: number, patch: Partial<ScanItem>) =>
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
 
-  /** One file = one `voucher` call = one document (a flight file may hold
-   *  several segments → several bookings). Never throws. */
+  /** One file = one `voucher` call = one document, which may hold several
+   *  bookings of any types (flight segments, hotels, cars). Never throws. */
   const scanOne = async (item: ScanItem): Promise<{ recognized: boolean; error?: string }> => {
     patchItem(item.id, { status: "scanning" });
     try {
@@ -318,28 +320,21 @@ export function ImportBookings({
         patchItem(item.id, { status: "error" });
         return { recognized: false, error: await mapInvokeError(error) };
       }
-      const res = data as {
-        ok?: boolean;
-        doc_type?: string;
-        data?: Record<string, unknown> | null;
-        segments?: unknown;
-        destination?: unknown;
-        passengers?: unknown;
-      };
-      if (!res?.ok || !res.data || (res.doc_type !== "flight" && res.doc_type !== "hotel" && res.doc_type !== "car")) {
+      const res = data as { destination?: unknown; passengers?: unknown } | null;
+      const records = scannedRecords(data);
+      if (!res || !records.length) {
         patchItem(item.id, { status: "unknown" });
         return { recognized: false };
       }
-      const docType = res.doc_type;
-      const datas: VoucherData[] =
-        docType === "flight"
-          ? flightSegmentsFrom(res)
-          : docType === "hotel"
-            ? [{ ...blankHotel, ...(res.data as Partial<VoucherHotelData>) }]
-            : [{ ...blankCar, ...(res.data as Partial<VoucherCarData>) }];
+      const fill = (r: ScannedRecord): VoucherData =>
+        r.docType === "flight"
+          ? { ...blankFlight, ...(r.data as Partial<VoucherFlightData>) }
+          : r.docType === "hotel"
+            ? { ...blankHotel, ...(r.data as Partial<VoucherHotelData>) }
+            : { ...blankCar, ...(r.data as Partial<VoucherCarData>) };
       patchItem(item.id, {
         status: "done",
-        bookings: datas.map((data, i) => ({ key: `${item.id}-${i}`, docType, data, removed: false })),
+        bookings: records.map((r, i) => ({ key: `${item.id}-${i}`, docType: r.docType, data: fill(r), removed: false })),
         destination: typeof res.destination === "string" && res.destination.trim() ? res.destination.trim() : null,
         passengers: readPassengers(res.passengers),
       });
@@ -487,13 +482,11 @@ export function ImportBookings({
       case "scanning":
         return { icon: <Loader2 className="size-4 animate-spin text-primary" />, text: "סורק…", tone: "text-primary" };
       case "done": {
-        const docType = it.bookings[0]?.docType ?? "flight";
+        const types = it.bookings.map((b) => b.docType);
+        const mixed = types.some((t) => t !== types[0]);
         return {
-          icon: <span className="text-base leading-none">{DOC_EMOJI[docType]}</span>,
-          text:
-            docType === "flight" && it.bookings.length > 1
-              ? `זוהו: ${it.bookings.length} טיסות`
-              : `זוהה: ${DOC_LABEL[docType]}`,
+          icon: <span className="text-base leading-none">{mixed ? "🧾" : DOC_EMOJI[types[0] ?? "flight"]}</span>,
+          text: scanSummary(types),
           tone: "text-primary",
         };
       }
