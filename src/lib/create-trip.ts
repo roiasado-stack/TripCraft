@@ -1,7 +1,8 @@
 // Creating a trip from staged drafts (trip-drafts.ts). Shared by the wizard
-// (/new) and the agent's "new trip from documents" (/agent/new).
+// (/new) and the agent's "new trip from documents" (/agency/new, via createImportedTrip).
 import { supabase } from "./supabase";
 import { uploadTripDocument } from "./documents";
+import { clientRow, type BookingImport } from "./agency-import";
 import type { Participant, Trip } from "./types";
 import {
   participantRows,
@@ -161,4 +162,30 @@ export async function uploadSourceDocs(
     }
   }
   return failed;
+}
+
+/**
+ * Creates an agent's trip from a BookingImport (agency-import.ts) — the one
+ * place an imported trip is written, whatever its source. The trip and its
+ * bookings go through insertTripWithDrafts (throws only if the trip row
+ * fails); then the owner-only trip_clients row, which records the client, the
+ * source and the agency's booking number (migration 025). A failed client row
+ * is reported, not thrown: the trip already exists.
+ */
+export async function createImportedTrip(
+  userId: string,
+  imp: BookingImport,
+  extra: Pick<NewTripFields, "trip_type" | "budget_level" | "cover_emoji">,
+): Promise<Awaited<ReturnType<typeof insertTripWithDrafts>> & { clientError: boolean }> {
+  const res = await insertTripWithDrafts({
+    userId,
+    fields: { ...imp.trip, ...extra },
+    participants: imp.travellers,
+    flights: imp.flights,
+    stays: imp.stays,
+    transfers: imp.transfers,
+  });
+  const { error } = await supabase.from("trip_clients").insert(clientRow(res.trip.id, imp));
+  if (error) console.error(error);
+  return { ...res, clientError: !!error };
 }

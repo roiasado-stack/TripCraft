@@ -103,7 +103,7 @@ export default function TripsListPage() {
       {isAgent && (
         <GroupedList className="mb-6">
           <ListRow
-            to="/agent"
+            to="/agency"
             leading={
               <span className="grid size-8 place-items-center rounded-[9px] bg-tile text-tile-foreground">
                 <Briefcase className="size-[18px]" />

@@ -9,6 +9,7 @@ import { Button, Field, GroupedList, Input, ListRow, Modal, Switch } from "@/com
 import { DOCS_BUCKET } from "@/lib/documents";
 import { AGENCY_LOGO_BUCKET } from "@/lib/agency-brand";
 import { AgencyLogoField } from "@/components/AgencyLogoField";
+import { NotificationSettings } from "@/components/NotificationSettings";
 import { LegalLinks } from "@/routes/LegalPages";
 import type { AgentAccount } from "@/lib/types";
 
@@ -207,9 +208,12 @@ export default function SettingsPage() {
           </div>
         </GroupedList>
 
+        {/* push notifications — demo users can't subscribe (migration 026) */}
+        {!isAnonymous && <NotificationSettings />}
+
         {isAgent ? (
           <GroupedList>
-            <ListRow to="/agent" leading={<Briefcase className="size-5 text-primary" />} title="סביבת הסוכן" />
+            <ListRow to="/agency" leading={<Briefcase className="size-5 text-primary" />} title="סביבת הסוכן" />
           </GroupedList>
         ) : (
           !isAnonymous && <AgentAccess />
