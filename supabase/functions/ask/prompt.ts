@@ -131,6 +131,34 @@ export const TOOLS = [
   },
 ] as const;
 
+/** The app shows times in the viewer's browser zone; the agent gets the zone the client sent. */
+export const DEFAULT_TIME_ZONE = "Asia/Jerusalem";
+
+function validTimeZone(tz: unknown): string {
+  if (typeof tz !== "string" || !tz) return DEFAULT_TIME_ZONE;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: tz });
+    return tz;
+  } catch {
+    return DEFAULT_TIME_ZONE;
+  }
+}
+
+/** A stored TIMESTAMPTZ ("…T04:40:00+00:00") as the traveller's wall clock, "YYYY-MM-DD HH:MM".
+ *  The raw UTC value made the agent quote flights 2–3 hours early. */
+export function formatWallClock(value: unknown, timeZone?: unknown): string | null {
+  if (typeof value !== "string" || !value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: validTimeZone(timeZone),
+      year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).formatToParts(d).map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+}
+
 /** Compact Hebrew snapshot of the trip, used as the agent's system context. */
 export function buildSnapshot(
   trip: Record<string, unknown>,
@@ -140,6 +168,7 @@ export function buildSnapshot(
   flights: Record<string, unknown>[],
   suggestions: Record<string, unknown>[],
   checklistOpen: number,
+  timeZone?: unknown,
 ): string {
   const lines: string[] = [];
 
@@ -162,9 +191,10 @@ export function buildSnapshot(
   if (flights.length) {
     lines.push("", "טיסות:");
     for (const f of flights) {
+      const departs = formatWallClock(f.depart_at, timeZone);
       lines.push(
         `- ${f.direction === "inbound" ? "חזור" : "הלוך"}: ${f.from_airport ?? "?"} → ${f.to_airport ?? "?"}` +
-          `${f.depart_at ? ` ביציאה ${f.depart_at}` : ""}`,
+          `${departs ? ` ביציאה ${departs}` : ""}`,
       );
     }
   }

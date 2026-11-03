@@ -8,7 +8,7 @@ Supabase for auth/DB/storage. Setup steps live in README.md — don't duplicate 
 ```
 npm run dev        # Vite on :5173 (preview via .claude/launch.json, name "tripcraft")
 npm run check      # the gate: typecheck · lint · rules · test · build — run it after edits
-npm run test:db    # RLS / who-sees-what tests against the LOCAL Docker DB (after any supabase/ change)
+npm run test:db    # RLS / who-sees-what tests in a throwaway DB built from schema.sql + migrations (local Docker; after any supabase/ change)
 npm run typecheck  # tsc -b --noEmit
 npm run lint       # ESLint, bug rules only (hooks, unreachable code…) — no style rules
 npm run rules      # scripts/check-rules.mjs: this file's rules (RTL, hex, imports, migrations)
@@ -19,7 +19,10 @@ npm run build      # tsc -b && vite build
 Local Supabase (Docker Desktop) for anything touching RLS or Edge Functions:
 `npx supabase start`, then apply `supabase/schema.sql` and every `supabase/migrations/0NN_*.sql`
 in order with `docker exec -i supabase_db_tripcraft psql -U postgres -d postgres < file` (the CLI's own
-migration runner is off in `supabase/config.toml` on purpose). `.claude/launch.json` → "tripcraft-local"
+migration runner is off in `supabase/config.toml` on purpose).
+Production runs the `production` branch (frozen, tagged `prod-YYYY-MM-DD`); development happens on `agent-chat`
+and feature branches and is never deployed to prod from there. A cloud dev database, `TripCraft-dev`
+(`xneydbffncoqowtgkhxv`), backs `--mode devcloud` (launch.json "tripcraft-devcloud"). Release steps are in README. `.claude/launch.json` → "tripcraft-local"
 runs Vite on :5174 against it via `.env.localstack`. Test accounts belong there, never in production.
 
 ## Tests and gates
@@ -133,17 +136,7 @@ placeholder or disabled.
   is ever missing — keep handling that case rather than assuming it's always up.
 - Google login is enabled in Supabase Auth (Providers → Google), with its own OAuth client in
   the "Travel App" Google Cloud project.
-- `generate` also auto-attaches a cover photo (Wikipedia, `kind: "photo"`) and coordinates
-  (Nominatim, `kind: "geocode"`) to suggestions/itinerary items — manual add/edit and AI
-  generation both go through this, no user-typed URL/coordinates anywhere. Photos are the page
-  image of the exact English Wikipedia article for that place (AI items carry `wikipedia_title`;
-  `kind: "photo"` asks Claude for the title or NONE). No key, and no search fallback on purpose —
-  a miss stays null and shows MediaCard's fallback. Hits are cached in the service-role-only
-  `photo_cache` (`wiki:` keys). `UNSPLASH_ACCESS_KEY` is no longer used. Geocoding translates
-  Hebrew queries to English first (`translateHebrewQuery`) since Nominatim searches Hebrew badly.
-  Wikimedia images carry CC licenses (e.g. CC BY-SA): each image shows an ⓘ link to its file page
-  (author + license) via `wikimediaFilePage` in `MediaCard`, plus the `/credits` page.
-- Repeated AI presses don't duplicate: `generate` lists the trip's existing suggestions/itinerary
-  in the prompt and drops items whose normalized title (`normalizeTitle`) already exists.
+- `generate` attaches Wikipedia cover photos + Nominatim coordinates and dedupes repeated AI
+  presses — details (caching, licenses, Hebrew geocoding) in `docs/ai-media-pipeline.md`.
 
 There is no offline support.

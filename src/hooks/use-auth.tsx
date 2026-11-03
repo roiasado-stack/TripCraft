@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { dropBrowserSubscription, releaseForeignSubscription, unsubscribeOnSignOut } from "@/lib/push";
 import type { AppRole, Profile } from "@/lib/types";
 
 type AuthState = {
@@ -111,9 +112,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+    // Whether the last known session was a real (non-demo) user's.
+    let hadRealUser = false;
+    const track = (s: Session | null) => {
+      hadRealUser = !!s?.user && !s.user.is_anonymous;
+    };
 
     const { data } = supabase.auth.onAuthStateChange((_event, next) => {
       if (!active) return;
+      // A real user's session ended — our signOut() (already cleaned up, so
+      // this is a no-op), or token expiry/revocation, or another tab. Stop this
+      // browser's pushes. Not after a demo session: it never subscribed, and
+      // the subscription may be a real user's.
+      if (!next && hadRealUser) void dropBrowserSubscription();
+      track(next);
       setSession(next);
       if (next?.user) {
         // Same render as the new session: no beat where user B carries user A's roles.
@@ -128,6 +140,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(({ data: { session: current } }) => {
       if (!active) return;
+      // Opened with no session (it expired while the app was closed): whoever subscribed here is gone.
+      if (!current) void dropBrowserSubscription();
+      track(current);
       setSession(current);
       if (current?.user) loadProfileAndRoles(current.user.id);
       setLoading(false);
@@ -138,6 +153,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data.subscription.unsubscribe();
     };
   }, [clearProfileAndRoles, loadProfileAndRoles, switchTo]);
+
+  // A push subscription this browser holds for another account is dropped on
+  // sign-in, never taken over: the new user opts in again from Settings.
+  const pushUserId = session?.user && !session.user.is_anonymous ? session.user.id : null;
+  useEffect(() => {
+    if (pushUserId) void releaseForeignSubscription();
+  }, [pushUserId]);
 
   const value: AuthState = {
     session,
@@ -189,6 +211,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) await loadProfileAndRoles(session.user.id);
     },
     signOut: async () => {
+      // One browser, two accounts: the next one must not get this one's pushes.
+      // Needs the session (RLS), so it runs first; time-boxed, never blocks.
+      // A demo session never subscribed; unsubscribing it would kill the real user's browser subscription.
+      const { data: { session: current } } = await supabase.auth.getSession();
+      if (!current?.user?.is_anonymous) await unsubscribeOnSignOut();
       await supabase.auth.signOut();
       clearProfileAndRoles();
     },

@@ -18,7 +18,7 @@ export function RolesLoadError() {
   );
 }
 
-/** /agent screens: signed-in, approved travel agents (or admins). Everyone else goes home.
+/** /agency screens: signed-in, approved travel agents (or admins). Everyone else goes home.
  *  Only hides the screens — agent_trip_board() and RLS are the real gate. */
 export function AgentRoute({ children }: { children: ReactNode }) {
   const { session, loading, rolesReady, rolesError, isAgent } = useAuth();

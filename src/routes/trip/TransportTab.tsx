@@ -145,6 +145,119 @@ function flightToDraft(f: Flight): FlightDraft {
   };
 }
 
+type StayDraft = {
+  id?: string;
+  hotel_name: string;
+  address: string;
+  /** Calendar days as typed (`stays.check_in/check_out` are DATE columns) — never parsed as a Date. */
+  check_in: string;
+  check_out: string;
+  booking_ref: string;
+  phone: string;
+  notes: string;
+};
+
+const blankStay: StayDraft = { hotel_name: "", address: "", check_in: "", check_out: "", booking_ref: "", phone: "", notes: "" };
+
+function stayToDraft(s: Stay): StayDraft {
+  return {
+    id: s.id,
+    hotel_name: s.hotel_name ?? "",
+    address: s.address ?? "",
+    check_in: s.check_in?.slice(0, 10) ?? "",
+    check_out: s.check_out?.slice(0, 10) ?? "",
+    booking_ref: s.booking_ref ?? "",
+    phone: s.phone ?? "",
+    notes: s.notes ?? "",
+  };
+}
+
+type TransferDraft = {
+  id?: string;
+  kind: "transfer" | "car_rental";
+  provider: string;
+  pickup_location: string;
+  pickup_date: string;
+  pickup_hour: string;
+  pickup_minute: string;
+  dropoff_location: string;
+  return_date: string;
+  return_hour: string;
+  return_minute: string;
+  booking_ref: string;
+  phone: string;
+  notes: string;
+};
+
+const blankTransfer: TransferDraft = {
+  kind: "transfer",
+  provider: "",
+  pickup_location: "",
+  pickup_date: "",
+  pickup_hour: "",
+  pickup_minute: "",
+  dropoff_location: "",
+  return_date: "",
+  return_hour: "",
+  return_minute: "",
+  booking_ref: "",
+  phone: "",
+  notes: "",
+};
+
+function transferToDraft(t: Transfer): TransferDraft {
+  return {
+    id: t.id,
+    kind: t.kind === "car_rental" ? "car_rental" : "transfer",
+    provider: t.provider ?? "",
+    pickup_location: t.pickup_location ?? "",
+    pickup_date: isoToDatePart(t.pickup_at),
+    pickup_hour: isoToHour(t.pickup_at),
+    pickup_minute: isoToMinute(t.pickup_at),
+    dropoff_location: t.dropoff_location ?? "",
+    return_date: isoToDatePart(t.return_at),
+    return_hour: isoToHour(t.return_at),
+    return_minute: isoToMinute(t.return_at),
+    booking_ref: t.booking_ref ?? "",
+    phone: t.phone ?? "",
+    notes: t.notes ?? "",
+  };
+}
+
+/** 24-hour hour:minute pickers (see HOURS above for why not a native time input). */
+function TimeSelect({
+  hour,
+  minute,
+  onChange,
+}: {
+  hour: string;
+  minute: string;
+  onChange: (hour: string, minute: string) => void;
+}) {
+  const cls = "h-12 flex-1 rounded-2xl border border-input bg-card px-1 text-center text-sm";
+  return (
+    <div className="flex items-center gap-1">
+      <select value={hour} onChange={(e) => onChange(e.target.value, minute)} className={cls} aria-label="שעה">
+        <option value="">--</option>
+        {HOURS.map((h) => (
+          <option key={h} value={h}>
+            {h}
+          </option>
+        ))}
+      </select>
+      <span className="font-bold text-muted-foreground">:</span>
+      <select value={minute} onChange={(e) => onChange(hour, e.target.value)} className={cls} aria-label="דקות">
+        <option value="">--</option>
+        {MINUTES.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 /** Minutes between two ISO timestamps, as "5ש 20ד". */
 function duration(from?: string | null, to?: string | null): string | null {
   if (!from || !to) return null;
@@ -170,7 +283,8 @@ function telHref(phone?: string | null): string | null {
   return digits.length >= 6 ? `tel:${digits}` : null;
 }
 
-export default function TransportTab() {
+/** `embedded`: shown inside another screen (the agency trip screen) — no trip header, no side padding. */
+export default function TransportTab({ embedded = false }: { embedded?: boolean } = {}) {
   const { trip, role } = useTrip();
   const canEdit = can(role, "edit");
   const toast = useToast();
@@ -179,6 +293,8 @@ export default function TransportTab() {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<FlightDraft | null>(null);
+  const [editingStay, setEditingStay] = useState<StayDraft | null>(null);
+  const [editingTransfer, setEditingTransfer] = useState<TransferDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [sheet, setSheet] = useState<{ title: string; actions: SheetAction[] } | null>(null);
 
@@ -240,6 +356,109 @@ export default function TransportTab() {
     reload();
   };
 
+  const saveStay = async () => {
+    if (!editingStay) return;
+    const hotel_name = editingStay.hotel_name.trim();
+    if (!hotel_name) {
+      toast.error("צריך שם למקום הלינה");
+      return;
+    }
+    const { check_in, check_out } = editingStay;
+    // Both are YYYY-MM-DD, so string order is calendar order.
+    if (check_in && check_out && check_out < check_in) {
+      toast.error("תאריך העזיבה לפני תאריך ההגעה");
+      return;
+    }
+    setSaving(true);
+    const payload = {
+      trip_id: trip.id,
+      hotel_name,
+      address: editingStay.address.trim() || null,
+      check_in: check_in || null,
+      check_out: check_out || null,
+      booking_ref: editingStay.booking_ref.trim() || null,
+      phone: editingStay.phone.trim() || null,
+      notes: editingStay.notes.trim() || null,
+    };
+    // RLS hides a row the caller may no longer change: 0 rows, no error. Count the rows back.
+    const { data, error } = editingStay.id
+      ? await supabase.from("stays").update(payload).eq("id", editingStay.id).select("id")
+      : await supabase.from("stays").insert(payload).select("id");
+    setSaving(false);
+    if (error || !(data as unknown[] | null)?.length) {
+      toast.error("השמירה נכשלה");
+      return;
+    }
+    setEditingStay(null);
+    toast.success("נשמר");
+    reload();
+  };
+
+  const removeStay = async (s: Stay) => {
+    // RLS hides a row the caller may no longer change: 0 rows deleted, no error.
+    const { data, error } = await supabase.from("stays").delete().eq("id", s.id).select("id");
+    if (error || !(data as unknown[] | null)?.length) {
+      toast.error("המחיקה נכשלה");
+      return;
+    }
+    toast.success("הלינה הוסרה");
+    reload();
+  };
+
+  const saveTransfer = async () => {
+    if (!editingTransfer) return;
+    const d = editingTransfer;
+    // A time without its date would be dropped silently (partsToIso needs the date).
+    if ((d.pickup_hour || d.pickup_minute) && !d.pickup_date) {
+      toast.error("בחרו גם תאריך איסוף");
+      return;
+    }
+    if (d.kind === "car_rental" && (d.return_hour || d.return_minute) && !d.return_date) {
+      toast.error("בחרו גם תאריך החזרה");
+      return;
+    }
+    const pickup_at = partsToIso(d.pickup_date, d.pickup_hour, d.pickup_minute);
+    const return_at = d.kind === "car_rental" ? partsToIso(d.return_date, d.return_hour, d.return_minute) : null;
+    if (pickup_at && return_at && return_at < pickup_at) {
+      toast.error("מועד ההחזרה לפני מועד האיסוף");
+      return;
+    }
+    setSaving(true);
+    const payload = {
+      trip_id: trip.id,
+      kind: d.kind,
+      provider: d.provider.trim() || null,
+      pickup_location: d.pickup_location.trim() || null,
+      pickup_at,
+      dropoff_location: d.dropoff_location.trim() || null,
+      return_at,
+      booking_ref: d.booking_ref.trim() || null,
+      phone: d.phone.trim() || null,
+      notes: d.notes.trim() || null,
+    };
+    const { data, error } = d.id
+      ? await supabase.from("transfers").update(payload).eq("id", d.id).select("id")
+      : await supabase.from("transfers").insert(payload).select("id");
+    setSaving(false);
+    if (error || !(data as unknown[] | null)?.length) {
+      toast.error("השמירה נכשלה");
+      return;
+    }
+    setEditingTransfer(null);
+    toast.success("נשמר");
+    reload();
+  };
+
+  const removeTransfer = async (t: Transfer) => {
+    const { data, error } = await supabase.from("transfers").delete().eq("id", t.id).select("id");
+    if (error || !(data as unknown[] | null)?.length) {
+      toast.error("המחיקה נכשלה");
+      return;
+    }
+    toast.success(t.kind === "car_rental" ? "הרכב הוסר" : "ההעברה הוסרה");
+    reload();
+  };
+
   if (loading) return <FullSpinner />;
 
   const arrivalAirport = flights.find((f) => f.direction === "outbound")?.to_airport ?? null;
@@ -249,8 +468,8 @@ export default function TransportTab() {
     setSheet({ title, actions: actions.filter((a): a is SheetAction => !!a) });
 
   return (
-    <div className="px-4">
-      <TripHeader trip={trip} subtitle="טיסות, לינה ותחבורה" />
+    <div className={embedded ? undefined : "px-4"}>
+      {!embedded && <TripHeader trip={trip} subtitle="טיסות, לינה ותחבורה" />}
 
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="type-title">טיסות ולינה</h2>
@@ -380,7 +599,11 @@ export default function TransportTab() {
         )}
       </GroupedList>
 
-      <GroupedList title="לינה" className="mt-6">
+      <GroupedList
+        title="לינה"
+        className="mt-6"
+        action={canEdit && <AddButton label="הוספת לינה" onClick={() => setEditingStay({ ...blankStay })} />}
+      >
         {stays.length === 0 ? (
           <p className="type-footnote px-4 py-3 text-muted-foreground">לא הוזנה לינה.</p>
         ) : (
@@ -420,6 +643,8 @@ export default function TransportTab() {
                       },
                       telHref(st.phone) && { icon: <Phone className="size-5" />, label: `התקשרות \u2066${st.phone}\u2069`, href: telHref(st.phone)! },
                       st.url && isSafeHttpUrl(st.url) && { icon: <ExternalLink className="size-5" />, label: "אתר המלון", href: st.url },
+                      canEdit && { icon: <Pencil className="size-5" />, label: "עריכה", onClick: () => setEditingStay(stayToDraft(st)) },
+                      canEdit && { icon: <Trash2 className="size-5" />, label: "מחיקה", destructive: true, onClick: () => removeStay(st) },
                     ])
                   }
                   aria-label={`אפשרויות ל${st.hotel_name}`}
@@ -433,7 +658,11 @@ export default function TransportTab() {
         )}
       </GroupedList>
 
-      <GroupedList title="העברות ורכב" className="mt-6">
+      <GroupedList
+        title="העברות ורכב"
+        className="mt-6"
+        action={canEdit && <AddButton label="הוספת העברה או רכב" onClick={() => setEditingTransfer({ ...blankTransfer })} />}
+      >
         {transfers.length === 0 ? (
           <p className="type-footnote px-4 py-3 text-muted-foreground">לא הוזנו העברות.</p>
         ) : (
@@ -479,6 +708,8 @@ export default function TransportTab() {
                       },
                       telHref(t.phone) && { icon: <Phone className="size-5" />, label: `התקשרות \u2066${t.phone}\u2069`, href: telHref(t.phone)! },
                       t.url && isSafeHttpUrl(t.url) && { icon: <ExternalLink className="size-5" />, label: "פרטי ההזמנה", href: t.url },
+                      canEdit && { icon: <Pencil className="size-5" />, label: "עריכה", onClick: () => setEditingTransfer(transferToDraft(t)) },
+                      canEdit && { icon: <Trash2 className="size-5" />, label: "מחיקה", destructive: true, onClick: () => removeTransfer(t) },
                     ])
                   }
                   aria-label="אפשרויות להעברה"
@@ -697,6 +928,217 @@ export default function TransportTab() {
           </div>
         )}
       </Modal>
+
+      <Modal
+        open={!!editingStay}
+        onClose={() => setEditingStay(null)}
+        title={editingStay?.id ? "עריכת לינה" : "לינה חדשה"}
+        footer={
+          <>
+            <Button variant="ghost" className="flex-1" onClick={() => setEditingStay(null)}>
+              ביטול
+            </Button>
+            <Button className="flex-1" loading={saving} onClick={saveStay}>
+              שמירה
+            </Button>
+          </>
+        }
+      >
+        {editingStay && (
+          <div className="flex flex-col gap-3">
+            <Field label="שם המלון או מקום הלינה">
+              <Input
+                value={editingStay.hotel_name}
+                onChange={(e) => setEditingStay({ ...editingStay, hotel_name: e.target.value })}
+                dir="auto"
+                maxLength={200}
+              />
+            </Field>
+            <Field label="כתובת">
+              <Input
+                value={editingStay.address}
+                onChange={(e) => setEditingStay({ ...editingStay, address: e.target.value })}
+                dir="auto"
+                maxLength={300}
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="הגעה">
+                <Input
+                  type="date"
+                  value={editingStay.check_in}
+                  onChange={(e) => setEditingStay({ ...editingStay, check_in: e.target.value })}
+                />
+              </Field>
+              <Field label="עזיבה">
+                <Input
+                  type="date"
+                  value={editingStay.check_out}
+                  min={editingStay.check_in || undefined}
+                  onChange={(e) => setEditingStay({ ...editingStay, check_out: e.target.value })}
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="מספר הזמנה">
+                <Input
+                  value={editingStay.booking_ref}
+                  onChange={(e) => setEditingStay({ ...editingStay, booking_ref: e.target.value })}
+                  dir="ltr"
+                />
+              </Field>
+              <Field label="טלפון">
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  value={editingStay.phone}
+                  onChange={(e) => setEditingStay({ ...editingStay, phone: e.target.value })}
+                  dir="ltr"
+                />
+              </Field>
+            </div>
+            <Field label="הערות">
+              <Input value={editingStay.notes} onChange={(e) => setEditingStay({ ...editingStay, notes: e.target.value })} />
+            </Field>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!editingTransfer}
+        onClose={() => setEditingTransfer(null)}
+        title={
+          editingTransfer?.id
+            ? editingTransfer.kind === "car_rental"
+              ? "עריכת רכב שכור"
+              : "עריכת העברה"
+            : editingTransfer?.kind === "car_rental"
+              ? "רכב שכור חדש"
+              : "העברה חדשה"
+        }
+        footer={
+          <>
+            <Button variant="ghost" className="flex-1" onClick={() => setEditingTransfer(null)}>
+              ביטול
+            </Button>
+            <Button className="flex-1" loading={saving} onClick={saveTransfer}>
+              שמירה
+            </Button>
+          </>
+        }
+      >
+        {editingTransfer && (
+          <div className="flex flex-col gap-3">
+            <Segmented
+              options={[
+                { value: "transfer", label: "העברה" },
+                { value: "car_rental", label: "רכב שכור" },
+              ]}
+              value={editingTransfer.kind}
+              onChange={(v) => setEditingTransfer({ ...editingTransfer, kind: v as TransferDraft["kind"] })}
+            />
+            <Field label={editingTransfer.kind === "car_rental" ? "חברת ההשכרה" : "חברת ההסעות"}>
+              <Input
+                value={editingTransfer.provider}
+                onChange={(e) => setEditingTransfer({ ...editingTransfer, provider: e.target.value })}
+                dir="auto"
+                maxLength={200}
+              />
+            </Field>
+            <Field label="נקודת איסוף">
+              <Input
+                value={editingTransfer.pickup_location}
+                onChange={(e) => setEditingTransfer({ ...editingTransfer, pickup_location: e.target.value })}
+                dir="auto"
+                placeholder="למשל שדה התעופה CDG"
+                maxLength={300}
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="תאריך איסוף">
+                <Input
+                  type="date"
+                  value={editingTransfer.pickup_date}
+                  onChange={(e) => setEditingTransfer({ ...editingTransfer, pickup_date: e.target.value })}
+                />
+              </Field>
+              <Field label="שעת איסוף (24 שעות)">
+                <TimeSelect
+                  hour={editingTransfer.pickup_hour}
+                  minute={editingTransfer.pickup_minute}
+                  onChange={(pickup_hour, pickup_minute) => setEditingTransfer({ ...editingTransfer, pickup_hour, pickup_minute })}
+                />
+              </Field>
+            </div>
+            <Field label={editingTransfer.kind === "car_rental" ? "נקודת החזרה" : "יעד ההעברה"}>
+              <Input
+                value={editingTransfer.dropoff_location}
+                onChange={(e) => setEditingTransfer({ ...editingTransfer, dropoff_location: e.target.value })}
+                dir="auto"
+                maxLength={300}
+              />
+            </Field>
+            {editingTransfer.kind === "car_rental" && (
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="תאריך החזרה">
+                  <Input
+                    type="date"
+                    value={editingTransfer.return_date}
+                    min={editingTransfer.pickup_date || undefined}
+                    onChange={(e) => setEditingTransfer({ ...editingTransfer, return_date: e.target.value })}
+                  />
+                </Field>
+                <Field label="שעת החזרה (24 שעות)">
+                  <TimeSelect
+                    hour={editingTransfer.return_hour}
+                    minute={editingTransfer.return_minute}
+                    onChange={(return_hour, return_minute) => setEditingTransfer({ ...editingTransfer, return_hour, return_minute })}
+                  />
+                </Field>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="מספר הזמנה">
+                <Input
+                  value={editingTransfer.booking_ref}
+                  onChange={(e) => setEditingTransfer({ ...editingTransfer, booking_ref: e.target.value })}
+                  dir="ltr"
+                />
+              </Field>
+              <Field label="טלפון">
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  value={editingTransfer.phone}
+                  onChange={(e) => setEditingTransfer({ ...editingTransfer, phone: e.target.value })}
+                  dir="ltr"
+                />
+              </Field>
+            </div>
+            <Field label="הערות">
+              <Input
+                value={editingTransfer.notes}
+                onChange={(e) => setEditingTransfer({ ...editingTransfer, notes: e.target.value })}
+              />
+            </Field>
+          </div>
+        )}
+      </Modal>
     </div>
+  );
+}
+
+/** The "add" control in a section's title row (GroupedList action). */
+function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="type-footnote -me-2 inline-flex min-h-11 items-center gap-1 rounded-full px-2 font-semibold text-primary transition-colors active:bg-muted/70"
+    >
+      <Plus className="size-4" aria-hidden />
+      הוספה
+    </button>
   );
 }

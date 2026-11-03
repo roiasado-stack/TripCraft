@@ -1,5 +1,5 @@
 // Trip drafts: what a new trip holds before it exists in the database. Shared by
-// the wizard (/new) and the agent's "new trip from documents" (/agent/new) — both
+// the wizard (/new) and the agent's "new trip from documents" (/agency/new) — both
 // stage scanned bookings locally and insert them only once the trip is created
 // (see create-trip.ts). Pure: no Supabase, no React.
 import type { BookingsImportResult, BookingTraveller } from "@/components/ImportBookings";

@@ -197,7 +197,8 @@ export type AskResult = {
 export async function askAgent(trip: Trip, message: string, history: AskTurn[]): Promise<AskResult> {
   try {
     const { data, error } = await supabase.functions.invoke("ask", {
-      body: { trip_id: trip.id, message, history },
+      // The agent quotes times in the zone the app displays them in (the browser's).
+      body: { trip_id: trip.id, message, history, time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone },
     });
     if (error) return { ok: false, error: await mapInvokeError(error) };
     const res = data as { answer?: string; cards?: AgentCard[]; pendingActions?: PendingAction[] };

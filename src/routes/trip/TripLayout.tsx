@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet, useNavigate, useOutletContext, useParams } from "react-router-dom";
+import { NavLink, Outlet, useNavigate, useOutletContext, useParams, useSearchParams } from "react-router-dom";
+import { can } from "@/lib/permissions";
 import { CalendarDays, CheckSquare, FileText, Home, MapPinned } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
@@ -41,6 +42,7 @@ export default function TripLayout() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "notfound">("loading");
   const [shareOpen, setShareOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // The trip currently on screen. A reload that finishes after the user moved to
   // another trip (e.g. right after "duplicate") must not swap the old one back in.
@@ -79,6 +81,17 @@ export default function TripLayout() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId, user]);
+
+  // A join-request push opens /trip/<id>?members=1: show the owner the members
+  // sheet once, then drop the param so a reload or back doesn't reopen it.
+  useEffect(() => {
+    // trip.id check: coming from another trip, role is still that trip's until the reload lands.
+    if (state !== "ready" || trip?.id !== tripId || searchParams.get("members") !== "1") return;
+    if (can(role, "manage")) setShareOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete("members");
+    setSearchParams(next, { replace: true });
+  }, [state, trip?.id, tripId, role, searchParams, setSearchParams]);
 
   if (state === "loading") return <FullSpinner label="טוען את הטיול…" />;
   if (state === "notfound" || !trip || !role)
