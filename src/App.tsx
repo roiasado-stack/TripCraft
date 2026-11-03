@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -8,31 +9,38 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { AgentRoute } from "@/components/AgentRoute";
 import { SetupNeeded } from "@/components/SetupNeeded";
+import { FullSpinner } from "@/components/ui";
+// First paint stays in the main bundle: the login screen, the trips list and
+// the public share page (anonymous visitors). Everything else loads per route.
 import AuthPage from "@/routes/AuthPage";
-import ResetPasswordPage from "@/routes/ResetPasswordPage";
 import TripsListPage from "@/routes/TripsListPage";
-import WizardPage from "@/routes/WizardPage";
-import SettingsPage from "@/routes/SettingsPage";
-import AdminMonitoringPage from "@/routes/AdminMonitoringPage";
-import AdminAgentsPage from "@/routes/AdminAgentsPage";
-import AgentPage from "@/routes/AgentPage";
-import AgentNewTripPage from "@/routes/AgentNewTripPage";
-import AgentSendPage from "@/routes/AgentSendPage";
-import AgencyLayout from "@/routes/agency/AgencyLayout";
-import AgencyTripLayout from "@/routes/agency/AgencyTripLayout";
-import AgencyTripPage from "@/routes/agency/AgencyTripPage";
 import SharePage from "@/routes/SharePage";
-import JoinPage from "@/routes/JoinPage";
-import { AccessibilityPage, CreditsPage, PrivacyPage, TermsPage } from "@/routes/LegalPages";
-import TripLayout from "@/routes/trip/TripLayout";
-import HomeTab from "@/routes/trip/HomeTab";
-import PeopleTab from "@/routes/trip/PeopleTab";
-import TransportTab from "@/routes/trip/TransportTab";
-import ItineraryTab from "@/routes/trip/ItineraryTab";
-import SuggestionsTab from "@/routes/trip/SuggestionsTab";
-import AskTab from "@/routes/trip/AskTab";
-import DocumentsTab from "@/routes/trip/DocumentsTab";
-import ChecklistTab from "@/routes/trip/ChecklistTab";
+
+const ResetPasswordPage = lazy(() => import("@/routes/ResetPasswordPage"));
+const WizardPage = lazy(() => import("@/routes/WizardPage"));
+const SettingsPage = lazy(() => import("@/routes/SettingsPage"));
+const AdminMonitoringPage = lazy(() => import("@/routes/AdminMonitoringPage"));
+const AdminAgentsPage = lazy(() => import("@/routes/AdminAgentsPage"));
+const AgentPage = lazy(() => import("@/routes/AgentPage"));
+const AgentNewTripPage = lazy(() => import("@/routes/AgentNewTripPage"));
+const AgentSendPage = lazy(() => import("@/routes/AgentSendPage"));
+const AgencyLayout = lazy(() => import("@/routes/agency/AgencyLayout"));
+const AgencyTripLayout = lazy(() => import("@/routes/agency/AgencyTripLayout"));
+const AgencyTripPage = lazy(() => import("@/routes/agency/AgencyTripPage"));
+const JoinPage = lazy(() => import("@/routes/JoinPage"));
+const TermsPage = lazy(() => import("@/routes/LegalPages").then((m) => ({ default: m.TermsPage })));
+const PrivacyPage = lazy(() => import("@/routes/LegalPages").then((m) => ({ default: m.PrivacyPage })));
+const CreditsPage = lazy(() => import("@/routes/LegalPages").then((m) => ({ default: m.CreditsPage })));
+const AccessibilityPage = lazy(() => import("@/routes/LegalPages").then((m) => ({ default: m.AccessibilityPage })));
+const TripLayout = lazy(() => import("@/routes/trip/TripLayout"));
+const HomeTab = lazy(() => import("@/routes/trip/HomeTab"));
+const PeopleTab = lazy(() => import("@/routes/trip/PeopleTab"));
+const TransportTab = lazy(() => import("@/routes/trip/TransportTab"));
+const ItineraryTab = lazy(() => import("@/routes/trip/ItineraryTab"));
+const SuggestionsTab = lazy(() => import("@/routes/trip/SuggestionsTab"));
+const AskTab = lazy(() => import("@/routes/trip/AskTab"));
+const DocumentsTab = lazy(() => import("@/routes/trip/DocumentsTab"));
+const ChecklistTab = lazy(() => import("@/routes/trip/ChecklistTab"));
 
 function LegacySendRedirect() {
   const { tripId } = useParams();
@@ -60,6 +68,7 @@ export default function App() {
           <ErrorBoundary>
             <AuthProvider>
               <BrowserRouter>
+              <Suspense fallback={<FullSpinner label="טוען…" />}>
               <Routes>
                 <Route path="/auth" element={<AuthPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -150,6 +159,7 @@ export default function App() {
 
                 <Route path="*" element={<NotFound />} />
                 </Routes>
+              </Suspense>
               </BrowserRouter>
             </AuthProvider>
           </ErrorBoundary>
