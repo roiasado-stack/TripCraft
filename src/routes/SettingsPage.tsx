@@ -10,7 +10,7 @@ import { DOCS_BUCKET } from "@/lib/documents";
 import { AGENCY_LOGO_BUCKET } from "@/lib/agency-brand";
 import { AgencyLogoField } from "@/components/AgencyLogoField";
 import { NotificationSettings } from "@/components/NotificationSettings";
-import { LegalLinks } from "@/routes/LegalPages";
+import { LegalLinks } from "@/components/LegalLinks";
 import type { AgentAccount } from "@/lib/types";
 
 const DELETE_CONFIRM_WORD = "מחיקה";
