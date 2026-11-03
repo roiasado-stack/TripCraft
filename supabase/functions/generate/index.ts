@@ -11,6 +11,16 @@
  */
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  type FlightRow,
+  type StayRow,
+  flightWindow,
+  itineraryBookingLines,
+  outsideTrip,
+  partyLine,
+  staysLines,
+  tripDays,
+} from "./bookings.ts";
 
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -119,7 +129,12 @@ type Body = {
     end_date: string | null;
   };
   participants: Participant[];
+  /** The browser's IANA zone; flight times go into the prompt on that clock (as in `ask`). */
+  time_zone?: string;
 };
+
+/** The trip's stays and flights, read server-side under the caller's RLS. */
+type Bookings = { stays: StayRow[]; flights: FlightRow[] };
 
 const TUNE_HE: Record<string, string> = {
   more_kids: "התאם יותר לילדים — פעילויות ידידותיות למשפחות עם ילדים.",
@@ -127,16 +142,6 @@ const TUNE_HE: Record<string, string> = {
   cheaper: "התמקד באפשרויות זולות או חינמיות, תקציב נמוך.",
   more_active: "הוסף יותר פעילות, ספורט והרפתקאות.",
 };
-
-function daysBetween(start: string, end: string): string[] {
-  const out: string[] = [];
-  const from = new Date(start);
-  const to = new Date(end);
-  for (const d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-    out.push(d.toISOString().slice(0, 10));
-  }
-  return out;
-}
 
 function describeParticipants(list: Participant[]): string {
   if (!list.length) return "לא צוינו משתתפים.";
@@ -206,17 +211,19 @@ function uniqueForPrompt(rows: ExistingRow[]): ExistingRow[] {
   return out;
 }
 
-function buildPrompt(body: Body, existing: ExistingRow[] = []): string {
+function buildPrompt(body: Body, existing: ExistingRow[] = [], bookings: Bookings = { stays: [], flights: [] }): string {
   const { trip, participants, kind, tune } = body;
-  const days = trip.start_date && trip.end_date ? daysBetween(trip.start_date, trip.end_date) : [];
+  // Only the days the traveller is actually there: the trip dates clipped to the flights.
+  const days = tripDays(trip.start_date, trip.end_date, bookings.flights, body.time_zone);
   const tuneLine = tune && TUNE_HE[tune] ? `\nכיוונון מיוחד: ${TUNE_HE[tune]}` : "";
+  const party = partyLine(participants, trip.trip_type);
 
   const context = `יעד: ${trip.destination}
 סוג טיול: ${trip.trip_type}
 תקציב: ${trip.budget_level ?? "לא צוין"}
 תאריכים: ${trip.start_date ?? "?"} עד ${trip.end_date ?? "?"}${days.length ? ` (${days.length} ימים)` : ""}
 משתתפים:
-${describeParticipants(participants)}${tuneLine}`;
+${describeParticipants(participants)}${party ? `\n${party}` : ""}${tuneLine}`;
 
   if (kind === "suggestions") {
     // Place kinds first so the capped list keeps the entries most likely to be re-suggested.
@@ -227,7 +234,9 @@ ${describeParticipants(participants)}${tuneLine}`;
 ${saved.map((r) => r.title).join("; ")}
 - אם אין מספיק מקומות חדשים ואמיתיים — החזר פחות פריטים. אל תמציא מקומות ואל תחזור על הקיימים.`
       : "";
-    return `${context}
+    const stays = staysLines(bookings.stays);
+    const staysBlock = stays ? `\nלינה (הזמנות):\n${stays}\nפזר את ההמלצות בין הערים שבהן לנים.` : "";
+    return `${context}${staysBlock}
 
 צור המלצות מותאמות אישית לטיול הזה. החזר JSON בלבד, ללא טקסט נוסף, במבנה:
 {"items":[{"kind":"attraction|restaurant|tip","title":"שם בעברית","description":"תיאור קצר בעברית (1-2 משפטים) כולל למה זה מתאים למשתתפים","tags":["תג1","תג2"],"age_min":0,"age_max":99,"price_level":"low|mid|high","wikipedia_title":"כותרת הערך בוויקיפדיה האנגלית או null","lat":32.0853,"lng":34.7818}]}
@@ -271,7 +280,8 @@ ${perDay}
 ${scope}
 - לעולם אל תחזור על פעילות או מקום שכבר קיימים במסלול — גם לא בשם אחר, בכתיב אחר או ביום אחר.`;
     }
-    return `${context}
+    const bookingBlock = itineraryBookingLines(bookings.stays, bookings.flights, days, body.time_zone);
+    return `${context}${bookingBlock ? `\n${bookingBlock}` : ""}
 
 צור מסלול יומי מוצע. הימים: ${dayList}
 החזר JSON בלבד במבנה:
@@ -1372,6 +1382,26 @@ Never answer with the article of the surrounding city, region or country — e.g
     }
     existing = existing.filter((r) => typeof r.title === "string" && r.title.trim() !== "");
 
+    // The trip's own stays and flights, read here under the caller's RLS (never
+    // taken from the request body): the itinerary follows where the traveller
+    // sleeps and when they land / fly home. A failed read means no booking
+    // context, as before — never a failed run.
+    const bookings: Bookings = { stays: [], flights: [] };
+    if (body.kind === "itinerary" || body.kind === "suggestions") {
+      try {
+        const [stays, flights] = await Promise.all([
+          supabase.from("stays").select("hotel_name, address, check_in, check_out").eq("trip_id", body.trip_id).limit(50),
+          body.kind === "itinerary"
+            ? supabase.from("flights").select("direction, from_airport, to_airport, depart_at, arrive_at").eq("trip_id", body.trip_id).limit(50)
+            : Promise.resolve({ data: [] }),
+        ]);
+        bookings.stays = (stays.data ?? []) as StayRow[];
+        bookings.flights = (flights.data ?? []) as FlightRow[];
+      } catch (e) {
+        console.error("Bookings lookup threw", e);
+      }
+    }
+
     const runStart = Date.now();
     const llm = await fetch(ANTHROPIC_URL, {
       method: "POST",
@@ -1383,7 +1413,7 @@ Never answer with the article of the surrounding city, region or country — e.g
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        messages: [{ role: "user", content: buildPrompt(body, existing) }],
+        messages: [{ role: "user", content: buildPrompt(body, existing, bookings) }],
       }),
     });
     const latencyMs = Date.now() - runStart;
@@ -1574,6 +1604,8 @@ Never answer with the article of the surrounding city, region or country — e.g
       inserted = rows.length;
       dupStats = `dup_dropped=${dupDropped} photo_dup_cleared=${cleared} existing=${existing.length}`;
     } else if (body.kind === "itinerary") {
+      const tripDayList = tripDays(body.trip.start_date, body.trip.end_date, bookings.flights, body.time_zone);
+      const flightTimes = flightWindow(bookings.flights, body.time_zone);
       const built = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
         return {
@@ -1593,7 +1625,11 @@ Never answer with the article of the surrounding city, region or country — e.g
             lng: lngOf(i),
           },
         };
-      }).filter(({ row }) => row.title && /^\d{4}-\d{2}-\d{2}$/.test(row.day_date));
+      })
+        .filter(({ row }) => row.title && /^\d{4}-\d{2}-\d{2}$/.test(row.day_date))
+        // Backstop for the prompt's booking rules: nothing on a day the traveller isn't there,
+        // before landing, or after take-off home.
+        .filter(({ row }) => !outsideTrip(row, tripDayList, flightTimes));
       const kept = dropDuplicates(built);
       const dupDropped = built.length - kept.length;
       if (!kept.length) return await noNewItems(dupDropped ? "all_duplicates" : "no_valid_rows", dupDropped);

@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button, Card, FullSpinner, Input, Label } from "@/components/ui";
 import { Mail } from "lucide-react";
-import { LegalLinks } from "@/routes/LegalPages";
+import { LegalLinks } from "@/components/LegalLinks";
 import { DevSignIn } from "@/components/DevSignIn";
 
 type Mode = "signin" | "signup" | "reset";
