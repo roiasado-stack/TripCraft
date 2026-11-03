@@ -105,6 +105,8 @@ export async function generateContent(
           age_range: p.age_range,
           preferences: p.preferences,
         })),
+        // Flight times go into the itinerary prompt on the clock the app shows them in.
+        time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
     });
     if (error) return { ok: false, error: await mapInvokeError(error) };

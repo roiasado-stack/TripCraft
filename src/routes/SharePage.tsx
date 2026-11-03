@@ -16,7 +16,7 @@ import { isTripPhotoUrl } from "@/lib/photo-url";
 import { AGENCY_LOGO_BUCKET, isAgencyLogoPath, safeAgencyColor } from "@/lib/agency-brand";
 import { cn } from "@/lib/utils";
 import { resolveMapUrl } from "@/lib/maps";
-import { LegalLinks } from "@/routes/LegalPages";
+import { LegalLinks } from "@/components/LegalLinks";
 import { ShareEnglishContext } from "@/hooks/use-share-english";
 import {
   formatDateEn,
