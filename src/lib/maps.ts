@@ -39,11 +39,59 @@ export function flightStatusUrl(airline?: string | null, number?: string | null)
   return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
 }
 
-/** Where to find taxis / ride-hailing at the destination. */
-export function taxiSearchUrl(destination?: string | null): string | null {
-  const d = (destination ?? "").trim();
-  if (!d) return null;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`taxi ${d}`)}`;
+type StayPlace = { hotel_name?: string | null; address?: string | null };
+
+/**
+ * What to search for to find a stay. A specific address is enough on its own:
+ * adding the trip's destination to it can break the match, because on a
+ * multi-city trip that text names several places ("קרקוב וורשה, פולין"). Only a
+ * bare hotel name is scoped to the destination, since it could be anywhere.
+ */
+function stayPlace(stay: StayPlace, destination?: string | null): { place: string; near: string | null } {
+  const name = (stay.hotel_name ?? "").trim();
+  const address = (stay.address ?? "").trim();
+  if (!address) return { place: name, near: destination ?? null };
+  const repeatsName = name && address.toLowerCase().includes(name.toLowerCase());
+  return { place: name && !repeatsName ? `${name}, ${address}` : address, near: null };
+}
+
+/** A stay on the map: explicit map_url wins, then the hotel and its address. */
+export function stayMapUrl(stay: StayPlace & { map_url?: string | null }, destination?: string | null): string | null {
+  const { place, near } = stayPlace(stay, destination);
+  return resolveMapUrl(stay.map_url, place, near);
+}
+
+/** Turn-by-turn directions to a stay. */
+export function stayDirectionsUrl(stay: StayPlace, destination?: string | null): string | null {
+  const { place, near } = stayPlace(stay, destination);
+  return directionsUrl(place, near);
+}
+
+/**
+ * Where to find taxis / ride-hailing. Searches around the first real place the
+ * trip knows, because a multi-city destination is no place at all: a stay's
+ * address, then the arrival airport, then a stay's name, and only then the
+ * destination text. Stays are taken in the order given (the earliest first).
+ */
+export function taxiSearchUrl(where: {
+  stays?: readonly StayPlace[];
+  arrivalAirport?: string | null;
+  destination?: string | null;
+}): string | null {
+  const stays = where.stays ?? [];
+  const address = stays.map((s) => (s.address ?? "").trim()).find(Boolean);
+  const airport = (where.arrivalAirport ?? "").trim();
+  const hotel = stays.map((s) => (s.hotel_name ?? "").trim()).find(Boolean);
+  const destination = (where.destination ?? "").trim();
+  const q = address
+    ? `taxi near ${address}`
+    : airport
+      ? `taxi near ${airport} airport`
+      : hotel
+        ? `taxi near ${[hotel, destination].filter(Boolean).join(", ")}`
+        : destination && `taxi ${destination}`;
+  if (!q) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 }
 
 /** Car-rental desks, typically at the arrival airport. */

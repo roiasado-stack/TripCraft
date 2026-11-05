@@ -27,6 +27,7 @@ const AgentSendPage = lazy(() => import("@/routes/AgentSendPage"));
 const AgencyLayout = lazy(() => import("@/routes/agency/AgencyLayout"));
 const AgencyTripLayout = lazy(() => import("@/routes/agency/AgencyTripLayout"));
 const AgencyTripPage = lazy(() => import("@/routes/agency/AgencyTripPage"));
+const AgencyRequestsPage = lazy(() => import("@/routes/agency/AgencyRequestsPage"));
 const JoinPage = lazy(() => import("@/routes/JoinPage"));
 const TermsPage = lazy(() => import("@/routes/LegalPages").then((m) => ({ default: m.TermsPage })));
 const PrivacyPage = lazy(() => import("@/routes/LegalPages").then((m) => ({ default: m.PrivacyPage })));
@@ -113,6 +114,7 @@ export default function App() {
                 >
                   <Route index element={<AgentPage />} />
                   <Route path="new" element={<AgentNewTripPage />} />
+                  <Route path="requests" element={<AgencyRequestsPage />} />
                   <Route path="trips/:tripId" element={<AgencyTripLayout />}>
                     <Route index element={<AgencyTripPage />} />
                   </Route>

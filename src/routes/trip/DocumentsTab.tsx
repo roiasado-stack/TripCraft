@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, ExternalLink, LinkIcon, Lock, MoreHorizontal, Plus, ScanLine, Trash2, Upload, Users } from "lucide-react";
+import { Download, ExternalLink, LinkIcon, Lock, MoreHorizontal, Pencil, Plus, ScanLine, Trash2, Upload, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
-import type { DocumentRow } from "@/lib/types";
+import type { DocumentRow, Participant } from "@/lib/types";
 import { useTrip } from "./TripLayout";
 import { TripHeader } from "@/components/TripHeader";
 import { Button, Chip, EmptyState, Field, GroupedList, Input, Label, Modal, Segmented, SheetRow, Spinner } from "@/components/ui";
@@ -12,6 +12,62 @@ import { DOC_CATEGORIES } from "@/lib/trip-options";
 import { ImportVoucher, type VoucherResult } from "@/components/ImportVoucher";
 import { DOCS_BUCKET as BUCKET, uploadTripDocument } from "@/lib/documents";
 import { isSafeHttpUrl } from "@/lib/maps";
+import { canEditDocument, documentTravellerProblem, PASSPORT_CATEGORY, type TravellerProblem } from "@/lib/document-rules";
+
+const TRAVELLER_PROBLEM_TEXT: Record<TravellerProblem, string> = {
+  no_travellers: "כדי לשמור דרכון צריך קודם להוסיף נוסע לטיול",
+  pick_traveller: "דרכון חייב להיות משויך לנוסע. בחרו נוסע מהרשימה",
+};
+
+/** Category chips and traveller picker, shared by the add and edit sheets. */
+function DocCategoryFields({
+  category,
+  participantId,
+  participants,
+  onCategory,
+  onParticipant,
+}: {
+  category: string;
+  participantId: string;
+  participants: Participant[];
+  onCategory: (value: string) => void;
+  onParticipant: (value: string) => void;
+}) {
+  const required = category === PASSPORT_CATEGORY;
+  const problem = documentTravellerProblem(category, participantId, participants);
+  return (
+    <>
+      <div>
+        <Label>קטגוריה</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {DOC_CATEGORIES.map((c) => (
+            <Chip key={c.value} active={category === c.value} onClick={() => onCategory(c.value)}>
+              {c.emoji} {c.label}
+            </Chip>
+          ))}
+        </div>
+      </div>
+      {participants.length > 0 && (
+        <div>
+          <Label>{required ? "שייך לנוסע (חובה)" : "שייך לנוסע (לא חובה)"}</Label>
+          <select
+            value={participantId}
+            onChange={(e) => onParticipant(e.target.value)}
+            className="h-11 w-full rounded-2xl border border-input bg-card px-3 text-sm"
+          >
+            <option value="">{required ? "בחרו נוסע" : "כללי / כל הטיול"}</option>
+            {participants.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {problem && <p className="text-xs text-muted-foreground">{TRAVELLER_PROBLEM_TEXT[problem]}</p>}
+    </>
+  );
+}
 
 /**
  * A scanned voucher's times come back as local wall-clock time with no zone
@@ -44,6 +100,8 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [actionsFor, setActionsFor] = useState<DocumentRow | null>(null);
+  const [editFor, setEditFor] = useState<{ id: string; name: string; category: string; participantId: string } | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -77,13 +135,51 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
     load();
   };
 
+  /** Toasts why this category + traveller can't be saved; true when they can. */
+  const travellerOk = (cat: string, travellerId: string) => {
+    const problem = documentTravellerProblem(cat, travellerId, participants);
+    if (problem) toast.error(TRAVELLER_PROBLEM_TEXT[problem]);
+    return !problem;
+  };
+
+  /** The picker keeps its choice for the next document, but the next passport
+   *  belongs to someone else: keeping it would count one traveller twice and
+   *  leave the other one "missing" on the agent board. */
+  const clearTravellerAfterPassport = () => {
+    if (category === PASSPORT_CATEGORY) setParticipantId("");
+  };
+
+  const saveEdit = async () => {
+    if (!editFor || !travellerOk(editFor.category, editFor.participantId)) return;
+    setSavingEdit(true);
+    // select(): an update RLS refuses matches zero rows without any error.
+    const { data, error } = await supabase
+      .from("documents")
+      .update({ category: editFor.category, participant_id: editFor.participantId || null })
+      .eq("id", editFor.id)
+      .select("id");
+    setSavingEdit(false);
+    if (error || !data?.length) {
+      toast.error("לא הצלחנו לעדכן את המסמך. נסו שוב.");
+    } else {
+      setEditFor(null);
+      toast.success("המסמך עודכן");
+    }
+    load();
+  };
+
   const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
+    if (!travellerOk(category, participantId)) {
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     setUploading(true);
     try {
       await uploadDocument(file, { category, participantId });
       toast.success("הקובץ הועלה 📎");
+      clearTravellerAfterPassport();
       load();
     } catch (err) {
       if (err instanceof Error && err.message === "file_too_large") {
@@ -187,6 +283,7 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
       toast.error("הקישור צריך להתחיל ב-https://");
       return;
     }
+    if (!travellerOk(category, participantId)) return;
     const { error } = await supabase.from("documents").insert({
       trip_id: trip.id,
       name: linkModal.name.trim(),
@@ -201,6 +298,7 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
     }
     setLinkModal(null);
     toast.success("הקישור נשמר 🔗");
+    clearTravellerAfterPassport();
     load();
   };
 
@@ -374,33 +472,13 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
               ]}
             />
           </div>
-          <div>
-            <Label>קטגוריה</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {DOC_CATEGORIES.map((c) => (
-                <Chip key={c.value} active={category === c.value} onClick={() => setCategory(c.value)}>
-                  {c.emoji} {c.label}
-                </Chip>
-              ))}
-            </div>
-          </div>
-          {participants.length > 0 && (
-            <div>
-              <Label>שייך לנוסע (לא חובה)</Label>
-              <select
-                value={participantId}
-                onChange={(e) => setParticipantId(e.target.value)}
-                className="h-11 w-full rounded-2xl border border-input bg-card px-3 text-sm"
-              >
-                <option value="">כללי / כל הטיול</option>
-                {participants.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <DocCategoryFields
+            category={category}
+            participantId={participantId}
+            participants={participants}
+            onCategory={setCategory}
+            onParticipant={setParticipantId}
+          />
           <div className="flex flex-col gap-2">
             {!isAnonymous && (
               <SheetRow
@@ -408,6 +486,7 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
                 label="העלאת קובץ"
                 hint="תמונה או PDF, עד 20MB"
                 onClick={() => {
+                  if (!travellerOk(category, participantId)) return;
                   setAddOpen(false);
                   fileRef.current?.click();
                 }}
@@ -418,6 +497,7 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
               label="קישור חיצוני"
               hint="Drive / Dropbox / OneDrive"
               onClick={() => {
+                if (!travellerOk(category, participantId)) return;
                 setAddOpen(false);
                 setLinkModal({ name: "", url: "" });
               }}
@@ -450,6 +530,17 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
                 open(d);
               }}
             />
+            {canEditDocument(actionsFor, user?.id, role) && (
+              <SheetRow
+                icon={<Pencil className="size-5" />}
+                label="שינוי קטגוריה או נוסע"
+                onClick={() => {
+                  const d = actionsFor;
+                  setActionsFor(null);
+                  setEditFor({ id: d.id, name: d.name, category: d.category, participantId: d.participant_id ?? "" });
+                }}
+              />
+            )}
             <SheetRow
               icon={actionsFor.visibility === "members" ? <Lock className="size-5" /> : <Users className="size-5" />}
               label={actionsFor.visibility === "members" ? "להפוך לפרטי (רק אני)" : "לשתף עם כל חברי הטיול"}
@@ -468,6 +559,35 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
                 setActionsFor(null);
                 remove(d);
               }}
+            />
+          </div>
+        )}
+      </Modal>
+
+      {/* Fix a document's category or traveller without uploading it again */}
+      <Modal
+        open={!!editFor}
+        onClose={() => setEditFor(null)}
+        title={editFor?.name ?? ""}
+        footer={
+          <>
+            <Button variant="ghost" className="flex-1" onClick={() => setEditFor(null)}>
+              ביטול
+            </Button>
+            <Button className="flex-1" disabled={savingEdit} onClick={saveEdit}>
+              שמירה
+            </Button>
+          </>
+        }
+      >
+        {editFor && (
+          <div className="flex flex-col gap-4">
+            <DocCategoryFields
+              category={editFor.category}
+              participantId={editFor.participantId}
+              participants={participants}
+              onCategory={(value) => setEditFor({ ...editFor, category: value })}
+              onParticipant={(value) => setEditFor({ ...editFor, participantId: value })}
             />
           </div>
         )}
