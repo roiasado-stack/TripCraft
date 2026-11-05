@@ -104,10 +104,26 @@ export default function AgentPage() {
           )}
         </div>
         <div>
-          <Button size="lg" className="pressable w-full lg:w-auto" onClick={() => navigate("/agency/new")}>
-            <FileUp className="size-5" />
-            טיול חדש מהמסמכים
-          </Button>
+          <div className="flex flex-col gap-2 lg:flex-row-reverse">
+            <Button size="lg" className="pressable w-full lg:w-auto" onClick={() => navigate("/agency/new")}>
+              <FileUp className="size-5" />
+              טיול חדש מהמסמכים
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="pressable w-full lg:w-auto"
+              onClick={() => navigate("/agency/requests")}
+            >
+              <UserPlus className="size-5" />
+              בקשות הצטרפות
+              {pendingCount > 0 && (
+                <span className="type-footnote rounded-full bg-accent-soft px-2 font-semibold tabular-nums text-accent">
+                  {pendingCount}
+                </span>
+              )}
+            </Button>
+          </div>
           <p className="type-footnote mt-2 px-4 text-center text-muted-foreground lg:hidden">
             מעלים כרטיסי טיסה, אישור מלון או רכב (עד 8 קבצים), בודקים ושולחים ללקוח.
           </p>
