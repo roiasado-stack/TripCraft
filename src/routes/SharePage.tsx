@@ -15,7 +15,8 @@ import { ImageCredit } from "@/components/MediaCard";
 import { isTripPhotoUrl } from "@/lib/photo-url";
 import { AGENCY_LOGO_BUCKET, isAgencyLogoPath, safeAgencyColor } from "@/lib/agency-brand";
 import { cn } from "@/lib/utils";
-import { resolveMapUrl } from "@/lib/maps";
+import { resolveMapUrl, stayMapUrl } from "@/lib/maps";
+import { sortItinerary } from "@/lib/itinerary-order";
 import { LegalLinks } from "@/components/LegalLinks";
 import { ShareEnglishContext } from "@/hooks/use-share-english";
 import {
@@ -121,7 +122,9 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
       </div>
     );
 
-  const { trip, agency, flights, stays, itinerary, suggestions, updates } = shared;
+  const { trip, agency, flights, stays, suggestions, updates } = shared;
+  // The RPC returns day_date, sort_order; the page shows the same order as the app.
+  const itinerary = sortItinerary(shared.itinerary);
   // 023 already filters these server-side; checked again because they reach
   // anonymous visitors (a CSS value or foreign URL could load a tracking pixel).
   const accent = safeAgencyColor(agency?.color) ?? undefined;
@@ -268,7 +271,7 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
                     </div>
                   )}
                 </div>
-                <MapLink url={resolveMapUrl(st.map_url, st.address || st.hotel_name, trip.destination)} />
+                <MapLink url={stayMapUrl(st, trip.destination)} />
               </div>
             ))}
           </GroupedList>

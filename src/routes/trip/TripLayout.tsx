@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate, useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import { can } from "@/lib/permissions";
+import { joinPushLanding } from "@/lib/join-requests";
 import { CalendarDays, CheckSquare, FileText, Home, MapPinned } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
@@ -36,7 +37,7 @@ const TABS = [
 export default function TripLayout() {
   const { tripId } = useParams();
   const navigate = useNavigate();
-  const { user, isAnonymous } = useAuth();
+  const { user, isAnonymous, isAgent, rolesReady, rolesError } = useAuth();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [role, setRole] = useState<TripRole | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -84,14 +85,22 @@ export default function TripLayout() {
 
   // A join-request push opens /trip/<id>?members=1: show the owner the members
   // sheet once, then drop the param so a reload or back doesn't reopen it.
+  // An agent who owns the trip goes to the requests screen instead.
   useEffect(() => {
     // trip.id check: coming from another trip, role is still that trip's until the reload lands.
     if (state !== "ready" || trip?.id !== tripId || searchParams.get("members") !== "1") return;
-    if (can(role, "manage")) setShareOpen(true);
+    // Roles arrive a beat after the session. If they failed to load, nobody is treated as an agent.
+    if (!rolesReady && !rolesError) return;
+    const landing = joinPushLanding(can(role, "manage"), isAgent);
+    if (landing === "agent_requests") {
+      navigate("/agency/requests", { replace: true });
+      return;
+    }
+    if (landing === "members_sheet") setShareOpen(true);
     const next = new URLSearchParams(searchParams);
     next.delete("members");
     setSearchParams(next, { replace: true });
-  }, [state, trip?.id, tripId, role, searchParams, setSearchParams]);
+  }, [state, trip?.id, tripId, role, rolesReady, rolesError, isAgent, navigate, searchParams, setSearchParams]);
 
   if (state === "loading") return <FullSpinner label="טוען את הטיול…" />;
   if (state === "notfound" || !trip || !role)

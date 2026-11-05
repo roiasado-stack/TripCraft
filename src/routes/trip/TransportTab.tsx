@@ -14,6 +14,8 @@ import {
   flightStatusUrl,
   isSafeHttpUrl,
   resolveMapUrl,
+  stayDirectionsUrl,
+  stayMapUrl,
   taxiSearchUrl,
 } from "@/lib/maps";
 import { formatDateTimeHeb, formatHeb, formatTimeHeb } from "@/lib/trip-options";
@@ -608,8 +610,8 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
           <p className="type-footnote px-4 py-3 text-muted-foreground">לא הוזנה לינה.</p>
         ) : (
           stays.map((st) => {
-            const place = st.address || st.hotel_name;
-            const mapUrl = resolveMapUrl(st.map_url, place, trip.destination);
+            const mapUrl = stayMapUrl(st, trip.destination);
+            const directions = stayDirectionsUrl(st, trip.destination);
             return (
               <div key={st.id} className="flex items-start gap-3 py-3 ps-4 pe-1">
                 <div className="min-w-0 flex-1">
@@ -636,11 +638,7 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
                   onClick={() =>
                     openSheet(st.hotel_name, [
                       mapUrl && isSafeHttpUrl(mapUrl) && { icon: <MapPin className="size-5" />, label: "פתיחה במפה", href: mapUrl },
-                      directionsUrl(place, trip.destination) && {
-                        icon: <Navigation className="size-5" />,
-                        label: "ניווט",
-                        href: directionsUrl(place, trip.destination)!,
-                      },
+                      directions && { icon: <Navigation className="size-5" />, label: "ניווט", href: directions },
                       telHref(st.phone) && { icon: <Phone className="size-5" />, label: `התקשרות \u2066${st.phone}\u2069`, href: telHref(st.phone)! },
                       st.url && isSafeHttpUrl(st.url) && { icon: <ExternalLink className="size-5" />, label: "אתר המלון", href: st.url },
                       canEdit && { icon: <Pencil className="size-5" />, label: "עריכה", onClick: () => setEditingStay(stayToDraft(st)) },
@@ -726,7 +724,7 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
       {/* Live searches at the destination */}
       <GroupedList title="תחבורה ביעד" className="mt-6">
         {[
-          { href: taxiSearchUrl(trip.destination), label: "מוניות ביעד", icon: <Car className="size-5" /> },
+          { href: taxiSearchUrl({ stays, arrivalAirport, destination: trip.destination }), label: "מוניות ביעד", icon: <Car className="size-5" /> },
           {
             href: carRentalSearchUrl(arrivalAirport ? `${arrivalAirport} airport` : trip.destination),
             label: "השכרת רכב",

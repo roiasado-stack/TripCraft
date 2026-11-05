@@ -9,6 +9,7 @@ import { EXTERNAL_REF_MAX, IMPORT_SOURCE_LABEL, isImportSource, normalizeExterna
 import { Flag } from "@/components/Flag";
 import { AgentSendPanel } from "@/components/AgentSendPanel";
 import { dateRangeHeb, parseLocalDate, tripLength, dayCount } from "@/lib/trip-dates";
+import { sortItinerary } from "@/lib/itinerary-order";
 import { useTrip } from "@/routes/trip/TripLayout";
 import TransportTab from "@/routes/trip/TransportTab";
 import DocumentsTab from "@/routes/trip/DocumentsTab";
@@ -35,15 +36,13 @@ export default function AgencyTripPage() {
         supabase.from("trip_clients").select("*").eq("trip_id", trip.id).maybeSingle(),
         supabase
           .from("itinerary_items")
-          .select("day_date, title, sort_order")
-          .eq("trip_id", trip.id)
-          .order("day_date")
-          .order("sort_order"),
+          .select("day_date, title, start_time, sort_order")
+          .eq("trip_id", trip.id),
       ]);
       if (cancelled) return;
       setClient((c as TripClient | null) ?? null);
       const byDay = new Map<string, string[]>();
-      for (const it of (items as Pick<ItineraryItem, "day_date" | "title">[] | null) ?? []) {
+      for (const it of sortItinerary((items as Pick<ItineraryItem, "day_date" | "title" | "start_time" | "sort_order">[] | null) ?? [])) {
         byDay.set(it.day_date, [...(byDay.get(it.day_date) ?? []), it.title]);
       }
       setDays([...byDay].map(([day, titles]) => ({ day, titles })));

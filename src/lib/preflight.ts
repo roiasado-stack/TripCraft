@@ -24,7 +24,8 @@ export function preflightChecklist(
   const kosher = participants.some((p) => p.preferences?.includes("kosher"));
   const vegetarian = participants.some((p) => p.preferences?.includes("vegetarian"));
 
-  // A week out
+  // A week out (the earliest group), though the wording asks for it right after buying the tickets
+  add("לרכוש ביטוח נסיעות מיד עם קניית הכרטיסים, ולשמור את הפוליסה", 168);
   add("לוודא שהדרכונים בתוקף (6+ חודשים)", 168);
   add("לבדוק אם נדרשת ויזה / ETA ליעד", 168);
   if (kosher || vegetarian) add("להזמין ארוחה מיוחדת בטיסה (כשר / צמחוני)", 168);
@@ -32,7 +33,6 @@ export function preflightChecklist(
   if (hasBaby) add("לאשר מול חברת התעופה עריסה / מושב תינוק", 168);
 
   // Two days out
-  add("לרכוש ביטוח נסיעות ולשמור את הפוליסה", 48);
   add("להוריד את המסמכים לטלפון (זמינים גם בלי אינטרנט)", 48);
   add("להזמין העברה / להסדיר חניה לשדה", 48);
   add("לבדוק תחזית מזג אוויר ולהתאים את המזוודה", 48);

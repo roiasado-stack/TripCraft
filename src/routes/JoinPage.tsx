@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Clock, LogIn, UserX } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import type { MemberRole } from "@/lib/types";
+import { stepAfterWaitingCheck, stepForMemberStatus, type WaitingCheckStep } from "@/lib/join-waiting";
 import { ROLE_HINTS, ROLE_LABELS } from "@/lib/permissions";
 import { formatHeb } from "@/lib/trip-options";
 import { Flag } from "@/components/Flag";
@@ -24,8 +25,22 @@ type Preview = {
   lead_email_hint?: string | null;
 };
 
-/** accept_trip_invite refusals that need their own message (migration 024). */
-type JoinProblem = "wrong_account" | "lead_taken" | null;
+/**
+ * Dead ends that need their own message: accept_trip_invite refusals (migration 024),
+ * a member the owner removed, and a waiting request whose row no longer exists.
+ */
+type JoinProblem = "wrong_account" | "lead_taken" | "removed" | "gone" | null;
+
+/** A join request waiting for approval, for this link and this account only. */
+type WaitingRequest = {
+  tripId: string;
+  userId: string;
+  token: string;
+  /** Joined by a personal link but not made lead, so the lead wording doesn't apply. */
+  notLead: boolean;
+};
+
+const WAITING_CHECK_MS = 10_000;
 
 /**
  * /join/:token — where a WhatsApp invite lands. Public: shows what the link
@@ -39,10 +54,23 @@ export default function JoinPage() {
   const navigate = useNavigate();
   const [preview, setPreview] = useState<Preview | null | undefined>(undefined);
   const [joining, setJoining] = useState(false);
-  const [pending, setPending] = useState(false);
+  const [waitingRequest, setWaitingRequest] = useState<WaitingRequest | null>(null);
+  const [checkingNow, setCheckingNow] = useState(false);
   const [problem, setProblem] = useState<JoinProblem>(null);
+  const runCheck = useRef<(() => Promise<WaitingCheckStep>) | null>(null);
+  // The toast object changes whenever a toast shows; the checks below shouldn't restart for that.
+  const toastRef = useRef(toast);
   const returnPath = `/join/${token}`;
   const isLeadLink = !!preview?.grants_lead;
+  // Another account (signed in from another tab) or another link is not this request:
+  // its row would read as gone.
+  const waiting = waitingRequest && waitingRequest.userId === user?.id && waitingRequest.token === token ? waitingRequest : null;
+  const waitingTripId = waiting?.tripId;
+  const waitingUserId = waiting?.userId;
+
+  useEffect(() => {
+    toastRef.current = toast;
+  });
 
   useEffect(() => {
     // A failed lookup shows the same "invite not valid" card as an unknown token.
@@ -50,6 +78,70 @@ export default function JoinPage() {
       .rpc("invite_preview", { p_token: token })
       .then(({ data }) => setPreview((data as Preview | null) ?? null), () => setPreview(null));
   }, [token]);
+
+  // While waiting: re-read the user's own member row on a timer and when the page
+  // comes back. A failed read does nothing and the next one retries.
+  useEffect(() => {
+    if (!waitingTripId || !waitingUserId) return;
+    let stopped = false;
+    let inFlight: Promise<WaitingCheckStep> | null = null;
+
+    const read = async (): Promise<WaitingCheckStep> => {
+      try {
+        const { data, error } = await supabase
+          .from("trip_members")
+          .select("status")
+          .eq("trip_id", waitingTripId)
+          .eq("user_id", waitingUserId)
+          .maybeSingle();
+        return stepAfterWaitingCheck(!!error, (data as { status: string } | null)?.status);
+      } catch {
+        return "retry";
+      }
+    };
+
+    const check = () => {
+      inFlight ??= read().then((step) => {
+        inFlight = null;
+        if (stopped) return step;
+        if (step === "open_trip") {
+          stopped = true;
+          toastRef.current.success("הבקשה אושרה, נכנסים לטיול 🎉");
+          navigate(`/trip/${waitingTripId}`, { replace: true });
+        } else if (step === "removed" || step === "gone") {
+          stopped = true;
+          setProblem(step);
+          setWaitingRequest(null);
+        }
+        return step;
+      });
+      return inFlight;
+    };
+    runCheck.current = check;
+
+    const timer = setInterval(() => {
+      if (!document.hidden) void check();
+    }, WAITING_CHECK_MS);
+    const onVisibility = () => {
+      if (!document.hidden) void check();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stopped = true;
+      runCheck.current = null;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [waitingTripId, waitingUserId, navigate]);
+
+  const checkNow = async () => {
+    if (!runCheck.current) return;
+    setCheckingNow(true);
+    const step = await runCheck.current();
+    setCheckingNow(false);
+    if (step === "wait") toast.toast("עדיין ממתינים לאישור.");
+    else if (step === "retry") toast.error("הבדיקה לא הצליחה. ננסה שוב בעוד רגע.");
+  };
 
   const join = async () => {
     setJoining(true);
@@ -72,21 +164,19 @@ export default function JoinPage() {
       /** Already on the trip, personal link without an email: not made lead (migration 024). */
       not_lead?: boolean;
     };
-    if (result.status === "removed") {
-      toast.error("הוסרת מהטיול, ולכן הקישור לא מצרף אותך שוב. אפשר לבקש ממי שמנהל את הטיול להוסיף אותך מחדש.");
+    const step = stepForMemberStatus(result.status);
+    if (step === "removed" || step === "gone") {
+      setProblem(step);
       return;
     }
     if (result.not_lead) {
       toast.error("כבר הייתם בטיול, ולכן הקישור האישי לא הפך אתכם ללקוח הראשי. בקשו מהסוכן לסמן אתכם כלקוח ראשי.");
-      if (result.status === "pending") setPending(true);
-      else navigate(`/trip/${result.trip_id}`, { replace: true });
+    }
+    if (step === "wait") {
+      if (user) setWaitingRequest({ tripId: result.trip_id, userId: user.id, token, notLead: !!result.not_lead });
       return;
     }
-    if (result.status === "pending") {
-      setPending(true);
-      return;
-    }
-    toast.success("הצטרפת לטיול 🎉");
+    if (!result.not_lead) toast.success("הצטרפת לטיול 🎉");
     navigate(`/trip/${result.trip_id}`, { replace: true });
   };
 
@@ -175,12 +265,29 @@ export default function JoinPage() {
                   <Clock className="size-5 shrink-0 text-primary" />
                   לטיול הזה כבר יש לקוח ראשי. בקשו ממנו את קישור ההצטרפות של המשפחה.
                 </p>
-              ) : pending ? (
-                <div className="type-footnote flex items-center gap-3 rounded-2xl bg-muted p-3">
-                  <Clock className="size-5 shrink-0 text-primary" />
-                  {isLeadLink
-                    ? "נכנסתם. הסוכן יאשר אתכם, ואז הטיול יופיע ברשימת הטיולים שלכם ותוכלו להזמין את המשפחה."
-                    : "הבקשה נשלחה. הטיול יופיע ברשימת הטיולים שלך אחרי שבעל הטיול יאשר."}
+              ) : problem === "removed" || problem === "gone" ? (
+                <div className="flex flex-col items-center gap-2">
+                  <p className="type-footnote flex items-start gap-3 rounded-2xl bg-muted p-3">
+                    <UserX className="size-5 shrink-0 text-destructive" />
+                    {problem === "removed"
+                      ? "הוסרת מהטיול, ולכן הקישור לא מצרף אותך שוב. אפשר לבקש ממי שמנהל את הטיול להוסיף אותך מחדש."
+                      : "הבקשה להצטרף כבר לא פעילה. ייתכן שהטיול נמחק. אפשר לבקש ממי ששלח את הקישור להזמין אותך שוב."}
+                  </p>
+                  <Link to="/" className="type-headline inline-flex min-h-11 items-center text-primary">
+                    לטיולים שלי
+                  </Link>
+                </div>
+              ) : waiting ? (
+                <div className="flex flex-col gap-3">
+                  <div className="type-footnote flex items-start gap-3 rounded-2xl bg-muted p-3">
+                    <Clock className="size-5 shrink-0 text-primary" />
+                    {isLeadLink && !waiting.notLead
+                      ? "נכנסתם. אחרי שהסוכן יאשר, הטיול ייפתח כאן מעצמו ותוכלו להזמין את המשפחה. אפשר גם לסגור את האפליקציה: אחרי האישור הטיול יופיע ברשימת הטיולים שלכם."
+                      : "הבקשה נשלחה. אחרי שבעל הטיול יאשר, הטיול ייפתח כאן מעצמו. אפשר גם לסגור את האפליקציה: אחרי האישור הטיול יופיע ברשימת הטיולים שלך."}
+                  </div>
+                  <Button size="lg" variant="outline" className="w-full" loading={checkingNow} onClick={checkNow}>
+                    בדיקה עכשיו
+                  </Button>
                 </div>
               ) : session && !isAnonymous ? (
                 <Button size="lg" className="w-full" loading={joining} onClick={join}>
