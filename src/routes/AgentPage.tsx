@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, FileUp, Search } from "lucide-react";
+import { ChevronLeft, FileUp, Search, UserPlus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import type { AgentTripBoardRow } from "@/lib/types";
@@ -17,6 +17,7 @@ import {
   tripsCountHe,
   type AgentTripStatus,
 } from "@/lib/agent-board";
+import { pendingRequestsLabel, pendingRequestsTotal } from "@/lib/join-requests";
 import { dateRangeHeb } from "@/lib/trip-dates";
 
 const STATUS_TONE: Record<AgentTripStatus, "primary" | "accent" | "sun" | "muted"> = {
@@ -61,12 +62,40 @@ export default function AgentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Back in the app: new join requests may be waiting. Quietly, so the board on
+  // screen doesn't flip to a spinner; a failure here keeps what's already shown.
+  useEffect(() => {
+    const onVisible = async () => {
+      if (document.visibilityState !== "visible") return;
+      const { data, error } = await supabase.rpc("agent_trip_board");
+      if (error) {
+        console.error(error);
+        return;
+      }
+      setRows((data as AgentTripBoardRow[] | null) ?? []);
+      setState("ready");
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   const today = useMemo(() => new Date(), []);
+  const pendingCount = pendingRequestsTotal(rows);
   const attentionCount = rows.filter(needsHandling).length;
   const visible = sortBoard(rows, today).filter((r) => (filter === "all" || needsHandling(r)) && matchesBoardQuery(r, query));
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-16 pt-5 lg:max-w-6xl lg:px-8 lg:pt-8">
+      {pendingCount > 0 && (
+        <Link
+          to="/agency/requests"
+          className="mb-4 flex min-h-12 items-center gap-3 rounded-2xl bg-accent-soft px-4 py-3 text-accent transition-colors active:opacity-80"
+        >
+          <UserPlus className="size-5 shrink-0" aria-hidden />
+          <span className="type-headline min-w-0 flex-1">{pendingRequestsLabel(pendingCount)}</span>
+          <ChevronLeft className="size-5 shrink-0" aria-hidden />
+        </Link>
+      )}
       <div className="mb-5 flex flex-col gap-4 lg:mb-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="px-1">
           <h1 className="type-large-title">הטיולים</h1>

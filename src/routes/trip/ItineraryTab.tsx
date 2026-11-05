@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileUp, Flame, List, Map as MapIcon, MapPin, MoreHorizontal, Navigation, Pencil, Plus, Sparkles, Trash2, TriangleAlert } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { ItineraryItem, ShabbatDay, ShabbatInfo } from "@/lib/types";
@@ -74,6 +74,8 @@ export default function ItineraryTab() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [editing, setEditing] = useState<Draft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [importing, setImporting] = useState(false);
   const [view, setView] = useState<"list" | "map">("list");
   const [shabbat, setShabbat] = useState<ShabbatInfo | null>(null);
@@ -149,44 +151,55 @@ export default function ItineraryTab() {
   const defaultDay = trip.start_date ?? localDateString(new Date());
 
   const save = async () => {
-    if (!editing) return;
+    // The ref blocks a second click at once; the photo and map lookups below take seconds.
+    if (!editing || savingRef.current) return;
     if (!editing.title.trim()) {
       toast.error("צריך כותרת לפריט");
       return;
     }
-    // Reuse an existing photo/coordinates as-is (editing a typo shouldn't
-    // re-roll a good AI-picked photo, or move a pin the user already placed)
-    // — only search/geocode when the item has none yet.
-    const query = `${editing.title.trim()} ${trip.destination}`;
-    const [image_url, coords] = await Promise.all([
-      editing.image_url ? Promise.resolve(editing.image_url) : searchPhoto(trip.id, query),
-      editing.lat == null && editing.lng == null ? searchCoordinates(trip.id, query) : Promise.resolve(null),
-    ]);
-    const payload = {
-      trip_id: trip.id,
-      day_date: editing.day_date,
-      start_time: editing.start_time || null,
-      title: editing.title.trim(),
-      description: editing.description || null,
-      category: editing.category,
-      location: editing.location || null,
-      map_url: editing.location
-        ? mapsUrl(editing.location, scopeFor(editing.category, trip.destination))
-        : null,
-      image_url,
-      lat: editing.lat ?? coords?.lat ?? null,
-      lng: editing.lng ?? coords?.lng ?? null,
-    };
-    const { error } = editing.id
-      ? await supabase.from("itinerary_items").update(payload).eq("id", editing.id)
-      : await supabase.from("itinerary_items").insert(payload);
-    if (error) {
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      // Reuse an existing photo/coordinates as-is (editing a typo shouldn't
+      // re-roll a good AI-picked photo, or move a pin the user already placed)
+      // — only search/geocode when the item has none yet.
+      const query = `${editing.title.trim()} ${trip.destination}`;
+      const [image_url, coords] = await Promise.all([
+        editing.image_url ? Promise.resolve(editing.image_url) : searchPhoto(trip.id, query),
+        editing.lat == null && editing.lng == null ? searchCoordinates(trip.id, query) : Promise.resolve(null),
+      ]);
+      const payload = {
+        trip_id: trip.id,
+        day_date: editing.day_date,
+        start_time: editing.start_time || null,
+        title: editing.title.trim(),
+        description: editing.description || null,
+        category: editing.category,
+        location: editing.location || null,
+        map_url: editing.location
+          ? mapsUrl(editing.location, scopeFor(editing.category, trip.destination))
+          : null,
+        image_url,
+        lat: editing.lat ?? coords?.lat ?? null,
+        lng: editing.lng ?? coords?.lng ?? null,
+      };
+      const { error } = editing.id
+        ? await supabase.from("itinerary_items").update(payload).eq("id", editing.id)
+        : await supabase.from("itinerary_items").insert(payload);
+      if (error) {
+        toast.error("השמירה נכשלה. נסו שוב.");
+        return;
+      }
+      setEditing(null);
+      toast.success("נשמר");
+      load();
+    } catch (e) {
+      console.error(e);
       toast.error("השמירה נכשלה. נסו שוב.");
-      return;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-    setEditing(null);
-    toast.success("נשמר");
-    load();
   };
 
   const remove = async (id: string) => {
@@ -486,14 +499,17 @@ export default function ItineraryTab() {
 
       <Modal
         open={!!editing}
-        onClose={() => setEditing(null)}
+        onClose={() => {
+          // A save in flight can't be cancelled: closing here wouldn't stop the row being written.
+          if (!savingRef.current) setEditing(null);
+        }}
         title={editing?.id ? "עריכת פריט" : "פריט חדש"}
         footer={
           <>
-            <Button variant="ghost" className="flex-1" onClick={() => setEditing(null)}>
+            <Button variant="ghost" className="flex-1" disabled={saving} onClick={() => setEditing(null)}>
               ביטול
             </Button>
-            <Button className="flex-1" onClick={save}>
+            <Button className="flex-1" loading={saving} onClick={save}>
               שמירה
             </Button>
           </>

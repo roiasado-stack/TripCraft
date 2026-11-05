@@ -36,26 +36,50 @@ export default function TripsListPage() {
   };
 
   useEffect(() => {
-    (async () => {
-      if (!user) return;
-      // Own trips by user_id; trips shared with me come through my memberships
-      // (RLS hides a pending member's trip, so those only count here).
-      const [{ data }, { data: memberships }] = await Promise.all([
-        supabase
-          .from("trips")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("is_template", false)
-          .order("start_date", { ascending: true, nullsFirst: false })
-          .order("created_at", { ascending: false }),
-        supabase.from("trip_members").select("role, status, trips(*)").eq("user_id", user.id),
-      ]);
-      setTrips((data as Trip[]) ?? []);
-      const rows = (memberships as unknown as { role: MemberRole; status: string; trips: Trip | null }[]) ?? [];
-      setShared(rows.filter((m) => m.status === "active" && m.trips).map((m) => ({ trip: m.trips as Trip, role: m.role })));
-      setPendingCount(rows.filter((m) => m.status === "pending").length);
-      setLoading(false);
-    })();
+    if (!user) return;
+    let stopped = false;
+    let inFlight = false;
+
+    const load = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        // Own trips by user_id; trips shared with me come through my memberships
+        // (RLS hides a pending member's trip, so those only count here).
+        const [{ data, error }, { data: memberships, error: membershipsError }] = await Promise.all([
+          supabase
+            .from("trips")
+            .select("*")
+            .eq("user_id", user.id)
+            .eq("is_template", false)
+            .order("start_date", { ascending: true, nullsFirst: false })
+            .order("created_at", { ascending: false }),
+          supabase.from("trip_members").select("role, status, trips(*)").eq("user_id", user.id),
+        ]);
+        if (stopped) return;
+        // A phone waking up often has no network yet: keep the list on screen.
+        if (!error && !membershipsError) {
+          setTrips((data as Trip[]) ?? []);
+          const rows = (memberships as unknown as { role: MemberRole; status: string; trips: Trip | null }[]) ?? [];
+          setShared(rows.filter((m) => m.status === "active" && m.trips).map((m) => ({ trip: m.trips as Trip, role: m.role })));
+          setPendingCount(rows.filter((m) => m.status === "pending").length);
+        }
+        setLoading(false);
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void load();
+    // Approval can happen while the app is in the background.
+    const onVisibility = () => {
+      if (!document.hidden) void load();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [user]);
 
   const firstName = (profile?.full_name ?? "").split(" ")[0];
