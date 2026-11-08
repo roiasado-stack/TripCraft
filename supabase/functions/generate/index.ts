@@ -22,6 +22,7 @@ import {
   staysLines,
   tripDays,
 } from "./bookings.ts";
+import { AGENDA_ITEM_SHAPE, AGENDA_RULES, sanitizeAgenda } from "./agenda.ts";
 
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -106,7 +107,7 @@ type PassportImage = { media_type: string; data: string };
 
 type Body = {
   trip_id: string;
-  kind: "suggestions" | "itinerary" | "checklist" | "passports" | "photo" | "geocode" | "voucher" | "place_resolve" | "place_photo";
+  kind: "suggestions" | "itinerary" | "checklist" | "passports" | "photo" | "geocode" | "voucher" | "agenda" | "place_resolve" | "place_photo";
   /** For kind: "place_resolve" — optional location bias (the item's coordinates). */
   lat?: number | null;
   lng?: number | null;
@@ -639,7 +640,7 @@ Deno.serve(async (req) => {
     const isAnonymous = auth.user.is_anonymous === true;
     // Demo sessions never send documents to the model: scans are costly
     // vision calls and would mean a stranger's passport photo reaching us.
-    if (isAnonymous && (body.kind === "passports" || body.kind === "voucher")) {
+    if (isAnonymous && (body.kind === "passports" || body.kind === "voucher" || body.kind === "agenda")) {
       return new Response(JSON.stringify({ error: "demo_not_allowed" }), {
         status: 403,
         headers: { ...cors, "Content-Type": "application/json" },
@@ -772,6 +773,78 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Agenda: a document's day-by-day programme (the Itinerary tab's PDF
+    // import). Like "passports" it writes nothing — the client shows the rows
+    // for review and inserts them under its own RLS — so no trip check here;
+    // still a capped, logged vision call.
+    if (body.kind === "agenda") {
+      const images = (body.images ?? []).slice(0, 8);
+      if (!images.length) {
+        return new Response(JSON.stringify({ error: "no_images", ok: false, items: [] }), {
+          status: 400,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+      const content: unknown[] = images.map((img) =>
+        img.media_type === "application/pdf"
+          ? { type: "document", source: { type: "base64", media_type: img.media_type, data: img.data } }
+          : { type: "image", source: { type: "base64", media_type: img.media_type, data: img.data } },
+      );
+      content.push({
+        type: "text",
+        text: `זהו תוכנית טיול או אג'נדה. חלץ ממנה את התוכנית היומית — כל השורות המתוזמנות, יום אחר יום, מכל העמודים.
+
+החזר JSON בלבד, ללא טקסט נוסף:
+{"items":[ ${AGENDA_ITEM_SHAPE}, ... ]}
+
+${AGENDA_RULES}`,
+      });
+
+      const runStart = Date.now();
+      const agendaRes = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: MAX_TOKENS,
+          output_config: EXTRACTION_OUTPUT_CONFIG,
+          messages: [{ role: "user", content }],
+        }),
+      });
+      const latencyMs = Date.now() - runStart;
+      if (!agendaRes.ok) {
+        const detail = await agendaRes.text();
+        await logRun({ kind: "generate_agenda", tripId: body.trip_id ?? null, inputTokens: 0, outputTokens: 0, costUsd: 0, latencyMs, status: "error", errorMessage: detail });
+        // The provider's error stays in the log; the client gets only the code.
+        return new Response(JSON.stringify({ error: "llm_failed", ok: false, items: [] }), {
+          status: 502,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+      const payload = await agendaRes.json();
+      const usage = payload?.usage ?? {};
+      const inputTokens = Number(usage.input_tokens ?? 0);
+      const outputTokens = Number(usage.output_tokens ?? 0);
+      const items = sanitizeAgenda(extractJson(extractText(payload))?.items);
+      await logRun({
+        kind: "generate_agenda",
+        tripId: body.trip_id ?? null,
+        inputTokens,
+        outputTokens,
+        costUsd: (inputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (outputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD,
+        latencyMs,
+        status: "ok",
+        errorMessage: items.length ? undefined : `empty_agenda: stop=${payload?.stop_reason}`,
+      });
+      return new Response(JSON.stringify({ ok: true, items }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
     // Voucher scanning (flight/hotel/car-rental booking confirmations) returns a
     // classified record (for flights: every segment in the document, with the
     // first also in `data`) for client-side review only and writes nothing
@@ -806,10 +879,10 @@ Deno.serve(async (req) => {
 
 המסמך עשוי להשתרע על פני כמה עמודים — למשל כרטיס אלקטרוני נפרד לכל נוסע, או עמודים נפרדים לטיסת ההלוך ולטיסת החזור. קרא את כל העמודים עד הסוף, לא רק את הראשון, ואסוף את הפרטים מכולם.
 
-מסמך אחד יכול להכיל כמה הזמנות מסוגים שונים — למשל טיסות ושני מלונות באותו קובץ. החזר את כולן. גם הצעת מחיר, תוכנית טיול או סיכום הזמנה משולב ממערכת הזמנות (גם אם כתוב בו שהמקומות עוד לא הוזמנו) נחשבים: חלץ את הטיסות, המלונות והרכבים שמפורטים בו. התעלם מחלקים שאינם טיסה, מלון או רכב/הסעה (ביטוח, תנאי ביטול, מחירים).
+מסמך אחד יכול להכיל כמה הזמנות מסוגים שונים — למשל טיסות ושני מלונות באותו קובץ. החזר את כולן. גם הצעת מחיר, תוכנית טיול או סיכום הזמנה משולב ממערכת הזמנות (גם אם כתוב בו שהמקומות עוד לא הוזמנו) נחשבים: חלץ את הטיסות, המלונות והרכבים שמפורטים בו. התעלם מחלקים שאינם טיסה, מלון, רכב/הסעה או תוכנית יומית (ביטוח, תנאי ביטול, מחירים, פרטי קשר).
 
 ${hintLine}החזר JSON בלבד, ללא טקסט נוסף, במבנה:
-{"bookings":[ ...הזמנה אחת או יותר... ],"destination":"עיר, מדינה","passengers":[{"name":"שם הנוסע כפי שמודפס","type":"adult|child|infant|null","birth_date":null,"meal_code":null}]}
+{"bookings":[ ...הזמנה אחת או יותר... ],"destination":"עיר, מדינה","passengers":[{"name":"שם הנוסע כפי שמודפס","type":"adult|child|infant|null","birth_date":null,"meal_code":null}],"itinerary":[ ...פעילויות התוכנית היומית, אם יש... ]}
 
 כל פריט ב-bookings הוא אחד מהבאים.
 
@@ -833,7 +906,7 @@ segments (כל קטעי הטיסה שבמסמך):
 {"doc_type":"car","data":{"provider":"שם חברת ההשכרה או ההסעה","pickup_location":"נקודת איסוף","dropoff_location":null,"pickup_at":"YYYY-MM-DDTHH:MM:00","return_at":null,"booking_ref":null,"phone":null,"url":null,"notes":null}}
 
 אם אין במסמך אף טיסה, מלון או רכב/הסעה שאפשר לזהות בבירור:
-{"bookings":[],"destination":null,"passengers":[]}
+{"bookings":[],"destination":null,"passengers":[],"itinerary":[ ...התוכנית היומית אם יש, אחרת ריק... ]}
 
 כללים:
 - כל שדה שלא מופיע במסמך בבירור — החזר null, אל תמציא ואל תנחש. בהצעת מחיר בלי מספר הזמנה, booking_ref הוא null.
@@ -856,7 +929,11 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
 - אל תמציא שמות, אל תשלים שם חלקי ואל תנחש שם שלא מודפס בבירור.
 - type: "adult" / "child" / "infant" רק אם מופיע במסמך סימון סוג נוסע מפורש (ADT/CHD/INF, מבוגר/ילד/תינוק, Adult/Child/Infant). אחרת null — אל תסיק סוג מהשם או מהתואר.
 - birth_date: "YYYY-MM-DD" רק אם תאריך הלידה מודפס במסמך, אחרת null.
-- meal_code: קוד הארוחה המיוחדת כפי שמודפס (למשל KSML, VGML, VLML, AVML), אחרת null.`,
+- meal_code: קוד הארוחה המיוחדת כפי שמודפס (למשל KSML, VGML, VLML, AVML), אחרת null.
+
+itinerary (התוכנית היומית — רק אם המסמך כולל תוכנית לפי ימים, למשל תוכנית טיול של סוכנות או אג'נדה של כנס):
+כל פריט: ${AGENDA_ITEM_SHAPE}
+${AGENDA_RULES}`,
       });
 
       const runStart = Date.now();
@@ -1110,7 +1187,9 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
       // caller that only reads those. `segments` is every flight segment when
       // that booking is a flight, otherwise [].
       const outSegments = finalDocType === "flight" ? segments : [];
-      return new Response(JSON.stringify({ ok: true, doc_type: finalDocType, data, segments: outSegments, items, destination, passengers }), {
+      // The day-by-day programme printed in the same document (additive; [] when none).
+      const itinerary = sanitizeAgenda(parsedVision?.itinerary);
+      return new Response(JSON.stringify({ ok: true, doc_type: finalDocType, data, segments: outSegments, items, destination, passengers, itinerary }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
