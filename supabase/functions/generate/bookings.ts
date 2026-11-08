@@ -190,3 +190,25 @@ export function outsideTrip(
   if (window.departure && row.day_date === window.departure.day && t >= window.departure.time) return true;
   return false;
 }
+
+/**
+ * A scanned ticket often prints the terminal inside the airport line
+ * ("Hangzhou (HGH) Terminal 3", "Tel Aviv TLV T3", "Abu Dhabi (AUH) - Terminal A").
+ * Pulls it out into its own field so the card can show "טרמינל 3", and leaves
+ * the airport name without it. A terminal the model already returned wins.
+ */
+export function splitAirportTerminal(
+  airport: string | null,
+  terminal: string | null,
+): { airport: string | null; terminal: string | null } {
+  if (!airport) return { airport, terminal };
+  // "Terminal 3" / "Terminal A" / "טרמינל 1", or the short "T3" (digits only, so "T" alone never matches).
+  const m =
+    airport.match(/[\s,\-–]*\(?\s*(?:terminal|טרמינל)\s+([0-9]{1,2}[A-Za-z]?|[A-Za-z])\s*\)?\s*$/i) ??
+    airport.match(/[\s,\-–]*\(?\s*\bT([0-9]{1,2}[A-Za-z]?)\s*\)?\s*$/);
+  if (!m || m.index === undefined || m.index === 0) return { airport, terminal };
+  let rest = airport.slice(0, m.index).replace(/[\s,\-–]+$/, "").trim();
+  // "Shanghai (PVG, Terminal 2)" → close the bracket the terminal sat in.
+  if ((rest.match(/\(/g) ?? []).length > (rest.match(/\)/g) ?? []).length) rest += ")";
+  return { airport: rest || airport, terminal: terminal || m[1].toUpperCase() };
+}
