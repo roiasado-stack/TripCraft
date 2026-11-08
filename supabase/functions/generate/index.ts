@@ -18,6 +18,7 @@ import {
   itineraryBookingLines,
   outsideTrip,
   partyLine,
+  splitAirportTerminal,
   staysLines,
   tripDays,
 } from "./bookings.ts";
@@ -686,7 +687,7 @@ Deno.serve(async (req) => {
       const today = new Date().toISOString().slice(0, 10);
       content.push({
         type: "text",
-        text: `אלה תמונות של דרכונים. עבור כל דרכון, חלץ את שם בעל הדרכון ואת תאריך הלידה שלו (Date of Birth בעמוד הנתונים), וחשב ממנו את הגיל הנוכחי.
+        text: `אלה דרכונים, או מסמך שמפרט רשימת נוסעים (רשימת שמות, מניפסט, אישור הזמנה). עבור כל דרכון או כל נוסע ברשימה, חלץ את השם ואת תאריך הלידה (Date of Birth בעמוד הנתונים של דרכון, או עמודת תאריך לידה ברשימה), וחשב ממנו את הגיל הנוכחי. אם ברשימה מופיע גיל במקום תאריך לידה — השתמש בו.
 
 היום הוא ${today}. חשב גיל = השנה הנוכחית פחות שנת הלידה, ואם יום-והחודש של יום ההולדת עוד לא הגיעו השנה (ביחס ל-${today}) — הפחת עוד 1.
 
@@ -694,8 +695,8 @@ Deno.serve(async (req) => {
 {"items":[{"name":"שם מלא בעברית אם אפשר, אחרת כפי שמופיע","age":34}]}
 
 כללים:
-- פריט אחד לכל דרכון, באותו סדר שבו הופיעו התמונות.
-- אם לא ניתן לקרוא את השם — דלג על אותו דרכון.
+- פריט אחד לכל דרכון או נוסע, באותו סדר שבו הופיעו.
+- אם לא ניתן לקרוא את השם — דלג עליו.
 - אם לא ניתן לקרוא את תאריך הלידה בבירור — החזר age: null, אל תנחש.
 - אל תמציא פרטים. אל תחזיר מספרי דרכון או כל מידע אחר.`,
       });
@@ -821,6 +822,8 @@ segments (כל קטעי הטיסה שבמסמך):
 - אותה טיסה שמופיעה בעמוד של כל נוסע היא קטע אחד — לא קטע לכל נוסע.
 - direction לכל קטע: "outbound" אם הקטע יוצא מישראל, "inbound" אם הוא נוחת בישראל; רגל של טיסת המשך מקבלת את הכיוון של המסלול שהיא חלק ממנו (הלוך או חזור). אם לא ברור, "outbound".
 - seats: המושבים של כל הנוסעים בקטע הזה, אם מודפסים.
+- from_airport / to_airport: שם העיר וקוד השדה בלבד, למשל "Hangzhou (HGH)". בלי מילת "Terminal" ובלי מספר הטרמינל.
+- from_terminal / to_terminal: הטרמינל בלבד (למשל "3" או "A") כשהוא מודפס במסמך — גם אם הוא כתוב באותה שורה עם שם השדה.
 
 מלון (פריט נפרד לכל מלון):
 {"doc_type":"hotel","data":{"hotel_name":"שם המלון","address":null,"check_in":"YYYY-MM-DD","check_out":"YYYY-MM-DD","booking_ref":null,"phone":null,"url":null,"notes":null}}
@@ -919,21 +922,27 @@ passengers (הנוסעים/האורחים ששמם מודפס בהזמנה):
         return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
       };
 
-      const sanitizeFlight = (raw: Record<string, unknown>) => ({
+      // Airport names were capped at 10 characters, which cut "Hangzhou (HGH)
+      // Terminal 3" to "Hangzhou (" and lost the terminal with it.
+      const sanitizeFlight = (raw: Record<string, unknown>) => {
+        const from = splitAirportTerminal(str(raw.from_airport, 80), str(raw.from_terminal, 20));
+        const to = splitAirportTerminal(str(raw.to_airport, 80), str(raw.to_terminal, 20));
+        return {
         direction: raw.direction === "inbound" ? "inbound" : "outbound",
         airline: str(raw.airline, 120),
         flight_number: str(raw.flight_number, 20),
-        from_airport: str(raw.from_airport, 10),
-        to_airport: str(raw.to_airport, 10),
+        from_airport: from.airport,
+        to_airport: to.airport,
         depart_at: isoDateTime(raw.depart_at),
         arrive_at: isoDateTime(raw.arrive_at),
-        from_terminal: str(raw.from_terminal, 20),
-        to_terminal: str(raw.to_terminal, 20),
+        from_terminal: from.terminal,
+        to_terminal: to.terminal,
         seats: str(raw.seats, 60),
         baggage: str(raw.baggage, 120),
         booking_ref: str(raw.booking_ref, 60),
         notes: str(raw.notes, 500),
-      });
+        };
+      };
 
       // Every flight segment in the document (outbound, return, connection
       // legs), across all flight bookings. Each booking falls back to a lone
