@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, FileUp, Search, UserPlus } from "lucide-react";
+import { ChevronLeft, FileUp, PencilLine, Search, UserPlus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import type { AgentTripBoardRow } from "@/lib/types";
@@ -108,6 +108,15 @@ export default function AgentPage() {
             <Button size="lg" className="pressable w-full lg:w-auto" onClick={() => navigate("/agency/new")}>
               <FileUp className="size-5" />
               טיול חדש מהמסמכים
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="pressable w-full lg:w-auto"
+              onClick={() => navigate("/agency/new?manual=1")}
+            >
+              <PencilLine className="size-5" />
+              טיול חדש ידני
             </Button>
             <Button
               size="lg"

@@ -7,7 +7,7 @@ import { ToastProvider } from "@/hooks/use-toast";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
-import { AgentRoute } from "@/components/AgentRoute";
+import { AgentRoute, TravelerRoute } from "@/components/AgentRoute";
 import { SetupNeeded } from "@/components/SetupNeeded";
 import { FullSpinner } from "@/components/ui";
 // First paint stays in the main bundle: the login screen, the trips list and
@@ -83,17 +83,17 @@ export default function App() {
                 <Route
                   path="/"
                   element={
-                    <ProtectedRoute>
+                    <TravelerRoute agentTo="/agency">
                       <TripsListPage />
-                    </ProtectedRoute>
+                    </TravelerRoute>
                   }
                 />
                 <Route
                   path="/new"
                   element={
-                    <ProtectedRoute>
+                    <TravelerRoute agentTo="/agency/new">
                       <WizardPage />
-                    </ProtectedRoute>
+                    </TravelerRoute>
                   }
                 />
                 <Route

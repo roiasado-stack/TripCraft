@@ -68,6 +68,11 @@ export function ImportParticipants({
     const file = e.target.files?.[0];
     if (fileRef.current) fileRef.current.value = "";
     if (!file) return;
+    // A PDF (or a photo of a list) has no text to parse here: the AI scan reads it.
+    if (file.type === "application/pdf" || file.type.startsWith("image/")) {
+      await scanFiles([file]);
+      return;
+    }
     try {
       const content = await fileToParsableText(file);
       setText(content);
@@ -82,6 +87,11 @@ export function ImportParticipants({
   const onPassports = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = [...(e.target.files ?? [])];
     if (passportRef.current) passportRef.current.value = "";
+    await scanFiles(files);
+  };
+
+  /** Passports, or a PDF / photo listing travellers → names and ages, via the vision edge function. */
+  const scanFiles = async (files: File[]) => {
     if (!files.length) return;
     if (files.length > 8) {
       toast.error("עד 8 דרכונים בבת אחת.");
@@ -94,19 +104,19 @@ export function ImportParticipants({
         body: { kind: "passports", images },
       });
       if (error) {
-        toast.error(aiErrorMessage(await mapInvokeError(error), "סריקת הדרכונים נכשלה. נסו שוב."));
+        toast.error(aiErrorMessage(await mapInvokeError(error), "קריאת הקובץ נכשלה. נסו שוב."));
         return;
       }
       const items = (data as { items?: ParsedParticipant[] })?.items ?? [];
       if (!items.length) {
-        toast.error("לא זוהו פרטים בדרכונים. נסה תמונה ברורה יותר.");
+        toast.error("לא זוהו נוסעים בקובץ. נסו קובץ ברור יותר.");
         return;
       }
       setPreview(items);
       setErrors([]);
       toast.success(`זוהו ${items.length} נוסעים 🛂`);
     } catch {
-      toast.error("סריקת הדרכונים נכשלה.");
+      toast.error("קריאת הקובץ נכשלה. נסו שוב.");
     } finally {
       setScanning(false);
     }
@@ -132,8 +142,8 @@ export function ImportParticipants({
       {!preview ? (
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
-            הדבק רשימת שמות — שורה לכל נוסע. אפשר גם להעלות קובץ Excel‏ (.xlsx), CSV או JSON. גיל
-            והעדפות אחרי פסיק (אופציונלי).
+            הדבק רשימת שמות — שורה לכל נוסע. אפשר גם להעלות קובץ Excel‏ (.xlsx), CSV, JSON או PDF. גיל
+            והעדפות אחרי פסיק (אופציונלי). קובץ PDF נקרא בעזרת AI.
           </p>
 
           <Textarea
@@ -148,11 +158,12 @@ export function ImportParticipants({
               <Sparkles className="size-4" />
               ניתוח הרשימה
             </Button>
-            <Button variant="outline" onClick={() => fileRef.current?.click()} aria-label="קובץ">
+            <Button variant="outline" onClick={() => fileRef.current?.click()} loading={scanning}>
               <FileUp className="size-4" />
+              קובץ
             </Button>
           </div>
-          <input ref={fileRef} type="file" accept={TABULAR_ACCEPT} hidden onChange={onFile} />
+          <input ref={fileRef} type="file" accept={`${TABULAR_ACCEPT},.pdf,application/pdf`} hidden onChange={onFile} />
 
           <div className="my-1 flex items-center gap-3 text-xs text-muted-foreground">
             <div className="h-px flex-1 bg-border" />

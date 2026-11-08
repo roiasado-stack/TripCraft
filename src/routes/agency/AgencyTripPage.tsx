@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { CalendarDays, ChevronRight, ExternalLink, Users } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { CalendarDays, ChevronRight, ExternalLink, Trash2, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { ItineraryItem, TripClient } from "@/lib/types";
-import { Badge, Card, Input, Spinner } from "@/components/ui";
+import { Badge, Button, Card, Input, Modal, Spinner } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
 import { EXTERNAL_REF_MAX, IMPORT_SOURCE_LABEL, isImportSource, normalizeExternalRef } from "@/lib/agency-import";
 import { Flag } from "@/components/Flag";
@@ -160,8 +160,70 @@ export default function AgencyTripPage() {
             </div>
           )}
         </section>
+
+        <section className="lg:col-start-1">
+          <DeleteTripButton tripId={trip.id} title={clientName || trip.title} />
+        </section>
       </div>
     </div>
+  );
+}
+
+/**
+ * Deletes the trip for good (the owner's DELETE policy; child rows cascade) and
+ * returns to the board. Behind a confirm, at the bottom, away from everyday controls.
+ */
+function DeleteTripButton({ tripId, title }: { tripId: string; title: string }) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const remove = async () => {
+    setDeleting(true);
+    // .select() makes a delete RLS silently skipped show up as zero rows instead of a false success.
+    const { data, error } = await supabase.from("trips").delete().eq("id", tripId).select("id");
+    setDeleting(false);
+    if (error || !data?.length) {
+      if (error) console.error(error);
+      toast.error("מחיקת הטיול נכשלה. נסו שוב.");
+      return;
+    }
+    setOpen(false);
+    toast.success("הטיול נמחק");
+    navigate("/agency", { replace: true });
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="type-body flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-card px-4 py-3 font-semibold text-destructive transition-colors active:bg-destructive/10"
+      >
+        <Trash2 className="size-5" aria-hidden />
+        מחיקת הטיול
+      </button>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="מחיקת טיול"
+        footer={
+          <>
+            <Button variant="ghost" className="flex-1" onClick={() => setOpen(false)}>
+              ביטול
+            </Button>
+            <Button variant="destructive" className="flex-1" loading={deleting} onClick={remove}>
+              מחק טיול
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground [unicode-bidi:plaintext]">
+          למחוק את "{title}"? המסלול, הנוסעים, המסמכים וקישורי ההצטרפות של הטיול יימחקו לצמיתות, והלקוח יאבד גישה אליו. אי אפשר לשחזר.
+        </p>
+      </Modal>
+    </>
   );
 }
 

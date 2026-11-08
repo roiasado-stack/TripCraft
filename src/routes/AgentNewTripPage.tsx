@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowRight, Check, FileUp, Plus, Trash2, X } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowRight, Check, FileUp, PencilLine, Plus, Trash2, Users, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button, Field, GroupedList, Input } from "@/components/ui";
 import { ImportBookings, personKey, type BookingsImportResult } from "@/components/ImportBookings";
+import { ImportParticipants } from "@/components/ImportParticipants";
+import type { ParsedParticipant } from "@/lib/import-participants";
 import { createImportedTrip, uploadSourceDocs } from "@/lib/create-trip";
 import { documentsSource } from "@/lib/agency-import";
 import {
@@ -32,8 +34,12 @@ export default function AgentNewTripPage() {
   const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
-  const [step, setStep] = useState<0 | 1>(0);
-  const [importOpen, setImportOpen] = useState(true);
+  // ?manual=1 (the board's "new trip, manual" button): straight to the form, no document picker.
+  const [params] = useSearchParams();
+  const startManual = params.get("manual") === "1";
+  const [step, setStep] = useState<0 | 1>(startManual ? 1 : 0);
+  const [importOpen, setImportOpen] = useState(!startManual);
+  const [peopleOpen, setPeopleOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -48,7 +54,7 @@ export default function AgentNewTripPage() {
 
   const phoneInvalid = clientPhone.trim() !== "" && !normalizePhone(clientPhone);
   // A voucher scanned twice counts (and is created) once: dedupeBookings.
-  const imp = documentsSource.toImport({
+  const scanned = documentsSource.toImport({
     scans,
     client: { name: clientName, phone: clientPhone },
     trip: {
@@ -59,6 +65,8 @@ export default function AgentNewTripPage() {
     },
     travellers,
   });
+  // No document was scanned: the agent typed the trip in, and trip_clients.source says so.
+  const imp = scans.length ? scanned : { ...scanned, source: "manual" as const };
   const { flights, stays, transfers } = imp;
 
   /** Scanned and reviewed bookings → this screen's drafts. A second import adds to the first. */
@@ -134,6 +142,14 @@ export default function AgentNewTripPage() {
     navigate(`/agency/trips/${tripId}/send`, { replace: true });
   };
 
+  /** A people file (Excel / CSV / PDF list / passports) → more travellers; names already listed are skipped. */
+  const onPeopleImported = (items: ParsedParticipant[]) => {
+    const have = new Set(travellers.map((t) => personKey(t.name)));
+    const fresh = items.filter((t) => t.name.trim() && !have.has(personKey(t.name)));
+    if (fresh.length) setTravellers((prev) => [...prev, ...fresh.map((t) => travellerToDraft({ ...t, type: null }))]);
+    toast.success(fresh.length ? `נוספו ${countHe(fresh.length, "נוסע אחד", "נוסעים")}` : "כל הנוסעים כבר ברשימה");
+  };
+
   const renameTraveller = (i: number, name: string) =>
     setTravellers((prev) => prev.map((t, idx) => (idx === i ? { ...t, name } : t)));
   const removeTraveller = (i: number) => setTravellers((prev) => prev.filter((_, idx) => idx !== i));
@@ -148,7 +164,7 @@ export default function AgentNewTripPage() {
       {/* top bar */}
       <div className="mb-4 flex items-center justify-between">
         <button
-          onClick={() => (step === 1 ? setStep(0) : navigate("/agency"))}
+          onClick={() => (step === 1 && !startManual ? setStep(0) : navigate("/agency"))}
           className="-ms-2 grid size-11 place-items-center rounded-full text-primary transition-colors active:bg-muted/70"
           aria-label="חזרה"
         >
@@ -190,16 +206,21 @@ export default function AgentNewTripPage() {
             <FileUp className="size-5" />
             {flights.length + stays.length + transfers.length ? "הוספת מסמכים" : "בחירת מסמכים"}
           </Button>
-          {flights.length + stays.length + transfers.length > 0 && (
+          {flights.length + stays.length + transfers.length > 0 ? (
             <Button variant="soft" size="lg" className="w-full" onClick={() => setStep(1)}>
               המשך לבדיקה ({bookingsSummary})
+            </Button>
+          ) : (
+            <Button variant="outline" size="lg" className="w-full" onClick={() => setStep(1)}>
+              <PencilLine className="size-5" />
+              בלי מסמכים — מילוי ידני
             </Button>
           )}
         </div>
       ) : (
         <div className="flex flex-col gap-6">
           <div>
-            <h1 className="type-large-title">בדיקה אחרונה</h1>
+            <h1 className="type-large-title">{scans.length ? "בדיקה אחרונה" : "פרטי הטיול"}</h1>
             {bookingsSummary && <p className="type-body mt-1 text-muted-foreground">זוהו {bookingsSummary}.</p>}
           </div>
 
@@ -237,7 +258,7 @@ export default function AgentNewTripPage() {
             <Field label="שם הטיול">
               <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="טיול לרומא" />
             </Field>
-            <Field label="יעד" hint={destination.trim() ? undefined : "לא זוהה יעד מהמסמכים — צריך למלא."}>
+            <Field label="יעד" hint={destination.trim() || !scans.length ? undefined : "לא זוהה יעד מהמסמכים — צריך למלא."}>
               <Input value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="לדוגמה: רומא, איטליה" />
             </Field>
             <div className="grid grid-cols-2 gap-3">
@@ -279,10 +300,19 @@ export default function AgentNewTripPage() {
               <Plus className="size-5" />
               הוספת נוסע
             </button>
+            <button
+              type="button"
+              onClick={() => setPeopleOpen(true)}
+              className="type-body flex min-h-12 w-full items-center gap-3 px-4 text-start text-primary transition-colors active:bg-muted/70"
+            >
+              <Users className="size-5" />
+              ייבוא נוסעים מקובץ (Excel / PDF)
+            </button>
           </GroupedList>
         </div>
       )}
 
+      <ImportParticipants open={peopleOpen} onClose={() => setPeopleOpen(false)} onConfirm={onPeopleImported} />
       <ImportBookings open={importOpen} onClose={() => setImportOpen(false)} onConfirm={onImported} context="agent" />
 
       {step === 1 && (
