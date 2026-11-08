@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, Check, FileUp, PencilLine, Plus, Trash2, Users, X } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, FileUp, PencilLine, Plus, Trash2, Users, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button, Field, GroupedList, Input } from "@/components/ui";
 import { ImportBookings, personKey, type BookingsImportResult } from "@/components/ImportBookings";
 import { ImportParticipants } from "@/components/ImportParticipants";
 import type { ParsedParticipant } from "@/lib/import-participants";
+import type { ParsedItem } from "@/lib/import-itinerary";
+import { formatDayHeb } from "@/lib/trip-options";
+import { sanitizeAgenda } from "../../supabase/functions/generate/agenda";
 import { createImportedTrip, uploadSourceDocs } from "@/lib/create-trip";
 import { documentsSource } from "@/lib/agency-import";
 import {
@@ -51,6 +54,8 @@ export default function AgentNewTripPage() {
   const [travellers, setTravellers] = useState<PartDraft[]>([]);
   // Every scan as returned; the bookings come from them through the documents import source.
   const [scans, setScans] = useState<BookingsImportResult[]>([]);
+  // The programme found in the documents; the agent can drop whole days before creating.
+  const [itinerary, setItinerary] = useState<ParsedItem[]>([]);
 
   const phoneInvalid = clientPhone.trim() !== "" && !normalizePhone(clientPhone);
   // A voucher scanned twice counts (and is created) once: dedupeBookings.
@@ -64,6 +69,7 @@ export default function AgentNewTripPage() {
       end_date: endDate,
     },
     travellers,
+    itinerary,
   });
   // No document was scanned: the agent typed the trip in, and trip_clients.source says so.
   const imp = scans.length ? scanned : { ...scanned, source: "manual" as const };
@@ -81,14 +87,18 @@ export default function AgentNewTripPage() {
     const fresh = r.travellers.filter((t) => !have.has(personKey(t.name)));
     if (fresh.length) setTravellers((prev) => [...prev, ...fresh.map(travellerToDraft)]);
     setScans((prev) => [...prev, r]);
+    // A second import adds its programme; a row already listed counts once.
+    if (r.itinerary.length) setItinerary((prev) => sanitizeAgenda([...prev, ...r.itinerary]));
     setStep(1);
   };
 
+  const itineraryDays = [...new Set(itinerary.map((i) => i.day_date))];
   const bookingsSummary = joinHebrew(
     [
       flights.length ? countHe(flights.length, "טיסה אחת", "טיסות") : null,
       stays.length ? countHe(stays.length, "מלון אחד", "מלונות") : null,
       transfers.length ? countHe(transfers.length, "הזמנת רכב אחת", "הזמנות רכב") : null,
+      itineraryDays.length ? `מסלול ל-${countHe(itineraryDays.length, "יום אחד", "ימים")}` : null,
     ].filter((x): x is string => !!x),
   );
 
@@ -149,6 +159,8 @@ export default function AgentNewTripPage() {
     if (fresh.length) setTravellers((prev) => [...prev, ...fresh.map((t) => travellerToDraft({ ...t, type: null }))]);
     toast.success(fresh.length ? `נוספו ${countHe(fresh.length, "נוסע אחד", "נוסעים")}` : "כל הנוסעים כבר ברשימה");
   };
+
+  const removeItineraryDay = (day: string) => setItinerary((prev) => prev.filter((i) => i.day_date !== day));
 
   const renameTraveller = (i: number, name: string) =>
     setTravellers((prev) => prev.map((t, idx) => (idx === i ? { ...t, name } : t)));
@@ -309,6 +321,38 @@ export default function AgentNewTripPage() {
               ייבוא נוסעים מקובץ (Excel / PDF)
             </button>
           </GroupedList>
+
+          {itineraryDays.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <GroupedList title={`מסלול יומי (${itinerary.length} פעילויות)`}>
+                {itineraryDays.map((day) => {
+                  const rows = itinerary.filter((i) => i.day_date === day);
+                  return (
+                    <div key={day} className="flex min-h-12 items-center gap-3 ps-4 pe-1">
+                      <CalendarDays className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+                      <div className="min-w-0 flex-1 py-2">
+                        <div className="type-body font-semibold">{formatDayHeb(day)}</div>
+                        <div className="type-footnote truncate text-muted-foreground [unicode-bidi:plaintext]">
+                          {rows.length} · {rows.map((r) => r.title).join(" · ")}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeItineraryDay(day)}
+                        className="grid size-11 shrink-0 place-items-center rounded-full text-destructive transition-colors active:bg-muted/70"
+                        aria-label={`הסרת ${formatDayHeb(day)} מהמסלול`}
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </GroupedList>
+              <p className="type-footnote px-4 text-muted-foreground">
+                המסלול נשמר בטיול, ואפשר לערוך כל פעילות אחרי היצירה בלשונית "מסלול".
+              </p>
+            </div>
+          )}
         </div>
       )}
 

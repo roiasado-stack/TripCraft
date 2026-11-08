@@ -2,6 +2,9 @@ import { useRef, useState } from "react";
 import { AlertTriangle, FileUp, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { aiErrorMessage, mapInvokeError } from "@/lib/ai";
+import { fileToBase64 } from "@/components/ImportBookings";
+import { sanitizeAgenda } from "../../supabase/functions/generate/agenda";
 import type { Trip } from "@/lib/types";
 import { Button, Card, Modal, Textarea } from "@/components/ui";
 import { parseItinerary, type ParsedItem } from "@/lib/import-itinerary";
@@ -29,6 +32,7 @@ export function ImportItinerary({
   const [preview, setPreview] = useState<ParsedItem[] | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const reset = () => {
@@ -55,6 +59,11 @@ export function ImportItinerary({
     const file = e.target.files?.[0];
     if (fileRef.current) fileRef.current.value = "";
     if (!file) return;
+    // A PDF or a photo of a programme has no table to parse here: the AI reads it.
+    if (file.type === "application/pdf" || file.type.startsWith("image/")) {
+      await scanDocument(file);
+      return;
+    }
     try {
       const content = await fileToParsableText(file);
       setText(content);
@@ -62,6 +71,33 @@ export function ImportItinerary({
     } catch (err) {
       console.error(err);
       toast.error("לא הצלחנו לקרוא את הקובץ. נסה CSV או Excel תקין.");
+    }
+  };
+
+  /** A trip programme / agenda document → itinerary rows for review (kind "agenda"). */
+  const scanDocument = async (file: File) => {
+    setScanning(true);
+    try {
+      const image = await fileToBase64(file);
+      const { data, error } = await supabase.functions.invoke("generate", {
+        body: { kind: "agenda", trip_id: trip.id, images: [image] },
+      });
+      if (error) {
+        toast.error(aiErrorMessage(await mapInvokeError(error), "קריאת הקובץ נכשלה. נסו שוב."));
+        return;
+      }
+      const items = sanitizeAgenda((data as { items?: unknown } | null)?.items);
+      if (!items.length) {
+        toast.error("לא נמצאה תוכנית יומית בקובץ.");
+        return;
+      }
+      setErrors([]);
+      setPreview(items);
+    } catch (err) {
+      console.error(err);
+      toast.error("קריאת הקובץ נכשלה. נסו שוב.");
+    } finally {
+      setScanning(false);
     }
   };
 
@@ -94,7 +130,7 @@ export function ImportItinerary({
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
             הדבק מסלול מ-Excel / Google Sheets, או העלה קובץ ‎.xlsx‎ / CSV / JSON. אפשר כותרות
-            בעברית או באנגלית — נזהה אותן אוטומטית.
+            בעברית או באנגלית — נזהה אותן אוטומטית. תוכנית טיול ב-PDF או בתמונה נקראת בעזרת AI.
           </p>
 
           <Textarea
@@ -110,12 +146,18 @@ export function ImportItinerary({
               <Sparkles className="size-4" />
               ניתוח התוכן
             </Button>
-            <Button variant="outline" onClick={() => fileRef.current?.click()}>
+            <Button variant="outline" loading={scanning} onClick={() => fileRef.current?.click()}>
               <FileUp className="size-4" />
               קובץ
             </Button>
           </div>
-          <input ref={fileRef} type="file" accept={TABULAR_ACCEPT} hidden onChange={onFile} />
+          <input
+            ref={fileRef}
+            type="file"
+            accept={`${TABULAR_ACCEPT},.pdf,application/pdf,image/*`}
+            hidden
+            onChange={onFile}
+          />
 
           <button
             onClick={() => {

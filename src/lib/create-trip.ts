@@ -4,6 +4,7 @@ import { supabase } from "./supabase";
 import { uploadTripDocument } from "./documents";
 import { clientRow, type BookingImport } from "./agency-import";
 import type { Participant, Trip } from "./types";
+import type { ParsedItem } from "./import-itinerary";
 import {
   participantRows,
   toIso,
@@ -39,6 +40,8 @@ export async function insertTripWithDrafts(input: {
   flights: FlightDraft[];
   stays: StayDraft[];
   transfers: TransferDraft[];
+  /** Programme rows from a scanned document, in the document's order. */
+  itinerary?: ParsedItem[];
 }): Promise<{
   trip: Trip;
   /** Participant rows as inserted (empty if the select came back empty). */
@@ -131,6 +134,13 @@ export async function insertTripWithDrafts(input: {
       ),
     );
   }
+  if (input.itinerary?.length) {
+    jobs.push(
+      supabase
+        .from("itinerary_items")
+        .insert(input.itinerary.map((it, idx) => ({ ...it, trip_id: tripId, sort_order: idx }))),
+    );
+  }
   const results = await Promise.all(jobs);
   return {
     trip: trip as Trip,
@@ -184,6 +194,7 @@ export async function createImportedTrip(
     flights: imp.flights,
     stays: imp.stays,
     transfers: imp.transfers,
+    itinerary: imp.itinerary,
   });
   const { error } = await supabase.from("trip_clients").insert(clientRow(res.trip.id, imp));
   if (error) console.error(error);
