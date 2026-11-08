@@ -4,6 +4,7 @@
 // ImportSource that produces the same BookingImport, and createImportedTrip
 // (create-trip.ts) stays the only place that writes it. Pure: no Supabase here.
 // See docs/agency-integrations.md.
+import type { ParsedItem } from "./import-itinerary";
 import type { BookingsImportResult } from "@/components/ImportBookings";
 import { bookingsToDrafts, type FlightDraft, type PartDraft, type StayDraft, type TransferDraft } from "./trip-drafts";
 
@@ -34,6 +35,8 @@ export interface BookingImport {
   flights: FlightDraft[];
   stays: StayDraft[];
   transfers: TransferDraft[];
+  /** Day-by-day programme rows to add to the trip's itinerary (none when absent). */
+  itinerary?: ParsedItem[];
 }
 
 /** A place bookings come from: turns its own input into a BookingImport. */
@@ -110,6 +113,8 @@ export type DocumentsInput = {
   client: { name: string; phone: string };
   trip: { title: string; destination: string; start_date: string; end_date: string };
   travellers: PartDraft[];
+  /** The programme found in the documents, as the agent kept it. */
+  itinerary?: ParsedItem[];
 };
 
 /** The first source: bookings recognised from the agent's documents. */
@@ -131,6 +136,7 @@ export const documentsSource: ImportSource<DocumentsInput> = {
       flights: drafts.flatMap((d) => d.flights),
       stays: drafts.flatMap((d) => d.stays),
       transfers: drafts.flatMap((d) => d.transfers),
+      itinerary: input.itinerary ?? [],
     });
   },
 };

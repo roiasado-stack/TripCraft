@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { AGE_RANGES, prefLabel } from "@/lib/trip-options";
 import type { ParsedParticipant } from "@/lib/import-participants";
 import { scanSummary, scannedRecords, type ScannedRecord } from "@/lib/voucher-scan";
+import type { ParsedItem } from "@/lib/import-itinerary";
+import { sanitizeAgenda } from "../../supabase/functions/generate/agenda";
 import {
   blankCar,
   blankFlight,
@@ -20,8 +22,8 @@ import {
 } from "@/components/ImportVoucher";
 
 /** Reads a File as a base64 data payload for the vision endpoint. Same shape as
- *  the copies in ImportVoucher/ImportParticipants. */
-function fileToBase64(file: File): Promise<{ media_type: string; data: string }> {
+ *  the copies in ImportVoucher/ImportParticipants; ImportItinerary uses this one. */
+export function fileToBase64(file: File): Promise<{ media_type: string; data: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -60,6 +62,8 @@ export type BookingsImportResult = {
   endDate: string;
   travellers: BookingTraveller[];
   bookings: ImportedBooking[];
+  /** The day-by-day programme printed in the scanned files (empty when none). */
+  itinerary: ParsedItem[];
 };
 
 type ScanStatus = "pending" | "scanning" | "done" | "unknown" | "error";
@@ -79,6 +83,8 @@ type ScanItem = {
   bookings: ScannedBooking[];
   destination: string | null;
   passengers: ScannedPassenger[];
+  /** The programme printed in this file (a tour programme next to the bookings). */
+  itinerary: ParsedItem[];
 };
 
 const liveBookings = (it: ScanItem) => it.bookings.filter((b) => !b.removed);
@@ -156,7 +162,9 @@ function bookingDates(b: { docType: VoucherDocType; data: VoucherData }): string
 /** Start = earliest date across all bookings (every flight segment included,
  *  so a return flight sets the end date), end = latest. */
 function pickDates(items: ScanItem[]): { start: string; end: string } {
-  const all = items.flatMap((i) => liveBookings(i).flatMap(bookingDates)).sort();
+  let all = items.flatMap((i) => liveBookings(i).flatMap(bookingDates)).sort();
+  // A file with only a programme (no bookings) still dates the trip.
+  if (!all.length) all = items.flatMap((i) => i.itinerary.map((x) => x.day_date)).sort();
   return { start: all[0] ?? "", end: all[all.length - 1] ?? "" };
 }
 
@@ -320,9 +328,10 @@ export function ImportBookings({
         patchItem(item.id, { status: "error" });
         return { recognized: false, error: await mapInvokeError(error) };
       }
-      const res = data as { destination?: unknown; passengers?: unknown } | null;
+      const res = data as { destination?: unknown; passengers?: unknown; itinerary?: unknown } | null;
       const records = scannedRecords(data);
-      if (!res || !records.length) {
+      const itinerary = sanitizeAgenda(res?.itinerary);
+      if (!res || (!records.length && !itinerary.length)) {
         patchItem(item.id, { status: "unknown" });
         return { recognized: false };
       }
@@ -337,6 +346,7 @@ export function ImportBookings({
         bookings: records.map((r, i) => ({ key: `${item.id}-${i}`, docType: r.docType, data: fill(r), removed: false })),
         destination: typeof res.destination === "string" && res.destination.trim() ? res.destination.trim() : null,
         passengers: readPassengers(res.passengers),
+        itinerary,
       });
       return { recognized: true };
     } catch {
@@ -362,6 +372,7 @@ export function ImportBookings({
       bookings: [],
       destination: null,
       passengers: [],
+      itinerary: [],
     }));
     setItems((prev) => [...prev, ...batch]);
 
@@ -394,10 +405,14 @@ export function ImportBookings({
   };
 
   /** Scanned files that still have at least one booking the user kept. */
-  const recognizedItems = (list: ScanItem[]) => list.filter((i) => i.status === "done" && liveBookings(i).length > 0);
+  const recognizedItems = (list: ScanItem[]) =>
+    list.filter((i) => i.status === "done" && (liveBookings(i).length > 0 || i.itinerary.length > 0));
   const active = recognizedItems(items);
   /** Every kept booking (card), each paired with the scanned file it came from. */
   const activeBookings = active.flatMap((it) => liveBookings(it).map((b) => ({ item: it, booking: b })));
+  /** The programme across all kept files, one row per activity (a repeat across files counts once). */
+  const activeItinerary = sanitizeAgenda(active.flatMap((it) => it.itinerary));
+  const itineraryDays = new Set(activeItinerary.map((i) => i.day_date)).size;
 
   /** Re-derives whatever the user hasn't edited yet from the current bookings. */
   const refreshBasics = (list: ScanItem[]) => {
@@ -438,7 +453,7 @@ export function ImportBookings({
   };
 
   const confirm = () => {
-    if (!activeBookings.length) return;
+    if (!activeBookings.length && !activeItinerary.length) return;
     if (startDate && endDate && endDate < startDate) {
       toast.error("תאריך החזרה מוקדם מתאריך היציאה");
       return;
@@ -471,6 +486,7 @@ export function ImportBookings({
         data: booking.data,
         sourceFile: item.file,
       })),
+      itinerary: activeItinerary,
     });
     close();
   };
@@ -483,10 +499,12 @@ export function ImportBookings({
         return { icon: <Loader2 className="size-4 animate-spin text-primary" />, text: "סורק…", tone: "text-primary" };
       case "done": {
         const types = it.bookings.map((b) => b.docType);
+        if (!types.length)
+          return { icon: <span className="text-base leading-none">🗓️</span>, text: `זוהה: מסלול יומי (${it.itinerary.length} פעילויות)`, tone: "text-primary" };
         const mixed = types.some((t) => t !== types[0]);
         return {
           icon: <span className="text-base leading-none">{mixed ? "🧾" : DOC_EMOJI[types[0] ?? "flight"]}</span>,
-          text: scanSummary(types),
+          text: it.itinerary.length ? `${scanSummary(types)} + מסלול יומי` : scanSummary(types),
           tone: "text-primary",
         };
       }
@@ -678,6 +696,17 @@ export function ImportBookings({
                 </button>
               </Card>
             ))}
+            {activeItinerary.length > 0 && (
+              <Card className="flex items-center gap-3 p-3 shadow-none">
+                <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary-soft text-lg">🗓️</div>
+                <div className="min-w-0 flex-1 text-sm">
+                  <div className="font-semibold">מסלול יומי</div>
+                  <div className="text-xs text-muted-foreground">
+                    {activeItinerary.length} פעילויות ב-{itineraryDays} ימים
+                  </div>
+                </div>
+              </Card>
+            )}
             <p className="text-xs text-muted-foreground">
               {context === "agent"
                 ? "פרטים מלאים (מושבים, טרמינלים, אסמכתאות) נשמרים בטיול, ואפשר לערוך אותם שם."
@@ -690,7 +719,7 @@ export function ImportBookings({
               <FilePlus className="size-4" />
               חזרה לקבצים
             </Button>
-            <Button className="flex-1" variant="accent" disabled={!activeBookings.length} onClick={confirm}>
+            <Button className="flex-1" variant="accent" disabled={!activeBookings.length && !activeItinerary.length} onClick={confirm}>
               <Sparkles className="size-4" />
               מילוי הטיול
             </Button>
