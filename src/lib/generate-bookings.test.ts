@@ -8,6 +8,7 @@ import {
   outsideTrip,
   partyKind,
   partyLine,
+  splitAirportTerminal,
   tripDays,
   type FlightRow,
   type StayRow,
@@ -148,5 +149,27 @@ describe("party", () => {
     expect(partyKind([], "family")).toBeNull();
     expect(partyKind([{ age: 40, age_range: null }, { age: null, age_range: null }], "family")).toBeNull();
     expect(partyLine([], "family")).toBe("");
+  });
+});
+
+describe("splitAirportTerminal", () => {
+  it("moves a printed terminal out of the airport name", () => {
+    expect(splitAirportTerminal("Hangzhou (HGH) Terminal 3", null)).toEqual({ airport: "Hangzhou (HGH)", terminal: "3" });
+    expect(splitAirportTerminal("Abu Dhabi (AUH) - Terminal A", null)).toEqual({ airport: "Abu Dhabi (AUH)", terminal: "A" });
+    expect(splitAirportTerminal("Tel Aviv TLV T3", null)).toEqual({ airport: "Tel Aviv TLV", terminal: "3" });
+    expect(splitAirportTerminal("Shanghai (PVG, Terminal 2)", null)).toEqual({ airport: "Shanghai (PVG)", terminal: "2" });
+    expect(splitAirportTerminal("נתב״ג טרמינל 3", null)).toEqual({ airport: "נתב״ג", terminal: "3" });
+  });
+
+  it("keeps a terminal the model already gave", () => {
+    expect(splitAirportTerminal("Shanghai (PVG) Terminal 2", "1")).toEqual({ airport: "Shanghai (PVG)", terminal: "1" });
+  });
+
+  it("leaves plain names alone", () => {
+    expect(splitAirportTerminal("Hangzhou (HGH)", null)).toEqual({ airport: "Hangzhou (HGH)", terminal: null });
+    expect(splitAirportTerminal("Roma Termini", null)).toEqual({ airport: "Roma Termini", terminal: null });
+    expect(splitAirportTerminal("TLV", "3")).toEqual({ airport: "TLV", terminal: "3" });
+    expect(splitAirportTerminal("Terminal 3", null)).toEqual({ airport: "Terminal 3", terminal: null });
+    expect(splitAirportTerminal(null, null)).toEqual({ airport: null, terminal: null });
   });
 });
