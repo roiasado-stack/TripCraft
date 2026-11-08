@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
-import { Briefcase, FilePlus2, LayoutList, LogOut, Menu, Settings, ShieldCheck, Smartphone, X } from "lucide-react";
+import { Briefcase, FilePlus2, LayoutList, LogOut, Menu, Settings, ShieldCheck, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { isAgencyLogoUrl } from "@/lib/agency-brand";
@@ -105,7 +105,6 @@ export default function AgencyLayout() {
       {isAdmin && <MenuLink to="/admin/agents" icon={<ShieldCheck className="size-5" />} label="ניהול סוכנים" />}
       <div className="mt-auto flex flex-col gap-1 border-t border-separator pt-3">
         <MenuLink to="/settings" icon={<Settings className="size-5" />} label="הגדרות ומיתוג" />
-        <MenuLink to="/" icon={<Smartphone className="size-5" />} label="לאפליקציית הטיולים" />
         <button type="button" onClick={() => void signOut()} className={cn(menuItem, "text-muted-foreground")}>
           <LogOut className="size-5" />
           יציאה

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Briefcase, Clock, Plus, Settings, Sparkles, Wand2 } from "lucide-react";
+import { Clock, Plus, Settings, Sparkles, Wand2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -11,7 +11,7 @@ import { TripCard } from "@/components/TripCard";
 import { parseLocalDate, tripPhase, type TripPhase } from "@/lib/trip-dates";
 
 export default function TripsListPage() {
-  const { profile, isAgent, user } = useAuth();
+  const { profile, user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -121,23 +121,8 @@ export default function TripsListPage() {
 
       <div className="mb-6 px-1">
         {firstName && <p className="type-footnote font-semibold text-muted-foreground">היי {firstName}</p>}
-        <h1 className="type-large-title">{isAgent ? "הטיולים של הלקוחות" : "הטיולים שלי"}</h1>
+        <h1 className="type-large-title">הטיולים שלי</h1>
       </div>
-
-      {isAgent && (
-        <GroupedList className="mb-6">
-          <ListRow
-            to="/agency"
-            leading={
-              <span className="grid size-8 place-items-center rounded-[9px] bg-tile text-tile-foreground">
-                <Briefcase className="size-[18px]" />
-              </span>
-            }
-            title="סביבת הסוכן"
-            subtitle="טיול חדש מהמסמכים ושליחה ללקוח"
-          />
-        </GroupedList>
-      )}
 
       {pendingCount > 0 && (
         <GroupedList className="mb-6">
