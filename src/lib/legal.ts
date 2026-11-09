@@ -18,10 +18,11 @@ export const LEGAL = {
   jurisdictionCity: "ירושלים",
   /** Supabase project region (Dashboard → Project Settings → General). */
   hostingRegion: "אירלנד (AWS eu-west-1)",
-  /** How long Supabase keeps backups after a deletion, in days. "0" = the plan keeps no backups
-   *  (checked 2026-09-30: no daily backups, no PITR). Update when upgrading the Supabase plan. */
-  backupRetention: "0",
-  lastUpdated: "5 בנובמבר 2026",
+  /** How long deleted data can survive in backups, in days. "0" = no backups at all. Since
+   *  2026-11-09: the encrypted nightly backup in the private repo tripcraft-backups (GitHub
+   *  artifacts, retention-days: 30). Supabase Free keeps none. Update if either changes. */
+  backupRetention: "30" as string, // widened so the "0" branch on /privacy still type-checks
+  lastUpdated: "9 בנובמבר 2026",
 } as const;
 
 export const isPlaceholder = (value: string) => value.startsWith("[");
