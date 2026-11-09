@@ -358,6 +358,16 @@ export interface StaleKnowledgeChunk {
   days_stale: number;
 }
 
+/** One row per platform from `admin_install_metrics(p_days)` (migration 027). Percentages are null when nobody opened. */
+export interface InstallMetricsRow {
+  platform: "ios" | "android" | "desktop" | "other";
+  users_opened: number;
+  users_installed: number;
+  pct_installed: number | null;
+  users_with_push: number;
+  pct_push: number | null;
+}
+
 /** A tool call the agent proposed but did not execute — shown as an approval
  *  card; the actual write only happens if the user confirms it. */
 export interface PendingAction {
