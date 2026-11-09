@@ -109,3 +109,27 @@ SELECT pg_temp.check('metrics: a wider window counts the older open',
   (SELECT users_opened = 2 AND users_installed = 2 FROM public.admin_install_metrics(90) WHERE platform = 'ios'));
 RESET ROLE;
 -- Retention (the nightly cron delete) isn't testable here: test:db stubs pg_cron.
+
+-- 5. Review additions (eng-security, 2026-11-09) -------------------------------------
+SELECT pg_temp.login(pg_temp.id('owner'));
+SELECT public.record_app_open('android', true);
+RESET ROLE;
+SELECT pg_temp.check('record: a repeat with another platform does not overwrite the row',
+  (SELECT platform = 'ios' FROM public.app_opens WHERE user_id = pg_temp.id('owner') AND standalone));
+
+SELECT pg_temp.login(pg_temp.id('stranger'));
+SELECT pg_temp.check('push_device_platform: a signed-in user can''t call it',
+  pg_temp.try($$SELECT public.push_device_platform('https://x', 'y')$$) = -1);
+RESET ROLE;
+
+INSERT INTO public.app_opens (user_id, day, platform, standalone)
+VALUES (pg_temp.id('viewer'), current_date - 200, 'ios', true);
+SELECT pg_temp.login(pg_temp.id('admin'));
+SELECT pg_temp.check('metrics: p_days <= 0 counts today only',
+  (SELECT users_opened = 1 FROM public.admin_install_metrics(-5) WHERE platform = 'ios'));
+SELECT pg_temp.check('metrics: p_days above 180 is capped (an open 200 days ago is not counted)',
+  (SELECT users_opened = 2 FROM public.admin_install_metrics(100000) WHERE platform = 'ios'));
+RESET ROLE;
+
+DELETE FROM auth.users WHERE id = pg_temp.id('editor');
+SELECT pg_temp.check('app_opens: rows go with the account', pg_temp.opens(pg_temp.id('editor')) = 0);

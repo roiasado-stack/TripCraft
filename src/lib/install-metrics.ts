@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase";
-import { localDateString } from "@/lib/trip-dates";
 
 /*
  * Install metrics (migration 027): once a day per mode, a signed-in user's
@@ -28,12 +27,22 @@ export function openKey(userId: string, day: string, standalone: boolean): strin
   return `tripcraft-app-open:${userId}:${day}:${standalone ? "installed" : "browser"}`;
 }
 
+/**
+ * The day the server records (`current_date` in a UTC database), so the
+ * "already recorded" guard and the table agree. A local day would skip the
+ * write for a user who opens the app just after local midnight.
+ */
+export function serverDay(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+}
+
 /** Record this open for the signed-in (non-demo) user. Never throws; failures only reach the console. */
 export async function recordAppOpen(userId: string): Promise<void> {
   try {
     const nav = navigator as Navigator & { standalone?: boolean };
     const standalone = isStandalone(window.matchMedia?.("(display-mode: standalone)").matches, nav.standalone);
-    const key = openKey(userId, localDateString(new Date()), standalone);
+    const key = openKey(userId, serverDay(new Date()), standalone);
     try {
       if (localStorage.getItem(key)) return;
     } catch {

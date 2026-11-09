@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { isStandalone, openKey, platformFromUserAgent } from "./install-metrics";
+import { isStandalone, openKey, platformFromUserAgent, serverDay } from "./install-metrics";
+
+describe("serverDay", () => {
+  it("is the UTC day, like the database's current_date", () => {
+    // 00:30 in Israel on 10 Nov is still 9 Nov in UTC
+    expect(serverDay(new Date(Date.UTC(2026, 10, 9, 22, 30)))).toBe("2026-11-09");
+    expect(serverDay(new Date(Date.UTC(2026, 11, 31, 23, 59)))).toBe("2026-12-31");
+    expect(serverDay(new Date(Date.UTC(2027, 0, 1, 0, 0)))).toBe("2027-01-01");
+  });
+});
 
 const UA = {
   iphone: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1",
