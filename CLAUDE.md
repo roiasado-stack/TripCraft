@@ -87,6 +87,10 @@ there are the business team; they never touch code.
   format them only through `@/lib/trip-dates` (`parseLocalDate`, `localDateString`, `daysFrom`…).
   `new Date("2026-11-15")` is UTC midnight and `toISOString().slice(0, 10)` is the UTC day — both
   were real bugs, and `npm run rules` now rejects them.
+- The database's day is different: `current_date` / `now()::date` is the **UTC** day. A client
+  check that has to agree with a day the server writes (e.g. "already recorded today") uses
+  `serverDay()` from `@/lib/install-metrics`, never the local day — mixing them lost every app open
+  just after Israeli midnight (caught in review, 2026-11-09).
 
 ## Supabase schema
 

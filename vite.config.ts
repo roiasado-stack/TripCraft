@@ -34,7 +34,10 @@ export default defineConfig({
         "*.{crt,pem,key}",
         "**/.git/**",
         "**/.vercel/**",
-        "**/.claude/**",
+        // This project's own .claude/, anchored to the root: "**/.claude/**" also
+        // matched every file of a dev server started inside .claude/worktrees/<name>
+        // (403 on the whole app — the eng-verifier hit it on 2026-11-09).
+        `${path.resolve(__dirname, ".claude").replace(/\\/g, "/")}/**`,
         "**/supabase/.temp/**",
         "**/business/**",
         "**/n8n/**",

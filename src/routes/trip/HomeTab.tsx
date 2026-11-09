@@ -12,7 +12,16 @@ import { TripUpdates } from "@/components/TripUpdates";
 import { PhotoAlbumCard } from "@/components/PhotoAlbumCard";
 import { GuideCard } from "@/components/GuideCard";
 import { TripMuteRow } from "@/components/TripMuteRow";
-import { GroupedList, ListRow, Spinner } from "@/components/ui";
+import { Button, Field, GroupedList, Input, ListRow, Modal, Spinner } from "@/components/ui";
+import {
+  dayShift,
+  templateChecklist,
+  templateItinerary,
+  templateStays,
+  templateSuggestions,
+  templateTrip,
+} from "@/lib/trip-template";
+import { isTripLimitError, TRIP_LIMIT_MESSAGE } from "@/lib/trip-drafts";
 import { formatDateTimeHeb, itineraryCategory } from "@/lib/trip-options";
 import {
   countdownLabel,
@@ -35,85 +44,64 @@ export default function HomeTab() {
   const [today, setToday] = useState<ItineraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [duplicating, setDuplicating] = useState(false);
+  const [dupOpen, setDupOpen] = useState(false);
+  const [newStart, setNewStart] = useState("");
   const [composeRequest, setComposeRequest] = useState(0);
   const { user, isAnonymous, isAgent } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
-  /** Deep-copies the trip and its child rows into a brand-new trip. */
+  /**
+   * Copies the trip as a clean template: route, hotels, suggestions and the group
+   * checklist, with every date moved to the chosen start. Nothing that belongs to
+   * the previous client comes along (#47) — the rules live in @/lib/trip-template.
+   */
   const duplicate = async () => {
     if (!user) return;
     setDuplicating(true);
+    const days = dayShift(trip.start_date, newStart);
+    let newId: string | null = null;
     try {
       const { data: created, error } = await supabase
         .from("trips")
-        .insert({
-          user_id: user.id,
-          title: `${trip.title} (עותק)`,
-          destination: trip.destination,
-          start_date: trip.start_date,
-          end_date: trip.end_date,
-          trip_type: trip.trip_type,
-          budget_level: trip.budget_level,
-          notes: trip.notes,
-          cover_emoji: trip.cover_emoji,
-        })
-        .select()
+        .insert({ ...templateTrip(trip as unknown as Record<string, unknown>, days), user_id: user.id })
+        .select("id")
         .single();
-      if (error || !created) throw error;
-      const newId = (created as { id: string }).id;
+      if (error || !created) throw error ?? new Error("no trip");
+      const id = (created as { id: string }).id;
+      newId = id;
 
-      // Copy participants first so checklist/document links can be remapped.
-      const { data: srcParts } = await supabase.from("participants").select("*").eq("trip_id", trip.id);
-      const partMap = new Map<string, string>();
-      for (const p of ((srcParts as Record<string, unknown>[]) ?? [])) {
-        const { data: np } = await supabase
-          .from("participants")
-          .insert({
-            trip_id: newId,
-            name: p.name,
-            age: p.age,
-            age_range: p.age_range,
-            preferences: p.preferences,
-            notes: p.notes,
-          })
-          .select()
-          .single();
-        if (np) partMap.set(p.id as string, (np as { id: string }).id);
-      }
-
-      const copyTable = async (table: string, strip: string[] = []) => {
-        const { data: rows } = await supabase.from(table).select("*").eq("trip_id", trip.id);
-        const list = (rows as Record<string, unknown>[]) ?? [];
-        if (!list.length) return;
-        const mapped = list.map((r) => {
-          const copy: Record<string, unknown> = { ...r, trip_id: newId };
-          delete copy.id;
-          delete copy.created_at;
-          // Authorship belongs to whoever makes the copy (the column defaults to
-          // auth.uid(); RLS rejects anyone else's id — migration 015).
-          delete copy.created_by;
-          strip.forEach((k) => delete copy[k]);
-          if (copy.participant_id) copy.participant_id = partMap.get(copy.participant_id as string) ?? null;
-          return copy;
-        });
-        await supabase.from(table).insert(mapped);
+      const read = async (table: string) => {
+        const { data, error: e } = await supabase.from(table).select("*").eq("trip_id", trip.id);
+        if (e) throw e;
+        return (data as Record<string, unknown>[]) ?? [];
       };
-
+      const write = async (table: string, rows: Record<string, unknown>[]) => {
+        if (!rows.length) return;
+        const { error: e } = await supabase.from(table).insert(rows);
+        if (e) throw e;
+      };
+      const [items, stays, suggestions, checklist] = await Promise.all([
+        read("itinerary_items"),
+        read("stays"),
+        read("suggestions"),
+        read("checklist_items"),
+      ]);
       await Promise.all([
-        copyTable("flights"),
-        copyTable("stays"),
-        copyTable("transfers"),
-        copyTable("itinerary_items"),
-        copyTable("suggestions", ["liked"]),
-        copyTable("checklist_items", ["is_done"]),
+        write("itinerary_items", templateItinerary(items, id, days)),
+        write("stays", templateStays(stays, id, days)),
+        write("suggestions", templateSuggestions(suggestions, id)),
+        write("checklist_items", templateChecklist(checklist, id)),
       ]);
 
-      toast.success("הטיול שוכפל 🎉");
-      navigate(`/trip/${newId}`);
+      setDupOpen(false);
+      toast.success("נוצר טיול חדש מהתבנית 🎉");
+      navigate(`/trip/${id}`);
     } catch (e) {
       console.error(e);
-      toast.error("השכפול נכשל. נסה שוב.");
+      // Don't leave a half-built trip behind (its child rows cascade).
+      if (newId) await supabase.from("trips").delete().eq("id", newId);
+      toast.error(isTripLimitError(e) ? TRIP_LIMIT_MESSAGE : "השכפול נכשל. נסה שוב.");
     } finally {
       setDuplicating(false);
     }
@@ -368,16 +356,50 @@ export default function HomeTab() {
 
       <div className="mt-6 divide-y divide-separator overflow-hidden rounded-2xl bg-card">
         <TripMuteRow tripId={trip.id} />
-        <button
-          type="button"
-          onClick={duplicate}
-          disabled={duplicating}
-          className="type-headline flex min-h-14 w-full items-center gap-3 px-4 py-3 text-start text-primary transition-colors active:bg-muted/70 disabled:opacity-60"
-        >
-          {duplicating ? <Spinner className="size-5" /> : <CopyPlus className="size-5" />}
-          שכפול הטיול כתבנית חדשה
-        </button>
+        {canEdit && !isAnonymous && (
+          <button
+            type="button"
+            onClick={() => {
+              setNewStart("");
+              setDupOpen(true);
+            }}
+            className="type-headline flex min-h-14 w-full items-center gap-3 px-4 py-3 text-start text-primary transition-colors active:bg-muted/70"
+          >
+            <CopyPlus className="size-5" />
+            שכפול הטיול כתבנית חדשה
+          </button>
+        )}
       </div>
+
+      <Modal
+        open={dupOpen}
+        onClose={() => !duplicating && setDupOpen(false)}
+        title="שכפול כתבנית חדשה"
+        footer={
+          <>
+            <Button variant="ghost" className="flex-1" disabled={duplicating} onClick={() => setDupOpen(false)}>
+              ביטול
+            </Button>
+            <Button className="flex-1" loading={duplicating} onClick={duplicate}>
+              יצירת טיול חדש
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            יועתקו המסלול, המלונות, ההמלצות והצ'קליסט המשותף. לא יועתקו משתתפים, טיסות, העברות, מספרי
+            הזמנה והערות — כדי שפרטי הלקוח הקודם לא יעברו לטיול החדש.
+          </p>
+          {trip.start_date ? (
+            <Field label="תאריך התחלה חדש" hint="כל התאריכים יזוזו בהתאם. בלי תאריך — התאריכים יישארו כמו בטיול המקורי.">
+              <Input type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
+            </Field>
+          ) : (
+            <p className="text-sm text-muted-foreground">לטיול הזה אין תאריך התחלה, ולכן התאריכים יועתקו כמו שהם.</p>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

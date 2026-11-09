@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { dropBrowserSubscription, releaseForeignSubscription, unsubscribeOnSignOut } from "@/lib/push";
+import { recordAppOpen } from "@/lib/install-metrics";
 import type { AppRole, Profile } from "@/lib/types";
 
 type AuthState = {
@@ -159,6 +160,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pushUserId = session?.user && !session.user.is_anonymous ? session.user.id : null;
   useEffect(() => {
     if (pushUserId) void releaseForeignSubscription();
+  }, [pushUserId]);
+
+  // Install metrics (migration 027): once a day per mode, real users only.
+  useEffect(() => {
+    if (pushUserId) void recordAppOpen(pushUserId);
   }, [pushUserId]);
 
   const value: AuthState = {
