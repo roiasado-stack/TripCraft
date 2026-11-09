@@ -21,6 +21,7 @@ import {
   templateSuggestions,
   templateTrip,
 } from "@/lib/trip-template";
+import { isTripLimitError, TRIP_LIMIT_MESSAGE } from "@/lib/trip-drafts";
 import { formatDateTimeHeb, itineraryCategory } from "@/lib/trip-options";
 import {
   countdownLabel,
@@ -59,6 +60,7 @@ export default function HomeTab() {
     if (!user) return;
     setDuplicating(true);
     const days = dayShift(trip.start_date, newStart);
+    let newId: string | null = null;
     try {
       const { data: created, error } = await supabase
         .from("trips")
@@ -66,7 +68,8 @@ export default function HomeTab() {
         .select("id")
         .single();
       if (error || !created) throw error ?? new Error("no trip");
-      const newId = (created as { id: string }).id;
+      const id = (created as { id: string }).id;
+      newId = id;
 
       const read = async (table: string) => {
         const { data, error: e } = await supabase.from(table).select("*").eq("trip_id", trip.id);
@@ -85,18 +88,20 @@ export default function HomeTab() {
         read("checklist_items"),
       ]);
       await Promise.all([
-        write("itinerary_items", templateItinerary(items, newId, days)),
-        write("stays", templateStays(stays, newId, days)),
-        write("suggestions", templateSuggestions(suggestions, newId)),
-        write("checklist_items", templateChecklist(checklist, newId)),
+        write("itinerary_items", templateItinerary(items, id, days)),
+        write("stays", templateStays(stays, id, days)),
+        write("suggestions", templateSuggestions(suggestions, id)),
+        write("checklist_items", templateChecklist(checklist, id)),
       ]);
 
       setDupOpen(false);
       toast.success("נוצר טיול חדש מהתבנית 🎉");
-      navigate(`/trip/${newId}`);
+      navigate(`/trip/${id}`);
     } catch (e) {
       console.error(e);
-      toast.error("השכפול נכשל. נסה שוב.");
+      // Don't leave a half-built trip behind (its child rows cascade).
+      if (newId) await supabase.from("trips").delete().eq("id", newId);
+      toast.error(isTripLimitError(e) ? TRIP_LIMIT_MESSAGE : "השכפול נכשל. נסה שוב.");
     } finally {
       setDuplicating(false);
     }
@@ -386,9 +391,13 @@ export default function HomeTab() {
             יועתקו המסלול, המלונות, ההמלצות והצ'קליסט המשותף. לא יועתקו משתתפים, טיסות, העברות, מספרי
             הזמנה והערות — כדי שפרטי הלקוח הקודם לא יעברו לטיול החדש.
           </p>
-          <Field label="תאריך התחלה חדש" hint="כל התאריכים יזוזו בהתאם. בלי תאריך — התאריכים יישארו כמו בטיול המקורי.">
-            <Input type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
-          </Field>
+          {trip.start_date ? (
+            <Field label="תאריך התחלה חדש" hint="כל התאריכים יזוזו בהתאם. בלי תאריך — התאריכים יישארו כמו בטיול המקורי.">
+              <Input type="date" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
+            </Field>
+          ) : (
+            <p className="text-sm text-muted-foreground">לטיול הזה אין תאריך התחלה, ולכן התאריכים יועתקו כמו שהם.</p>
+          )}
         </div>
       </Modal>
     </div>
