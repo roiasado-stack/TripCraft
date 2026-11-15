@@ -23,6 +23,7 @@ import {
   tripDays,
 } from "./bookings.ts";
 import { AGENDA_ITEM_SHAPE, AGENDA_RULES, sanitizeAgenda } from "./agenda.ts";
+import { extractJson, extractJsonObjects } from "./json-extract.ts";
 
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -321,66 +322,6 @@ function extractText(payload: unknown): string {
     .filter((b): b is { type: string; text: string } => (b as { type?: string })?.type === "text")
     .map((b) => b.text)
     .join("\n");
-}
-
-/**
- * Every top-level JSON object in the reply, in order. A long answer sometimes
- * arrives split into several blocks (e.g. one fenced ```json block per
- * itinerary day); taking only the first block silently dropped the rest.
- * Brace-matching respects string literals, so braces inside values are safe;
- * quotes outside any object (prose) are ignored.
- */
-function extractJsonObjects(rawText: string): Record<string, unknown>[] {
-  // Hebrew abbreviations (אונסק"ו, חב"ד, ארה"ב) are often written with a plain
-  // double quote, which ends the JSON string early and loses the whole reply.
-  // A quote between two Hebrew letters can never be JSON syntax, so turning it
-  // into the proper gershayim (״) is always safe.
-  const text = rawText.replace(/([\u0590-\u05FF])"(?=[\u0590-\u05FF])/g, "$1\u05F4");
-  const out: Record<string, unknown>[] = [];
-  let depth = 0;
-  let start = -1;
-  let inString = false;
-  let escaped = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (c === "\\") escaped = true;
-      else if (c === '"') inString = false;
-      continue;
-    }
-    if (c === '"') {
-      if (depth > 0) inString = true;
-    } else if (c === "{") {
-      if (depth === 0) start = i;
-      depth++;
-    } else if (c === "}" && depth > 0) {
-      depth--;
-      if (depth === 0 && start >= 0) {
-        try {
-          const v = JSON.parse(text.slice(start, i + 1));
-          if (v && typeof v === "object" && !Array.isArray(v)) out.push(v as Record<string, unknown>);
-        } catch {
-          // Not valid JSON on its own — skip it.
-        }
-        start = -1;
-      }
-    }
-  }
-  return out;
-}
-
-// Generic enough for both `{items:[...]}` (suggestions/itinerary/checklist/passports)
-// and `{doc_type, data}` (voucher) shaped responses. When the reply holds several
-// `{items:[...]}` objects, their items are concatenated into one.
-function extractJson(text: string): Record<string, unknown> | null {
-  const objects = extractJsonObjects(text);
-  if (!objects.length) return null;
-  const withItems = objects.filter((o) => Array.isArray(o.items));
-  if (withItems.length > 1) {
-    return { ...withItems[0], items: withItems.flatMap((o) => o.items as unknown[]) };
-  }
-  return withItems[0] ?? objects[0];
 }
 
 // Service-role client used ONLY for photo_cache (migration 012). That table is
