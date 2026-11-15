@@ -36,7 +36,10 @@ export function fileToBase64(file: File): Promise<{ media_type: string; data: st
   });
 }
 
-const MAX_FILES = 8;
+// An agency trip easily has 10+ files (each traveller's own tickets, domestic
+// flights, one voucher per hotel). 8 cut real trips short (2026-11-15). Scans
+// still run CONCURRENCY at a time, and each one is capped and logged server-side.
+const MAX_FILES = 20;
 const CONCURRENCY = 3;
 
 export type PassengerType = "adult" | "child" | "infant";
@@ -284,6 +287,9 @@ export function ImportBookings({
   const [view, setView] = useState<"scan" | "review">("scan");
   const [items, setItems] = useState<ScanItem[]>([]);
   const [scanning, setScanning] = useState(false);
+  // Files from the last pick that didn't fit under MAX_FILES. Shown in the
+  // modal until the next pick: a toast vanished before anyone read it.
+  const [overLimit, setOverLimit] = useState<string[]>([]);
 
   // review state
   const [destination, setDestination] = useState("");
@@ -298,6 +304,7 @@ export function ImportBookings({
     session.current += 1;
     setView("scan");
     setItems([]);
+    setOverLimit([]);
     setScanning(false);
     setDestination("");
     setStartDate("");
@@ -359,12 +366,9 @@ export function ImportBookings({
     const picked = [...(e.target.files ?? [])];
     if (fileRef.current) fileRef.current.value = "";
     if (!picked.length) return;
-    const room = MAX_FILES - items.length;
-    if (room <= 0) {
-      toast.error(`אפשר לסרוק עד ${MAX_FILES} קבצים.`);
-      return;
-    }
-    if (picked.length > room) toast.error(`אפשר לסרוק עד ${MAX_FILES} קבצים — נסרקים רק ${room} הראשונים.`);
+    const room = Math.max(MAX_FILES - items.length, 0);
+    setOverLimit(picked.slice(room).map((f) => f.name));
+    if (room === 0) return;
     const batch: ScanItem[] = picked.slice(0, room).map((file) => ({
       id: nextId.current++,
       file,
@@ -541,6 +545,18 @@ export function ImportBookings({
           <p className="-mt-1 text-center text-xs text-muted-foreground">
             כל קובץ הוא הזמנה אחת (PDF של כמה עמודים — עדיין הזמנה אחת). עד {MAX_FILES} קבצים. דורש הפעלת AI.
           </p>
+
+          {overLimit.length > 0 && (
+            <div role="alert" className="flex gap-2 rounded-2xl bg-destructive/10 p-3 text-xs text-destructive">
+              <AlertTriangle className="size-4 shrink-0" />
+              <span className="min-w-0 [overflow-wrap:anywhere]">
+                אפשר לסרוק עד {MAX_FILES} קבצים, ולכן{" "}
+                {overLimit.length === 1 ? "הקובץ הזה לא נסרק" : `${overLimit.length} הקבצים האלה לא נסרקו`}:{" "}
+                <bdi dir="auto">{overLimit.join(", ")}</bdi>. אפשר להסיר קבצים מהרשימה ולהוסיף אותם, או לסרוק אותם
+                אחר כך מתוך הטיול: מסמכים ← סריקת שובר הזמנה.
+              </span>
+            </div>
+          )}
 
           {items.length > 0 && (
             <div className="flex flex-col gap-1.5">
