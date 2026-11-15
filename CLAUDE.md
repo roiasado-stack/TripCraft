@@ -35,6 +35,11 @@ runs Vite on :5174 against it via `.env.localstack`. Test accounts belong there,
   reached regular trips (caught only in final review, #13).
 - Unit tests only for pure logic in `src/lib` (parsers, permissions, URL builders). No component tests,
   no mocking Supabase — RLS is tested against the real database instead.
+- Logic that reads flights or trip days (`supabase/functions/generate/bookings.ts`, the itinerary, the
+  `ask` snapshot) is also tested on a multi-stop trip with domestic flights. The scan saves every leg
+  that doesn't land in Israel as `outbound`, so domestic legs are `outbound` too. Single-destination
+  fixtures hid that, and an agency's 4-stop trip was planned only from its last domestic flight
+  (production, 2026-11-15, #42).
 - ESLint is limited to bug-catching rules on purpose; there is no formatter. A justified exception to
   a repo rule goes in `ALLOW` in `scripts/check-rules.mjs` with its reason — never loosen the rule.
 
