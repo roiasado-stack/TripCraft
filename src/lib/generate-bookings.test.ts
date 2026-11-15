@@ -4,6 +4,7 @@ import {
   dayRange,
   flightWindow,
   itineraryBookingLines,
+  itineraryTime,
   moveDays,
   outsideTrip,
   partyKind,
@@ -105,6 +106,23 @@ describe("booking lines for the itinerary prompt", () => {
 
   it("has no move day for one hotel", () => {
     expect(moveDays([stays[1]], days)).toEqual([]);
+  });
+});
+
+describe("an item's start time", () => {
+  it("keeps clock times as HH:MM", () => {
+    expect(itineraryTime("09:30")).toBe("09:30");
+    expect(itineraryTime("9:30")).toBe("09:30");
+    expect(itineraryTime(" 18:00:00 ")).toBe("18:00");
+  });
+
+  it("drops anything the database would reject, instead of failing the whole insert", () => {
+    expect(itineraryTime("בוקר")).toBeNull();
+    expect(itineraryTime("09:00-11:00")).toBeNull();
+    expect(itineraryTime("25:00")).toBeNull();
+    expect(itineraryTime("12:75")).toBeNull();
+    expect(itineraryTime(930)).toBeNull();
+    expect(itineraryTime(null)).toBeNull();
   });
 });
 

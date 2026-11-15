@@ -215,6 +215,16 @@ export function itineraryBookingLines(stays: StayRow[], flights: FlightRow[], da
 }
 
 /**
+ * A generated item's start time as "HH:MM", or null for anything that isn't a
+ * clock time ("בוקר", "09:00-11:00"): one such value would fail the whole insert.
+ */
+export function itineraryTime(value: unknown): string | null {
+  const m = typeof value === "string" ? value.trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/) : null;
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
+  return `${m[1].padStart(2, "0")}:${m[2]}`;
+}
+
+/**
  * Generated itinerary rows that fall outside the trip: a day not in `days`,
  * a time before landing on the arrival day, or at/after take-off on the return day.
  */

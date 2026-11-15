@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   chunkPromptLines,
   itineraryScope,
+  partsWithinBudget,
   planItineraryChunks,
   type ItineraryChunk,
 } from "../../supabase/functions/generate/chunks";
@@ -142,6 +143,30 @@ describe("splitting a long itinerary", () => {
     const { chunks, deferred } = planItineraryChunks(shuffled, ["2027-09-09", addDays("2027-09-09", 6)]);
     expect([...chunks.flatMap((c) => c.days), ...deferred]).toEqual(all);
     expect(chunks.every((c) => c.days.length <= 7)).toBe(true);
+  });
+});
+
+describe("parts within the caller's remaining budget", () => {
+  it("gives a demo visitor (0.10 $ a day) one part", () => {
+    expect(partsWithinBudget(0.1, 0.06)).toBe(1);
+  });
+
+  it("gives a fresh user all 5 and a nearly-spent one fewer", () => {
+    expect(partsWithinBudget(2, 0.06)).toBe(5);
+    expect(partsWithinBudget(0.13, 0.06)).toBe(2);
+    expect(partsWithinBudget(0.01, 0.06)).toBe(1);
+  });
+
+  it("fails closed on an unreadable budget", () => {
+    expect(partsWithinBudget(NaN, 0.06)).toBe(1);
+    expect(partsWithinBudget(Infinity, 0.06)).toBe(5);
+  });
+
+  it("one part with days left over plans only its own days", () => {
+    const { chunks, deferred } = planItineraryChunks(dayRange("2027-03-01", "2027-03-21"), [], { maxChunks: 1 });
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].days).toHaveLength(7);
+    expect(deferred).toHaveLength(14);
   });
 });
 

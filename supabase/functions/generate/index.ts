@@ -16,6 +16,7 @@ import {
   type StayRow,
   flightWindow,
   itineraryBookingLines,
+  itineraryTime,
   moveDays,
   outsideTrip,
   partyLine,
@@ -24,8 +25,9 @@ import {
   tripDays,
 } from "./bookings.ts";
 import { AGENDA_ITEM_SHAPE, AGENDA_RULES, sanitizeAgenda } from "./agenda.ts";
-import { type ItineraryChunk, chunkPromptLines, itineraryScope, planItineraryChunks } from "./chunks.ts";
+import { type ItineraryChunk, chunkPromptLines, itineraryScope, partsWithinBudget, planItineraryChunks } from "./chunks.ts";
 import { dropDuplicates, normalizeTitle } from "./dedupe.ts";
+import { extractJson, extractJsonObjects, extractText } from "./reply.ts";
 
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -64,11 +66,14 @@ const DEMO_APP_DAILY_CAP_USD = 1.0;
 
 /**
  * Which cap the caller, the demo pool (for anonymous callers) or the whole app
- * has hit: "month" for an agent's own monthly budget, "day" for every other
- * (and every unreadable) case, null when the call may go ahead. Truthy = stop.
+ * has hit (`over`): "month" for an agent's own monthly budget, "day" for every
+ * other (and every unreadable) case, null when the call may go ahead. Truthy =
+ * stop. `headroomUsd`: what the caller may still spend today under every cap
+ * that applies (0 when over) — a long itinerary plans only as many parts as
+ * that holds, so one press can't run far past a small remaining budget.
  */
 // deno-lint-ignore no-explicit-any
-async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<"day" | "month" | null> {
+async function capStatus(supabase: any, isAnonymous: boolean): Promise<{ over: "day" | "month" | null; headroomUsd: number }> {
   const [mine, app, demo, agent] = await Promise.all([
     supabase.rpc("my_agent_daily_cost_usd"),
     supabase.rpc("app_agent_daily_cost_usd"),
@@ -76,21 +81,34 @@ async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<"day" 
     // An active travel agent (migration 022): their own day and month caps, or NULL.
     isAnonymous ? Promise.resolve({ data: null }) : supabase.rpc("my_agent_limits"),
   ]);
+  const stop = (over: "day" | "month") => ({ over, headroomUsd: 0 });
   // The app-wide cap is the last line of defence: an unreadable total counts as reached.
-  if (app.error || (app.data ?? 0) >= APP_DAILY_CAP_USD) return "day";
+  if (app.error || (app.data ?? 0) >= APP_DAILY_CAP_USD) return stop("day");
   // An unreadable personal spend counts as reached too, for every kind of caller.
-  if (mine.error) return "day";
+  if (mine.error) return stop("day");
+  const appLeft = APP_DAILY_CAP_USD - Number(app.data ?? 0);
+  const spent = Number(mine.data ?? 0);
   if (isAnonymous) {
-    return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD ? "day" : null;
+    if (spent >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD) return stop("day");
+    return { over: null, headroomUsd: Math.min(appLeft, DEMO_DAILY_CAP_USD - spent, DEMO_APP_DAILY_CAP_USD - Number(demo.data ?? 0)) };
   }
   // Can't tell whether the caller is an agent, or can't read an agent's spend: fail closed.
-  if (agent.error) return "day";
+  if (agent.error) return stop("day");
   if (agent.data) {
     // The month goes first: it won't clear tomorrow, and the message has to say so.
-    if (!(Number(agent.data.ai_monthly_usd) > Number(agent.data.month_cost_usd))) return "month";
-    return !(Number(agent.data.ai_daily_usd) > (mine.data ?? 0)) ? "day" : null;
+    const monthLeft = Number(agent.data.ai_monthly_usd) - Number(agent.data.month_cost_usd);
+    if (!(monthLeft > 0)) return stop("month");
+    const dayLeft = Number(agent.data.ai_daily_usd) - spent;
+    if (!(dayLeft > 0)) return stop("day");
+    return { over: null, headroomUsd: Math.min(appLeft, monthLeft, dayLeft) };
   }
-  return (mine.data ?? 0) >= DAILY_CAP_USD ? "day" : null;
+  if (spent >= DAILY_CAP_USD) return stop("day");
+  return { over: null, headroomUsd: Math.min(appLeft, DAILY_CAP_USD - spent) };
+}
+
+// deno-lint-ignore no-explicit-any
+async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<"day" | "month" | null> {
+  return (await capStatus(supabase, isAnonymous)).over;
 }
 
 const cors = {
@@ -147,6 +165,27 @@ const TUNE_HE: Record<string, string> = {
   cheaper: "התמקד באפשרויות זולות או חינמיות, תקציב נמוך.",
   more_active: "הוסף יותר פעילות, ספורט והרפתקאות.",
 };
+
+/**
+ * Request fields that end up in prompts — once per part of a long itinerary —
+ * cut to sane sizes, so an oversized request body can't multiply the input
+ * cost. Generous for real trips (a group of 60, long Hebrew names).
+ */
+function clampBody(body: Body): void {
+  const cut = <T>(v: T, n: number): T => (typeof v === "string" ? (v.slice(0, n) as T) : v);
+  if (body.trip && typeof body.trip === "object") {
+    body.trip.destination = cut(body.trip.destination, 200);
+    body.trip.trip_type = cut(body.trip.trip_type, 40);
+    body.trip.budget_level = cut(body.trip.budget_level, 40);
+  }
+  body.participants = (Array.isArray(body.participants) ? body.participants : []).slice(0, 60).map((p) => ({
+    name: String(p?.name ?? "").slice(0, 80),
+    age: typeof p?.age === "number" ? p.age : null,
+    age_range: typeof p?.age_range === "string" ? p.age_range.slice(0, 20) : null,
+    preferences: Array.isArray(p?.preferences) ? p.preferences.slice(0, 10).map((x) => String(x).slice(0, 40)) : [],
+  }));
+  body.time_zone = cut(body.time_zone, 64);
+}
 
 function describeParticipants(list: Participant[]): string {
   if (!list.length) return "לא צוינו משתתפים.";
@@ -297,93 +336,20 @@ ${perDay}${scope ? `\n${scope}` : ""}
 - בקיצורים עבריים (כמו חב״ד, אונסק״ו, ארה״ב) כתוב את הגרשיים בתו ״ ולא במירכאות " — מירכאות רגילות שוברות את ה-JSON.`;
 }
 
-/**
- * Anthropic responses aren't guaranteed to put the reply in content[0] — a
- * leading non-text block (e.g. thinking) pushes it later. Concatenate every
- * text block instead of indexing positionally.
- */
-function extractText(payload: unknown): string {
-  const blocks = (payload as { content?: unknown[] })?.content;
-  if (!Array.isArray(blocks)) return "";
-  return blocks
-    .filter((b): b is { type: string; text: string } => (b as { type?: string })?.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-}
-
-/**
- * Every top-level JSON object in the reply, in order. A long answer sometimes
- * arrives split into several blocks (e.g. one fenced ```json block per
- * itinerary day); taking only the first block silently dropped the rest.
- * Brace-matching respects string literals, so braces inside values are safe;
- * quotes outside any object (prose) are ignored.
- */
-function extractJsonObjects(rawText: string): Record<string, unknown>[] {
-  // Hebrew abbreviations (אונסק"ו, חב"ד, ארה"ב) are often written with a plain
-  // double quote, which ends the JSON string early and loses the whole reply.
-  // A quote between two Hebrew letters can never be JSON syntax, so turning it
-  // into the proper gershayim (״) is always safe.
-  const text = rawText.replace(/([\u0590-\u05FF])"(?=[\u0590-\u05FF])/g, "$1\u05F4");
-  const out: Record<string, unknown>[] = [];
-  let depth = 0;
-  let start = -1;
-  let inString = false;
-  let escaped = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (c === "\\") escaped = true;
-      else if (c === '"') inString = false;
-      continue;
-    }
-    if (c === '"') {
-      if (depth > 0) inString = true;
-    } else if (c === "{") {
-      if (depth === 0) start = i;
-      depth++;
-    } else if (c === "}" && depth > 0) {
-      depth--;
-      if (depth === 0 && start >= 0) {
-        try {
-          const v = JSON.parse(text.slice(start, i + 1));
-          if (v && typeof v === "object" && !Array.isArray(v)) out.push(v as Record<string, unknown>);
-        } catch {
-          // Not valid JSON on its own — skip it.
-        }
-        start = -1;
-      }
-    }
-  }
-  return out;
-}
-
-// Generic enough for both `{items:[...]}` (suggestions/itinerary/checklist/passports)
-// and `{doc_type, data}` (voucher) shaped responses. When the reply holds several
-// `{items:[...]}` objects, their items are concatenated into one.
-function extractJson(text: string): Record<string, unknown> | null {
-  const objects = extractJsonObjects(text);
-  if (!objects.length) return null;
-  const withItems = objects.filter((o) => Array.isArray(o.items));
-  if (withItems.length > 1) {
-    return { ...withItems[0], items: withItems.flatMap((o) => o.items as unknown[]) };
-  }
-  return withItems[0] ?? objects[0];
-}
-
 // Cost held for one itinerary/suggestions call until its real numbers are
 // logged (above the measured averages); a long itinerary holds it per part.
 const LLM_CALL_HOLD_USD = 0.06;
 // Parts of a long itinerary (chunks.ts) must answer in time for the rest of
 // the request — photos and the insert — inside the Free plan's 150 s.
 const CHUNK_DEADLINE_MS = 105_000;
-// A part cut off at the deadline is still billed for what it generated, but
-// its usage never comes back: count this much (~105 s of output) against the caps.
-const ABORTED_CHUNK_COST_USD = 0.12;
 // Parts sent together can trip a burst/ramp limit (429) or meet an overload
 // (529): one retry, only when the call failed fast and the wait is short.
 const RETRY_WINDOW_MS = 20_000;
 const MAX_RETRY_AFTER_S = 10;
+// A part that answered with no usable item (ended early, or JSON the reader
+// couldn't use — ~1 call in 10 on 2026-11-15) is asked once more, if at least
+// this much time is left before the deadline: else a week of days is lost.
+const EMPTY_RETRY_MIN_MS = 60_000;
 
 type ModelReply = {
   ok: true;
@@ -400,6 +366,10 @@ type ModelFailure = { ok: false; ms: number; status: string; detail: string; abo
 
 const costOf = (inputTokens: number, outputTokens: number): number =>
   (inputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (outputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+// A part cut off at the deadline may still be billed in full, but its usage
+// never comes back: count the worst case (a long prompt, output to the cap,
+// ~0.18 $) against the caps, so the estimate errs high.
+const ABORTED_CHUNK_COST_USD = costOf(8_000, MAX_TOKENS);
 
 /**
  * One generation prompt → the model → its `{items:[...]}`. Never throws: an
@@ -443,6 +413,16 @@ async function callModel(
       const usage = payload?.usage ?? {};
       const text = extractText(payload);
       const parsed = extractJson(text);
+      if (!Array.isArray(parsed?.items) || !(parsed!.items as unknown[]).length) {
+        // Why a reply gave nothing (cut short? broken JSON?) — readable in the function logs.
+        console.error("generate: reply with no items", JSON.stringify({
+          stop: payload?.stop_reason,
+          output_tokens: usage.output_tokens,
+          chars: text.length,
+          head: text.slice(0, 1500),
+          tail: text.slice(-500),
+        }));
+      }
       return {
         ok: true,
         ms: Date.now() - start,
@@ -640,6 +620,11 @@ Deno.serve(async (req) => {
   // logRun turns it into the real row; if no model call happened, finally
   // deletes it.
   let reservation: { id: string; kind: string } | null = null;
+  // What the generation call(s) cost, once they answered: a throw after that
+  // (a rejected insert, say) keeps it on the reservation instead of dropping
+  // the spend from the caps.
+  let spent: { inputTokens: number; outputTokens: number; costUsd: number; latencyMs: number } | null = null;
+  let failure = "";
 
   try {
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -674,6 +659,7 @@ Deno.serve(async (req) => {
     }
 
     const body = (await req.json()) as Body;
+    clampBody(body);
 
     const logRun = async (fields: {
       kind: string;
@@ -729,8 +715,10 @@ Deno.serve(async (req) => {
 
     // Google Places kinds spend Google quota, not Anthropic tokens: they're
     // bounded by the daily quota caps set in Google Cloud, not by agent_runs.
+    let headroomUsd = 0;
     if (body.kind !== "photo" && body.kind !== "geocode" && body.kind !== "place_resolve" && body.kind !== "place_photo") {
-      const cap = await overDailyCap(supabase, isAnonymous);
+      const { over: cap, headroomUsd: left } = await capStatus(supabase, isAnonymous);
+      headroomUsd = left;
       if (cap) {
         return new Response(JSON.stringify({ error: cap === "month" ? "monthly_cap_reached" : "daily_cap_reached" }), {
           status: 429,
@@ -1577,11 +1565,16 @@ Never answer with the article of the surrounding city, region or country — e.g
     // the one call it always was.
     const tripDayList = tripDays(body.trip.start_date, body.trip.end_date, bookings.flights, body.time_zone);
     const scope = itineraryScope(tripDayList, existing.map((r) => r.day_date));
+    // No more parts than the caller's remaining budget holds (a demo visitor's
+    // 0.10 $ → one): the rest come back as missing days for a later press.
     const plan =
       body.kind === "itinerary" && !scope.allPlanned
-        ? planItineraryChunks(scope.planDays, moveDays(bookings.stays, tripDayList).map((m) => m.day))
+        ? planItineraryChunks(scope.planDays, moveDays(bookings.stays, tripDayList).map((m) => m.day), {
+            maxChunks: partsWithinBudget(headroomUsd, LLM_CALL_HOLD_USD),
+          })
         : { chunks: [], deferred: [] };
-    const chunked = plan.chunks.length > 1;
+    // One part with days left over still plans only its own days.
+    const chunked = plan.chunks.length > 1 || plan.deferred.length > 0;
     if (chunked && reservation) {
       // Hold one call's estimate per part until the real total is logged.
       await adminDb()?.from("agent_runs").update({ cost_usd: LLM_CALL_HOLD_USD * plan.chunks.length }).eq("id", reservation.id);
@@ -1589,21 +1582,35 @@ Never answer with the article of the surrounding city, region or country — e.g
 
     const runStart = Date.now();
     const deadline = runStart + CHUNK_DEADLINE_MS;
+    // Every call made, retries included: all of them are billed.
+    const attempts: (ModelReply | ModelFailure)[] = [];
     const calls = await Promise.all(
-      (chunked ? plan.chunks : [undefined]).map((chunk) =>
-        callModel(apiKey, buildPrompt(body, existing, bookings, chunk), chunked ? { deadline, retry: true } : {}),
-      ),
+      (chunked ? plan.chunks : [undefined]).map(async (chunk) => {
+        const prompt = buildPrompt(body, existing, bookings, chunk);
+        const opts = chunked ? { deadline, retry: true } : {};
+        let call = await callModel(apiKey, prompt, opts);
+        attempts.push(call);
+        if (chunked && call.ok && !call.items.length && deadline - Date.now() >= EMPTY_RETRY_MIN_MS) {
+          const again = await callModel(apiKey, prompt, opts);
+          attempts.push(again);
+          call = { ...again, ms: call.ms + again.ms };
+        }
+        return call;
+      }),
     );
     const latencyMs = Date.now() - runStart;
     const answered = calls.filter((c): c is ModelReply => c.ok);
-    const inputTokens = answered.reduce((n, c) => n + c.inputTokens, 0);
-    const outputTokens = answered.reduce((n, c) => n + c.outputTokens, 0);
-    const abortedCalls = calls.filter((c) => !c.ok && c.aborted).length;
+    const paid = attempts.filter((c): c is ModelReply => c.ok);
+    const inputTokens = paid.reduce((n, c) => n + c.inputTokens, 0);
+    const outputTokens = paid.reduce((n, c) => n + c.outputTokens, 0);
+    const abortedCalls = attempts.filter((c) => !c.ok && c.aborted).length;
     const costUsd = costOf(inputTokens, outputTokens) + abortedCalls * ABORTED_CHUNK_COST_USD;
+    spent = { inputTokens, outputTokens, costUsd, latencyMs };
     // One agent_runs row for the whole request; per part: how it stopped and how long it took.
     const stops = calls.map((c) => (c.ok ? c.stop : c.status)).join(",");
+    // empty = answered but no item parsed even after the retry; retried = parts asked twice.
     const chunkDiag = chunked
-      ? ` chunks=${calls.length} failed=${calls.length - answered.length} chunk_ms=${calls.map((c) => c.ms).join(",")}`
+      ? ` chunks=${calls.length} failed=${calls.length - answered.length} empty=${answered.filter((c) => !c.items.length).length} retried=${attempts.length - calls.length} deferred_days=${plan.deferred.length} chunk_ms=${calls.map((c) => c.ms).join(",")}`
       : "";
 
     if (!answered.length) {
@@ -1786,7 +1793,8 @@ Never answer with the article of the surrounding city, region or country — e.g
           row: {
             trip_id: body.trip_id,
             day_date: String(i.day_date ?? body.trip.start_date ?? new Date().toISOString().slice(0, 10)),
-            start_time: i.start_time ? String(i.start_time) : null,
+            // Only a real clock time: one "בוקר" would fail the whole insert.
+            start_time: itineraryTime(i.start_time),
             title: String(i.title ?? "").slice(0, 300),
             description: i.description ? String(i.description) : null,
             category: ["activity", "food", "transport", "flight", "hotel", "free"].includes(String(i.category))
@@ -1849,11 +1857,28 @@ Never answer with the article of the surrounding city, region or country — e.g
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (e) {
+    failure = e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? "unknown");
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "unknown" }), {
       status: 500,
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } finally {
-    if (reservation) await adminDb()?.from("agent_runs").delete().eq("id", reservation.id);
+    if (reservation && spent) {
+      // The model answered (and was paid for) but the request threw before
+      // logging it — a rejected insert, say: the reservation keeps the real cost.
+      await adminDb()
+        ?.from("agent_runs")
+        .update({
+          input_tokens: spent.inputTokens,
+          output_tokens: spent.outputTokens,
+          cost_usd: spent.costUsd,
+          latency_ms: spent.latencyMs,
+          status: "error",
+          error_message: `threw after the model call: ${failure}`.slice(0, 500),
+        })
+        .eq("id", reservation.id);
+    } else if (reservation) {
+      await adminDb()?.from("agent_runs").delete().eq("id", reservation.id);
+    }
   }
 });

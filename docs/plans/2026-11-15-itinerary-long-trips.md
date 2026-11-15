@@ -104,6 +104,20 @@ Touches: Edge Function, AI spend. Roles: owner / editor (unchanged gate). No DB 
 5. Phone width, itinerary tab: the info toast shows the missing-day count in Hebrew (from 4).
 6. Over the daily cap → 429 before any model call (unchanged path), nothing logged as spend.
 
+## Added during the build
+- **Security review (eng-security, 3 must-fix):** parts are limited to what the caller's remaining
+  budget holds (`capStatus` → `partsWithinBudget`, 0.06 $ a part: a demo visitor gets one part);
+  a throw after the model answered (e.g. a rejected insert) keeps the real cost on the reservation
+  instead of deleting it; an item's `start_time` must be a clock time (`itineraryTime`), so one
+  "בוקר" can't fail the whole insert; request fields that go into every part's prompt are clamped
+  (`clampBody`); a part aborted at the deadline counts the worst case (~0.18 $).
+- **Empty replies (found in the live check):** about 1 reply in 8 answered `end_turn` with JSON
+  that didn't parse — the model emitted a lone Hebrew point (U+05BF) between two fields, outside any
+  string. Pre-existing (it also hit a 5-day single call). `reply.ts` now retries a block that fails
+  to parse with stray marks outside strings dropped (never letters) and with stray quotes repaired;
+  a part that still answers with no items is asked once more if ≥ 60 s remain; empty replies are
+  logged (`generate: reply with no items`) with their head and tail.
+
 ## Production (Roi, after #42 and this PR merge)
 1. Deploy the `generate` Edge Function (no migration, no secret). The old site ignores the new
    `missing_days` field, so the function can go first.

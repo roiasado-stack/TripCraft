@@ -98,6 +98,17 @@ export function planItineraryChunks(
 }
 
 /**
+ * How many parts one request may plan: what the caller can still spend today
+ * (every cap that applies) at `holdUsd` a part, between 1 and `max`. The cap
+ * check before this already stopped a caller with nothing left; an unreadable
+ * budget gets one part.
+ */
+export function partsWithinBudget(headroomUsd: number, holdUsd: number, max = MAX_CHUNKS): number {
+  if (Number.isNaN(headroomUsd) || !(holdUsd > 0)) return 1;
+  return Math.min(max, Math.max(1, Math.floor(headroomUsd / holdUsd)));
+}
+
+/**
  * The itinerary prompt's lines for one part: plan only its days, and — when
  * a stay is split between parts that can't see each other — which kind of
  * places this part takes, so two parts don't pick the same sights.
