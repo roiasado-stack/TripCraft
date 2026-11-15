@@ -36,6 +36,13 @@ describe("extractJson", () => {
     expect(titles(text)).toEqual(["א", "ג"]);
   });
 
+  // Production-shaped: an 18-day plan hit max_tokens mid-item (local check, 2026-11-15).
+  it("keeps the finished items of a reply cut off at max_tokens", () => {
+    const cut = reply(item("2027-01-03", "א", "x"), item("2027-01-04", "ב", "y")).replace(/\n\]\}\n```$/, "") +
+      ',\n{"day_date":"2027-01-05","start_time":"09:00","title":"ג","descr';
+    expect(titles(cut)).toEqual(["א", "ב"]);
+  });
+
   it("still fixes Hebrew abbreviations with a plain quote", () => {
     expect(titles(reply(item("2027-01-03", 'בית חב"ד', 'ארוחת שבת בחב"ד')))).toEqual(["בית חב״ד"]);
   });

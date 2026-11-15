@@ -94,6 +94,12 @@ export function extractJsonObjects(rawText: string, salvage = true): Record<stri
       }
     }
   }
+  // A reply cut off at max_tokens never closes its `{"items":[...` object:
+  // keep the items that were finished before the cut.
+  if (salvage && depth > 0 && start >= 0 && /^\{\s*"items"\s*:\s*\[/.test(text.slice(start))) {
+    const items = extractJsonObjects(text.slice(start + 1), false);
+    if (items.length) out.push({ items });
+  }
   return out;
 }
 
