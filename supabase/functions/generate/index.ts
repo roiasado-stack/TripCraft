@@ -16,6 +16,7 @@ import {
   type StayRow,
   flightWindow,
   itineraryBookingLines,
+  moveDays,
   outsideTrip,
   partyLine,
   splitAirportTerminal,
@@ -23,6 +24,8 @@ import {
   tripDays,
 } from "./bookings.ts";
 import { AGENDA_ITEM_SHAPE, AGENDA_RULES, sanitizeAgenda } from "./agenda.ts";
+import { type ItineraryChunk, chunkPromptLines, itineraryScope, planItineraryChunks } from "./chunks.ts";
+import { dropDuplicates, normalizeTitle } from "./dedupe.ts";
 
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -156,29 +159,6 @@ function describeParticipants(list: Participant[]): string {
     .join("\n");
 }
 
-/**
- * Title key used to spot the same place twice: drops any parenthetical
- * ("קברי המלכים (Tombs of the Kings)" == "קברי המלכים"), Hebrew niqqud and
- * cantillation, quotes (incl. ״ ׳), other punctuation/symbols (incl. maqaf), lowercases
- * Latin and collapses whitespace. Falls back to the un-stripped form when the
- * whole title was inside parentheses, so it only comes back empty for a title
- * with no letters or digits at all.
- */
-function normalizeTitle(title: string): string {
-  const clean = (s: string) =>
-    s
-      .replace(/[\u0591-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7]/g, "")
-      // Quotes/gershayim sit inside a word (אונסק״ו == אונסקו) — delete them;
-      // any other punctuation or symbol (hyphen, maqaf, comma…) separates words.
-      .replace(/["'`\u05F3\u05F4\u2018\u2019\u201C\u201D]/g, "")
-      .replace(/[\p{P}\p{S}]/gu, " ")
-      .toLowerCase()
-      .replace(/\s+/g, " ")
-      .trim();
-  const s = title.normalize("NFKC");
-  return clean(s.replace(/\([^)]*\)/g, " ")) || clean(s);
-}
-
 /** What the trip already holds — fed into the prompt so a repeated AI press adds new places. */
 type ExistingRow = {
   title: string;
@@ -213,7 +193,13 @@ function uniqueForPrompt(rows: ExistingRow[]): ExistingRow[] {
   return out;
 }
 
-function buildPrompt(body: Body, existing: ExistingRow[] = [], bookings: Bookings = { stays: [], flights: [] }): string {
+/** `chunk`: one part of a long itinerary (chunks.ts) — the prompt plans only its days. */
+function buildPrompt(
+  body: Body,
+  existing: ExistingRow[] = [],
+  bookings: Bookings = { stays: [], flights: [] },
+  chunk?: ItineraryChunk,
+): string {
   const { trip, participants, kind, tune } = body;
   // Only the days the traveller is actually there: the trip dates clipped to the flights.
   const days = tripDays(trip.start_date, trip.end_date, bookings.flights, body.time_zone);
@@ -254,13 +240,11 @@ ${saved.map((r) => r.title).join("; ")}
   }
 
   if (kind === "itinerary") {
-    const dayList = days.length ? days.join(", ") : "צור 3 ימים לדוגמה";
+    const dayList = chunk ? chunk.days.join(", ") : days.length ? days.join(", ") : "צור 3 ימים לדוגמה";
     // Which days already hold items decides the scope: plan only the empty
     // days, or — when every day is taken (or there are no trip dates to tell) —
     // add just a few complementary activities instead of a second full plan.
-    const plannedDays = new Set(existing.map((r) => r.day_date).filter((d): d is string => !!d));
-    const emptyDays = days.filter((d) => !plannedDays.has(d));
-    const allPlanned = existing.length > 0 && emptyDays.length === 0;
+    const { planDays: emptyDays, allPlanned } = itineraryScope(days, existing.map((r) => r.day_date));
     let existingLines = "";
     if (existing.length) {
       const byDay = new Map<string, string[]>();
@@ -273,16 +257,20 @@ ${saved.map((r) => r.title).join("; ")}
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .map(([day, titles]) => `${day}: ${titles.join("; ")}`)
         .join("\n");
+      // A part of a long trip gets its own days instead (chunkPromptLines below).
       const scope = allPlanned
         ? "- לכל הימים כבר יש פריטים — אל תבנה מסלול שני. הוסף רק 2-5 פעילויות חדשות באמת בסך הכול, שמשלימות את הקיים, בימים ובשעות שבהם הן מתאימות."
-        : `- תכנן רק את הימים שעדיין אין בהם פריטים: ${emptyDays.join(", ")}. אל תוסיף פריטים לימים שכבר יש בהם פריטים.`;
+        : chunk
+          ? ""
+          : `- תכנן רק את הימים שעדיין אין בהם פריטים: ${emptyDays.join(", ")}. אל תוסיף פריטים לימים שכבר יש בהם פריטים.`;
       existingLines = `
 - פריטים שכבר קיימים במסלול, לפי יום:
-${perDay}
-${scope}
+${perDay}${scope ? `\n${scope}` : ""}
 - לעולם אל תחזור על פעילות או מקום שכבר קיימים במסלול — גם לא בשם אחר, בכתיב אחר או ביום אחר.`;
     }
-    const bookingBlock = itineraryBookingLines(bookings.stays, bookings.flights, days, body.time_zone);
+    // Every stay and flight stays in the context; the day rules (move day,
+    // landing, flight home) only for the days this prompt plans.
+    const bookingBlock = itineraryBookingLines(bookings.stays, bookings.flights, chunk?.days ?? days, body.time_zone);
     return `${context}${bookingBlock ? `\n${bookingBlock}` : ""}
 
 צור מסלול יומי מוצע. הימים: ${dayList}
@@ -292,7 +280,7 @@ ${scope}
 דרישות:
 - ${allPlanned ? "כל פריט בשעה הגיונית ביחס לפריטים הקיימים באותו יום." : "3-5 פריטים לכל יום שאתה מתכנן, בסדר הגיוני לפי שעות (בוקר/צהריים/ערב)."}
 - התאם לקצב המשתתפים (ילדים/מבוגרים) ולהעדפות.
-- day_date חייב להיות אחד מהתאריכים שצוינו. כל הטקסט בעברית.${existingLines}
+- day_date חייב להיות אחד מהתאריכים שצוינו. כל הטקסט בעברית.${existingLines}${chunk ? `\n${chunkPromptLines(chunk)}` : ""}
 - ${WIKIPEDIA_TITLE_RULE}
 - lat/lng: קואורדינטות עשרוניות משוערות אך אמיתיות של המקום הספציפי, לפי הידע שלך (הערכה טובה מספיקה לסמן על מפה, לא נדרשת דיוק סקר-קרקע). לפריטים כלליים ללא מקום מסוים (כמו "זמן חופשי") — השמט lat/lng.
 - בקיצורים עבריים (כמו חב״ד, אונסק״ו, ארה״ב) כתוב את הגרשיים בתו ״ ולא במירכאות " — מירכאות רגילות שוברות את ה-JSON.`;
@@ -381,6 +369,98 @@ function extractJson(text: string): Record<string, unknown> | null {
     return { ...withItems[0], items: withItems.flatMap((o) => o.items as unknown[]) };
   }
   return withItems[0] ?? objects[0];
+}
+
+// Cost held for one itinerary/suggestions call until its real numbers are
+// logged (above the measured averages); a long itinerary holds it per part.
+const LLM_CALL_HOLD_USD = 0.06;
+// Parts of a long itinerary (chunks.ts) must answer in time for the rest of
+// the request — photos and the insert — inside the Free plan's 150 s.
+const CHUNK_DEADLINE_MS = 105_000;
+// A part cut off at the deadline is still billed for what it generated, but
+// its usage never comes back: count this much (~105 s of output) against the caps.
+const ABORTED_CHUNK_COST_USD = 0.12;
+// Parts sent together can trip a burst/ramp limit (429) or meet an overload
+// (529): one retry, only when the call failed fast and the wait is short.
+const RETRY_WINDOW_MS = 20_000;
+const MAX_RETRY_AFTER_S = 10;
+
+type ModelReply = {
+  ok: true;
+  ms: number;
+  inputTokens: number;
+  outputTokens: number;
+  stop: string;
+  blocks: string;
+  text: string;
+  items: unknown[];
+  jsonBlocks: number;
+};
+type ModelFailure = { ok: false; ms: number; status: string; detail: string; aborted: boolean };
+
+const costOf = (inputTokens: number, outputTokens: number): number =>
+  (inputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (outputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
+
+/**
+ * One generation prompt → the model → its `{items:[...]}`. Never throws: an
+ * HTTP error, a network failure or the deadline comes back as a failure, so
+ * one part of a long itinerary can fail without losing the others. `deadline`
+ * (epoch ms) and `retry` are for those parts only; a single call runs as before.
+ */
+async function callModel(
+  apiKey: string,
+  prompt: string,
+  opts: { deadline?: number; retry?: boolean } = {},
+): Promise<ModelReply | ModelFailure> {
+  const start = Date.now();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: MAX_TOKENS,
+          messages: [{ role: "user", content: prompt }],
+        }),
+        signal: opts.deadline ? AbortSignal.timeout(Math.max(1, opts.deadline - Date.now())) : undefined,
+      });
+      if (!res.ok) {
+        const detail = await res.text();
+        const wait = Number(res.headers.get("retry-after") ?? 2);
+        const retryable = res.status === 429 || res.status >= 500;
+        if (opts.retry && attempt === 0 && retryable && Date.now() - start < RETRY_WINDOW_MS && wait >= 0 && wait <= MAX_RETRY_AFTER_S) {
+          await new Promise((r) => setTimeout(r, Math.max(1, wait) * 1000));
+          continue;
+        }
+        return { ok: false, ms: Date.now() - start, status: `http_${res.status}`, detail, aborted: false };
+      }
+      const payload = await res.json();
+      const usage = payload?.usage ?? {};
+      const text = extractText(payload);
+      const parsed = extractJson(text);
+      return {
+        ok: true,
+        ms: Date.now() - start,
+        inputTokens: Number(usage.input_tokens ?? 0),
+        outputTokens: Number(usage.output_tokens ?? 0),
+        stop: String(payload?.stop_reason),
+        blocks: (payload?.content ?? []).map((b: { type?: string }) => b?.type).join(","),
+        text,
+        items: Array.isArray(parsed?.items) ? (parsed!.items as unknown[]) : [],
+        // How many JSON blocks came back — tells a parsing loss from a model issue.
+        jsonBlocks: extractJsonObjects(text).length,
+      };
+    } catch (e) {
+      const name = (e as { name?: string })?.name;
+      const aborted = name === "TimeoutError" || name === "AbortError";
+      return { ok: false, ms: Date.now() - start, status: aborted ? "timeout" : "network", detail: String(e).slice(0, 300), aborted };
+    }
+  }
 }
 
 // Service-role client used ONLY for photo_cache (migration 012). That table is
@@ -659,7 +739,7 @@ Deno.serve(async (req) => {
       }
       // Hold an estimate of this request's cost (above the measured averages)
       // until the real numbers are logged.
-      const estimateUsd = body.kind === "suggestions" || body.kind === "itinerary" ? 0.06 : 0.03;
+      const estimateUsd = body.kind === "suggestions" || body.kind === "itinerary" ? LLM_CALL_HOLD_USD : 0.03;
       const { data: held } = (await adminDb()
         ?.from("agent_runs")
         .insert({ trip_id: body.trip_id ?? null, user_id: auth.user.id, kind: `generate_${body.kind}`, cost_usd: estimateUsd, status: "pending" })
@@ -1490,44 +1570,66 @@ Never answer with the article of the surrounding city, region or country — e.g
       }
     }
 
-    const runStart = Date.now();
-    const llm = await fetch(ANTHROPIC_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        messages: [{ role: "user", content: buildPrompt(body, existing, bookings) }],
-      }),
-    });
-    const latencyMs = Date.now() - runStart;
+    // The itinerary's days to plan (chunks.ts). More than a week of them go to
+    // the model as parts of up to a week, cut where the hotel changes, all in
+    // parallel inside this request: one call for a long trip doesn't fit the
+    // 150 s limit or the output cap. A week or less — and every other kind — is
+    // the one call it always was.
+    const tripDayList = tripDays(body.trip.start_date, body.trip.end_date, bookings.flights, body.time_zone);
+    const scope = itineraryScope(tripDayList, existing.map((r) => r.day_date));
+    const plan =
+      body.kind === "itinerary" && !scope.allPlanned
+        ? planItineraryChunks(scope.planDays, moveDays(bookings.stays, tripDayList).map((m) => m.day))
+        : { chunks: [], deferred: [] };
+    const chunked = plan.chunks.length > 1;
+    if (chunked && reservation) {
+      // Hold one call's estimate per part until the real total is logged.
+      await adminDb()?.from("agent_runs").update({ cost_usd: LLM_CALL_HOLD_USD * plan.chunks.length }).eq("id", reservation.id);
+    }
 
-    if (!llm.ok) {
-      const detail = await llm.text();
-      await logRun({ kind: `generate_${body.kind}`, tripId: body.trip_id, inputTokens: 0, outputTokens: 0, costUsd: 0, latencyMs, status: "error", errorMessage: detail });
+    const runStart = Date.now();
+    const deadline = runStart + CHUNK_DEADLINE_MS;
+    const calls = await Promise.all(
+      (chunked ? plan.chunks : [undefined]).map((chunk) =>
+        callModel(apiKey, buildPrompt(body, existing, bookings, chunk), chunked ? { deadline, retry: true } : {}),
+      ),
+    );
+    const latencyMs = Date.now() - runStart;
+    const answered = calls.filter((c): c is ModelReply => c.ok);
+    const inputTokens = answered.reduce((n, c) => n + c.inputTokens, 0);
+    const outputTokens = answered.reduce((n, c) => n + c.outputTokens, 0);
+    const abortedCalls = calls.filter((c) => !c.ok && c.aborted).length;
+    const costUsd = costOf(inputTokens, outputTokens) + abortedCalls * ABORTED_CHUNK_COST_USD;
+    // One agent_runs row for the whole request; per part: how it stopped and how long it took.
+    const stops = calls.map((c) => (c.ok ? c.stop : c.status)).join(",");
+    const chunkDiag = chunked
+      ? ` chunks=${calls.length} failed=${calls.length - answered.length} chunk_ms=${calls.map((c) => c.ms).join(",")}`
+      : "";
+
+    if (!answered.length) {
+      const detail = calls.map((c) => (c.ok ? "" : chunked ? `${c.status}: ${c.detail.slice(0, 120)}` : c.detail)).join(" | ");
+      await logRun({
+        kind: `generate_${body.kind}`,
+        tripId: body.trip_id,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd,
+        latencyMs,
+        status: "error",
+        errorMessage: chunked ? `${chunkDiag.trim()} ${detail}` : detail,
+      });
       return new Response(JSON.stringify({ error: "llm_failed", detail }), {
         status: 502,
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
-    const payload = await llm.json();
-    const usage = payload?.usage ?? {};
-    const inputTokens = Number(usage.input_tokens ?? 0);
-    const outputTokens = Number(usage.output_tokens ?? 0);
-    const costUsd = (inputTokens / 1_000_000) * PRICE_PER_MTOK_INPUT_USD + (outputTokens / 1_000_000) * PRICE_PER_MTOK_OUTPUT_USD;
-
-    const text = extractText(payload);
-    const parsed = extractJson(text);
-    const items = Array.isArray(parsed?.items) ? parsed!.items : [];
+    // Every part's items in day order — the parts are in day order.
+    const items = answered.flatMap((c) => c.items);
     // Diagnostics recorded on the agent_runs row (status stays "ok"): how many
     // JSON blocks came back, how many items survived into rows, and how photo
     // lookups went — enough to tell a parsing loss from a model or photo issue.
-    const jsonBlocks = extractJsonObjects(text).length;
+    const jsonBlocks = answered.reduce((n, c) => n + c.jsonBlocks, 0);
     let photoStats = "";
     if (items.length === 0) {
       await logRun({
@@ -1538,7 +1640,7 @@ Never answer with the article of the surrounding city, region or country — e.g
         costUsd,
         latencyMs,
         status: "ok",
-        errorMessage: `empty_result: stop=${payload?.stop_reason} blocks=${(payload?.content ?? []).map((b: { type?: string }) => b?.type).join(",")} text=${text.slice(0, 300)}`,
+        errorMessage: `empty_result: stop=${stops}${chunkDiag} blocks=${answered[0].blocks} text=${answered[0].text.slice(0, 300)}`,
       });
       return new Response(JSON.stringify({ error: "no_items", inserted: 0 }), {
         status: 200,
@@ -1548,6 +1650,7 @@ Never answer with the article of the surrounding city, region or country — e.g
 
     let inserted = 0;
     let dupStats = "";
+    let missingDays: string[] = [];
 
     // Both AI-generated kinds get one Wikipedia lookup per item, keyed off the
     // model's own `wikipedia_title` — the exact article about that place (see
@@ -1580,28 +1683,9 @@ Never answer with the article of the surrounding city, region or country — e.g
       return results;
     };
 
-    // Safety net behind the prompt's "don't repeat" list: drop a generated
-    // item whose duplicate key matches an existing row of this table or an
-    // earlier item in this batch. The key is the normalized title, except in
-    // the itinerary where meals, free time and transport legitimately repeat
-    // day to day ("ארוחת בוקר במלון"), so those are unique per day only; a
-    // place or activity stays unique across the whole trip.
-    const dupKey = (r: { title: string; day_date?: string | null; category?: string | null }): string => {
-      const t = normalizeTitle(r.title);
-      if (!t) return "";
-      const perDay = body.kind === "itinerary" && (r.category === "food" || r.category === "free" || r.category === "transport");
-      return perDay ? `${r.day_date ?? ""}|${t}` : t;
-    };
-    const dropDuplicates = <T extends { row: { title: string; day_date?: string | null; category?: string | null } }>(list: T[]): T[] => {
-      const seen = new Set(existing.map(dupKey).filter(Boolean));
-      return list.filter(({ row }) => {
-        const key = dupKey(row);
-        if (!key) return true;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-    };
+    // Duplicates (against the trip's existing rows and within this batch —
+    // every part of a long itinerary together) are dropped by dropDuplicates
+    // in dedupe.ts.
 
     // One photo per place: if an image URL is already used — by an existing
     // row of this table or an earlier row of this batch — for a DIFFERENT
@@ -1640,7 +1724,7 @@ Never answer with the article of the surrounding city, region or country — e.g
         costUsd,
         latencyMs,
         status: "ok",
-        errorMessage: `diag: ${reason} stop=${payload?.stop_reason} json_blocks=${jsonBlocks} items=${items.length} dup_dropped=${dupDropped} existing=${existing.length} rows=0`,
+        errorMessage: `diag: ${reason} stop=${stops}${chunkDiag} json_blocks=${jsonBlocks} items=${items.length} dup_dropped=${dupDropped} existing=${existing.length} rows=0`,
       });
       return new Response(JSON.stringify({ error: "no_items", inserted: 0 }), {
         status: 200,
@@ -1682,7 +1766,7 @@ Never answer with the article of the surrounding city, region or country — e.g
           },
         };
       }).filter(({ row }) => row.title);
-      const kept = dropDuplicates(built);
+      const kept = dropDuplicates(built, existing, false);
       const dupDropped = built.length - kept.length;
       if (!kept.length) return await noNewItems(dupDropped ? "all_duplicates" : "no_valid_rows", dupDropped);
       const photoResults = await lookupPhotos(kept.map((k) => k.raw), (i) => i.kind === "tip" || i.kind === "gear");
@@ -1692,12 +1776,13 @@ Never answer with the article of the surrounding city, region or country — e.g
       inserted = rows.length;
       dupStats = `dup_dropped=${dupDropped} photo_dup_cleared=${cleared} existing=${existing.length}`;
     } else if (body.kind === "itinerary") {
-      const tripDayList = tripDays(body.trip.start_date, body.trip.end_date, bookings.flights, body.time_zone);
       const flightTimes = flightWindow(bookings.flights, body.time_zone);
       const built = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
         return {
           raw: i,
+          // The same place under two Hebrew names, from two parts, is one place.
+          wikiTitle: parseWikipediaTitle(i.wikipedia_title),
           row: {
             trip_id: body.trip_id,
             day_date: String(i.day_date ?? body.trip.start_date ?? new Date().toISOString().slice(0, 10)),
@@ -1718,7 +1803,7 @@ Never answer with the article of the surrounding city, region or country — e.g
         // Backstop for the prompt's booking rules: nothing on a day the traveller isn't there,
         // before landing, or after take-off home.
         .filter(({ row }) => !outsideTrip(row, tripDayList, flightTimes));
-      const kept = dropDuplicates(built);
+      const kept = dropDuplicates(built, existing, true);
       const dupDropped = built.length - kept.length;
       if (!kept.length) return await noNewItems(dupDropped ? "all_duplicates" : "no_valid_rows", dupDropped);
       const photoResults = await lookupPhotos(kept.map((k) => k.raw), (i) => i.category === "transport" || i.category === "free");
@@ -1727,6 +1812,13 @@ Never answer with the article of the surrounding city, region or country — e.g
       if (error) throw error;
       inserted = rows.length;
       dupStats = `dup_dropped=${dupDropped} photo_dup_cleared=${cleared} existing=${existing.length}`;
+      // Days that were to be planned and got nothing — a failed part, days past
+      // the per-request limit, or a day the model skipped. Another AI press
+      // plans exactly these (they're still empty).
+      if (!scope.allPlanned) {
+        const got = new Set(rows.map((r) => r.day_date));
+        missingDays = scope.planDays.filter((d) => !got.has(d));
+      }
     } else {
       const rows = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;
@@ -1750,9 +1842,10 @@ Never answer with the article of the surrounding city, region or country — e.g
       costUsd,
       latencyMs,
       status: "ok",
-      errorMessage: `diag: stop=${payload?.stop_reason} json_blocks=${jsonBlocks} items=${items.length} rows=${inserted}${dupStats ? ` ${dupStats}` : ""}${photoStats ? ` ${photoStats}` : ""}`,
+      errorMessage: `diag: stop=${stops}${chunkDiag} json_blocks=${jsonBlocks} items=${items.length} rows=${inserted}${missingDays.length ? ` missing_days=${missingDays.length}` : ""}${dupStats ? ` ${dupStats}` : ""}${photoStats ? ` ${photoStats}` : ""}`,
     });
-    return new Response(JSON.stringify({ ok: true, inserted }), {
+    // `missing_days` (itinerary): the app tells the user another press fills them.
+    return new Response(JSON.stringify(body.kind === "itinerary" ? { ok: true, inserted, missing_days: missingDays } : { ok: true, inserted }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (e) {

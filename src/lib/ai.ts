@@ -73,6 +73,9 @@ export type AiResult = {
   error?: string;
   /** number of rows the edge function inserted */
   inserted?: number;
+  /** Itinerary: days that were to be planned and got nothing (a failed part of a
+   *  long trip, or past the per-press limit) — another AI press plans them. */
+  missingDays?: string[];
 };
 
 /**
@@ -110,7 +113,11 @@ export async function generateContent(
       },
     });
     if (error) return { ok: false, error: await mapInvokeError(error) };
-    return { ok: true, inserted: (data as { inserted?: number })?.inserted ?? 0 };
+    const res = data as { inserted?: number; missing_days?: unknown } | null;
+    const missingDays = Array.isArray(res?.missing_days)
+      ? res.missing_days.filter((d): d is string => typeof d === "string")
+      : [];
+    return { ok: true, inserted: res?.inserted ?? 0, missingDays };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "unknown" };
   }

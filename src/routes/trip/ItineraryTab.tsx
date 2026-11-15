@@ -218,6 +218,16 @@ export default function ItineraryTab() {
     setGenerating(false);
     if (res.ok) {
       toast.success(`נוצר מסלול מוצע (${res.inserted} פריטים) ✨`);
+      // A long trip whose part failed, or past what one press plans: another press fills them.
+      const missing = res.missingDays?.length ?? 0;
+      if (missing) {
+        toast.toast(
+          missing === 1
+            ? "יום אחד נשאר בלי תוכנית — לחצו שוב על \"מסלול מוצע עם AI\" כדי להשלים אותו."
+            : `${missing} ימים נשארו בלי תוכנית — לחצו שוב על "מסלול מוצע עם AI" כדי להשלים אותם.`,
+          "info",
+        );
+      }
       load();
     } else {
       toast.error(aiErrorMessage(res.error, "יצירת המסלול נכשלה. נסו שוב."));

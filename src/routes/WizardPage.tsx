@@ -7,7 +7,7 @@ import { Button, Card, Checkbox, Chip, Field, Input, Label, Segmented, Spinner }
 import { ImportParticipants } from "@/components/ImportParticipants";
 import { ImportBookings, personKey, type BookingsImportResult } from "@/components/ImportBookings";
 import { ImportVoucher, type VoucherResult } from "@/components/ImportVoucher";
-import { generateContent } from "@/lib/ai";
+import { generateContent, type AiResult } from "@/lib/ai";
 import { insertTripWithDrafts, uploadSourceDocs } from "@/lib/create-trip";
 import {
   bookingsToDrafts,
@@ -165,17 +165,21 @@ export default function WizardPage() {
     const aiParticipants: Participant[] = inserted.length
       ? inserted
       : partRows.map((r) => ({ ...r, id: "", trip_id: createdTrip.id, notes: null, created_at: "" }));
-    const runAi = async (kind: "suggestions" | "itinerary"): Promise<boolean> => {
+    const runAi = async (kind: "suggestions" | "itinerary"): Promise<AiResult> => {
       const res = await generateContent(createdTrip, aiParticipants, kind);
       mark(kind, res.ok ? "done" : "failed");
-      return res.ok;
+      return res;
     };
+    const skipped: AiResult = { ok: true };
 
-    const [failedDocs, suggestionsOk, itineraryOk] = await Promise.all([
+    const [failedDocs, suggestionsRes, itineraryRes] = await Promise.all([
       uploadDocs(),
-      autoGenerate ? runAi("suggestions") : Promise.resolve(true),
-      autoGenerate ? runAi("itinerary") : Promise.resolve(true),
+      autoGenerate ? runAi("suggestions") : Promise.resolve(skipped),
+      autoGenerate ? runAi("itinerary") : Promise.resolve(skipped),
     ]);
+    const suggestionsOk = suggestionsRes.ok;
+    const itineraryOk = itineraryRes.ok;
+    const missingDays = itineraryRes.missingDays?.length ?? 0;
 
     toast.success(autoGenerate && suggestionsOk && itineraryOk ? "הטיול נוצר והסוכן בנה המלצות ומסלול ✨" : "הטיול נוצר! ✈️");
     if (failedDocs) {
@@ -191,6 +195,14 @@ export default function WizardPage() {
       toast.error("ההמלצות לא נוצרו — אפשר ליצור אותן בלשונית \"מומלצים\" עם כפתור ה-AI.");
     } else if (!itineraryOk) {
       toast.error("המסלול לא נוצר — אפשר ליצור אותו בלשונית \"מסלול\" עם כפתור ה-AI.");
+    } else if (missingDays) {
+      // A long trip whose part failed, or past what one press plans.
+      toast.toast(
+        missingDays === 1
+          ? "יום אחד במסלול נשאר בלי תוכנית — אפשר להשלים אותו בלשונית \"מסלול\" עם כפתור ה-AI."
+          : `${missingDays} ימים במסלול נשארו בלי תוכנית — אפשר להשלים אותם בלשונית "מסלול" עם כפתור ה-AI.`,
+        "info",
+      );
     }
   };
 
