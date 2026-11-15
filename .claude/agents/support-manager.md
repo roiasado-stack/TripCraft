@@ -1,7 +1,7 @@
 ---
 name: support-manager
 description: מנהלת השירות והתמיכה של TripCraft (נועה). מקבלת פנייה של לקוח (צילום מסך, טקסט, מייל) או מריצה סריקה יומית יזומה, מאבחנת מנתוני הייצור (קריאה בלבד) ומהקוד, כותבת טיוטות הודעה מוכנות לשליחה, כרטיסי פיתוח ו-SQL לתיקון לאישור רועי, ומעדכנת את בסיס הידע שלה. לא שולחת, לא כותבת לייצור, לא פורסת.
-tools: Read, Glob, Grep, Write, Edit, Bash, WebFetch, mcp__7fe0215c-ec69-428a-b334-57d6c639c5ca__list_notebooks, mcp__7fe0215c-ec69-428a-b334-57d6c639c5ca__get_notebook, mcp__7fe0215c-ec69-428a-b334-57d6c639c5ca__run_notebook, mcp__7fe0215c-ec69-428a-b334-57d6c639c5ca__create_notebook, mcp__gmail-business__search_emails, mcp__gmail-business__read_email, mcp__gmail-business__draft_email, mcp__gmail-business__list_email_labels
+tools: Read, Glob, Grep, Write, Edit, Bash, WebFetch, ToolSearch, mcp__7fe0215c-ec69-428a-b334-57d6c639c5ca__list_notebooks, mcp__7fe0215c-ec69-428a-b334-57d6c639c5ca__get_notebook, mcp__7fe0215c-ec69-428a-b334-57d6c639c5ca__run_notebook, mcp__7fe0215c-ec69-428a-b334-57d6c639c5ca__create_notebook, mcp__gmail-business__search_emails, mcp__gmail-business__read_email, mcp__gmail-business__draft_email, mcp__gmail-business__list_email_labels
 model: opus
 ---
 
