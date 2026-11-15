@@ -49,23 +49,60 @@ function clock(value: string | null, timeZone?: unknown): Clock | null {
   return s ? { day: s.slice(0, 10), time: s.slice(11, 16) } : null;
 }
 
+// A leg that leaves within this long of the previous leg's landing is a
+// connection on the same journey; a later one is a flight inside the trip.
+const CONNECTION_MS = 24 * 60 * 60 * 1000;
+
+type Leg = { f: FlightRow; start: number; end: number };
+
+function timeOf(v: string | null): number {
+  return v ? new Date(v).getTime() : NaN;
+}
+
+function legsOf(flights: FlightRow[], inbound: boolean): Leg[] {
+  return flights
+    .filter((f) => (f.direction === "inbound") === inbound)
+    .map((f) => {
+      const start = timeOf(f.depart_at ?? f.arrive_at);
+      const end = timeOf(f.arrive_at ?? f.depart_at);
+      return { f, start, end };
+    })
+    .filter((l) => !isNaN(l.start) && !isNaN(l.end))
+    .sort((a, b) => a.start - b.start);
+}
+
 /**
- * Landing at the destination (the last outbound leg's arrival, so a connection
- * counts) and take-off for home (the first inbound leg's departure), on the
- * clock the app shows them in.
+ * The flights to and from home: the first outbound leg plus every leg that
+ * connects on from it, and the last inbound leg plus every leg that connects
+ * into it. Anything else (a domestic flight, which the scan saves as
+ * "outbound" since it doesn't land in Israel) is a move inside the trip.
+ */
+function homeLegs(flights: FlightRow[]): { outbound: Leg[]; inbound: Leg[] } {
+  const out = legsOf(flights, false);
+  const outbound = out.slice(0, 1);
+  for (const l of out.slice(1)) {
+    if (l.start - outbound[outbound.length - 1].end > CONNECTION_MS) break;
+    outbound.push(l);
+  }
+  const back = legsOf(flights, true).reverse();
+  const inbound = back.slice(0, 1);
+  for (const l of back.slice(1)) {
+    if (inbound[0].start - l.end > CONNECTION_MS) break;
+    inbound.unshift(l);
+  }
+  return { outbound, inbound };
+}
+
+/**
+ * Landing at the destination (the end of the journey from home, so a connection
+ * counts but a later domestic flight doesn't) and take-off for home (the start
+ * of the journey back), on the clock the app shows them in.
  */
 export function flightWindow(flights: FlightRow[], timeZone?: unknown): { arrival: Clock | null; departure: Clock | null } {
-  const at = (v: string | null) => (v ? new Date(v).getTime() : NaN);
-  let arrivalAt: string | null = null;
-  let departureAt: string | null = null;
-  for (const f of flights) {
-    if (f.direction === "inbound") {
-      if (f.depart_at && !isNaN(at(f.depart_at)) && (!departureAt || at(f.depart_at) < at(departureAt))) departureAt = f.depart_at;
-    } else {
-      const v = f.arrive_at ?? f.depart_at;
-      if (v && !isNaN(at(v)) && (!arrivalAt || at(v) > at(arrivalAt))) arrivalAt = v;
-    }
-  }
+  const { outbound, inbound } = homeLegs(flights);
+  const last = outbound[outbound.length - 1];
+  const arrivalAt = last ? (last.f.arrive_at ?? last.f.depart_at) : null;
+  const departureAt = inbound.find((l) => l.f.depart_at)?.f.depart_at ?? null;
   return { arrival: clock(arrivalAt, timeZone), departure: clock(departureAt, timeZone) };
 }
 
@@ -146,11 +183,14 @@ export function itineraryBookingLines(stays: StayRow[], flights: FlightRow[], da
   const fl = flights.filter((f) => f.depart_at || f.arrive_at);
   if (fl.length) {
     lines.push("טיסות (שעון מקומי):");
+    const home = homeLegs(fl);
+    const kind = (f: FlightRow) =>
+      home.outbound.some((l) => l.f === f) ? "הלוך" : home.inbound.some((l) => l.f === f) ? "חזור" : "טיסת פנים";
     for (const f of [...fl].sort((a, b) => ((a.depart_at ?? "") < (b.depart_at ?? "") ? -1 : 1))) {
       const dep = formatWallClock(f.depart_at, timeZone);
       const arr = formatWallClock(f.arrive_at, timeZone);
       lines.push(
-        `- ${f.direction === "inbound" ? "חזור" : "הלוך"}: ${f.from_airport ?? "?"} → ${f.to_airport ?? "?"}` +
+        `- ${kind(f)}: ${f.from_airport ?? "?"} → ${f.to_airport ?? "?"}` +
           `${dep ? `, המראה ${dep}` : ""}${arr ? `, נחיתה ${arr}` : ""}`,
       );
     }
