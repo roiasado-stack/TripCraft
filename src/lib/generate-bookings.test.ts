@@ -129,6 +129,76 @@ describe("rows outside the trip", () => {
   });
 });
 
+// A multi-stop trip with flights inside the destination (production, 2026-11-15:
+// the itinerary only covered the days after the last domestic flight). The scan
+// saves every leg that doesn't land in Israel as "outbound", domestic ones too.
+// Times are on the Israeli browser's clock (UTC+2 in February).
+describe("domestic flights inside the trip", () => {
+  const leg = (direction: string, from: string, to: string, depart: string, arrive: string): FlightRow => ({
+    direction,
+    from_airport: from,
+    to_airport: to,
+    depart_at: `${depart}:00+02:00`,
+    arrive_at: `${arrive}:00+02:00`,
+  });
+  const multi: FlightRow[] = [
+    leg("outbound", "TLV", "AUH", "2027-02-01T00:55", "2027-02-01T05:50"),
+    leg("outbound", "AUH", "HKT", "2027-02-01T08:40", "2027-02-01T17:55"),
+    leg("outbound", "HKT", "USM", "2027-02-08T12:55", "2027-02-08T13:50"),
+    leg("outbound", "USM", "UTP", "2027-02-12T11:10", "2027-02-12T12:20"),
+    leg("inbound", "BKK", "AUH", "2027-02-18T20:50", "2027-02-19T00:40"),
+    leg("inbound", "AUH", "TLV", "2027-02-19T02:45", "2027-02-19T04:35"),
+  ];
+  const multiStays: StayRow[] = [
+    { hotel_name: "Beach Phuket", address: "Patong, Thailand", check_in: "2027-02-01", check_out: "2027-02-08" },
+    { hotel_name: "Resort Samui", address: "Koh Samui, Thailand", check_in: "2027-02-08", check_out: "2027-02-12" },
+    { hotel_name: "Hotel Pattaya", address: "Pattaya, Thailand", check_in: "2027-02-12", check_out: "2027-02-15" },
+    { hotel_name: "Hotel Bangkok", address: "Bangkok, Thailand", check_in: "2027-02-15", check_out: "2027-02-18" },
+  ];
+
+  it("lands at the first stop, not at the last domestic flight", () => {
+    const w = flightWindow(multi, TZ);
+    expect(w.arrival).toEqual({ day: "2027-02-01", time: "17:55" });
+    expect(w.departure).toEqual({ day: "2027-02-18", time: "20:50" });
+  });
+
+  it("plans every day from landing to the flight home", () => {
+    const days = tripDays("2027-02-01", "2027-02-19", multi, TZ);
+    expect(days[0]).toBe("2027-02-01");
+    expect(days[days.length - 1]).toBe("2027-02-18");
+    expect(days).toHaveLength(18);
+  });
+
+  it("still finds landing and take-off whatever order the legs come in", () => {
+    const w = flightWindow([...multi].reverse(), TZ);
+    expect(w.arrival).toEqual({ day: "2027-02-01", time: "17:55" });
+    expect(w.departure).toEqual({ day: "2027-02-18", time: "20:50" });
+  });
+
+  it("a domestic flight saved as inbound doesn't end the trip early", () => {
+    const w = flightWindow([...multi, leg("inbound", "CNX", "BKK", "2027-02-15T09:00", "2027-02-15T10:10")], TZ);
+    expect(w.departure).toEqual({ day: "2027-02-18", time: "20:50" });
+  });
+
+  it("keeps items on the days before a domestic flight", () => {
+    const days = tripDays("2027-02-01", "2027-02-19", multi, TZ);
+    const w = flightWindow(multi, TZ);
+    expect(outsideTrip({ day_date: "2027-02-05", start_time: "10:00" }, days, w)).toBe(false);
+    expect(outsideTrip({ day_date: "2027-02-12", start_time: "09:00" }, days, w)).toBe(false);
+  });
+
+  it("tells the model which flights are domestic and where it lands", () => {
+    const days = tripDays("2027-02-01", "2027-02-19", multi, TZ);
+    const text = itineraryBookingLines(multiStays, multi, days, TZ);
+    expect(text).toContain("ביום ההגעה (2027-02-01) התחל רק אחרי הנחיתה ב-17:55");
+    expect(text).not.toContain("ביום ההגעה (2027-02-12)");
+    expect(text).toContain("- טיסת פנים: HKT → USM");
+    expect(text).toContain("- טיסת פנים: USM → UTP");
+    expect(text).toContain("- הלוך: AUH → HKT");
+    expect(text).toContain("- חזור: BKK → AUH");
+  });
+});
+
 describe("party", () => {
   it("two adults on a 'family' trip get no kids content", () => {
     const adults = [{ age: 45, age_range: null }, { age: null, age_range: "30-49" }];
