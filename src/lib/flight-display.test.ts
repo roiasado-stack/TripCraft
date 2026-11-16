@@ -45,6 +45,25 @@ describe("flight display from the ticket's local times", () => {
     expect(flightDurationMinutes({ ...tlvBkk, from_tz: null })).toBeNull();
   });
 
+  it("keeps today's duration (the instants) for a backfilled row with neither zone", () => {
+    // 028's backfill: locals read in Israel time, zones NULL until the zone script runs.
+    const backfilled: FlightTimes = {
+      depart_local: "2026-03-14T22:40:00",
+      arrive_local: "2026-03-15T16:50:00",
+      from_tz: null,
+      to_tz: null,
+      depart_at: "2026-03-14T20:40:00+00:00",
+      arrive_at: "2026-03-15T14:50:00+00:00",
+    };
+    expect(flightDurationMinutes(backfilled)).toBe(18 * 60 + 10);
+    expect(flightDurationMinutes({ ...backfilled, arrive_at: null })).toBeNull();
+  });
+
+  it("hides the duration when exactly one zone is known", () => {
+    expect(flightDurationMinutes({ ...tlvBkk, from_tz: null, depart_at: "2026-03-14T20:40:00+00:00" })).toBeNull();
+    expect(flightDurationMinutes({ ...tlvBkk, to_tz: null, arrive_at: "2026-03-15T07:50:00+00:00" })).toBeNull();
+  });
+
   it("still shows the ticket time when the zone is unknown", () => {
     expect(flightStamp(tlvBkk.arrive_local, tlvBkk.arrive_at, "he")).toBe("15.3 14:50");
   });

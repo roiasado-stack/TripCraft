@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { aiErrorMessage, mapInvokeError } from "@/lib/ai";
 import { useToast } from "@/hooks/use-toast";
 import { Button, Chip, Field, Input, Modal, Segmented } from "@/components/ui";
+import { wallOf } from "@/lib/flight-form";
 
 /** Reads a File as a base64 data payload for the vision endpoint. Same shape as
  *  ImportParticipants' fileToBase64 — not exported there, so duplicated here
@@ -47,6 +48,14 @@ function partsToIso(date: string, hour: string, minute: string): string | null {
   const d = new Date(`${date}T${hour || "00"}:${minute || "00"}:00`);
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
+/** A flight's ticket time stays a wall clock ("YYYY-MM-DDTHH:MM"), never read in the browser's zone. */
+function wallParts(value: string | null): { date: string; hour: string; minute: string } {
+  const wall = wallOf(value);
+  return wall ? { date: wall.slice(0, 10), hour: wall.slice(11, 13), minute: wall.slice(14, 16) } : { date: "", hour: "", minute: "" };
+}
+function partsToWall(date: string, hour: string, minute: string): string | null {
+  return date ? `${date}T${hour || "00"}:${minute || "00"}` : null;
+}
 
 const HINT_OPTIONS = [
   { value: "flight", label: "טיסה", emoji: "✈️" },
@@ -64,8 +73,9 @@ export interface VoucherFlightData {
   flight_number: string | null;
   from_airport: string | null;
   to_airport: string | null;
-  depart_at: string | null; // ISO
-  arrive_at: string | null; // ISO
+  /** The ticket's wall clock at the departure / arrival airport ("YYYY-MM-DDTHH:MM[:SS]", no offset). */
+  depart_at: string | null;
+  arrive_at: string | null;
   from_terminal: string | null;
   to_terminal: string | null;
   seats: string | null;
@@ -151,22 +161,25 @@ export const blankCar: VoucherCarData = {
   notes: null,
 };
 
-/** A date + 24h-time pair of controls, matching TransportTab's departure fields. */
+/** A date + 24h-time pair of controls, matching TransportTab's departure fields.
+ *  `wall`: the value is a ticket wall clock (flights), kept as typed with no zone;
+ *  otherwise an instant in the browser's zone (cars, unchanged). */
 function DateTimeFields({
   dateLabel,
   timeLabel,
   iso,
   onChange,
+  wall = false,
 }: {
   dateLabel: string;
   timeLabel: string;
   iso: string | null;
   onChange: (iso: string | null) => void;
+  wall?: boolean;
 }) {
-  const date = isoToDatePart(iso);
-  const hour = isoToHour(iso);
-  const minute = isoToMinute(iso);
-  const set = (d: string, h: string, m: string) => onChange(partsToIso(d, h, m));
+  const parts = wall ? wallParts(iso) : { date: isoToDatePart(iso), hour: isoToHour(iso), minute: isoToMinute(iso) };
+  const { date, hour, minute } = parts;
+  const set = (d: string, h: string, m: string) => onChange(wall ? partsToWall(d, h, m) : partsToIso(d, h, m));
   return (
     <div className="grid grid-cols-2 gap-2">
       <Field label={dateLabel}>
@@ -251,12 +264,14 @@ function FlightFields({
         timeLabel="שעת המראה (24 שעות)"
         iso={data.depart_at}
         onChange={(iso) => patch({ depart_at: iso })}
+        wall
       />
       <DateTimeFields
         dateLabel="תאריך נחיתה"
         timeLabel="שעת נחיתה (24 שעות)"
         iso={data.arrive_at}
         onChange={(iso) => patch({ arrive_at: iso })}
+        wall
       />
       <div className="grid grid-cols-2 gap-2">
         <Field label="טרמינל יציאה">

@@ -31,11 +31,15 @@ export function flightStamp(local: string | null | undefined, instant: string | 
 
 /**
  * Block time in minutes. From the ticket times and both airports' zones; null (hide it)
- * when a zone is unknown, rather than a guess. A row without locals (pre-028) uses the
- * stored instants, as before.
+ * when only one zone is known, rather than a guess. A row with neither zone (every row
+ * migration 028 backfilled, until the zone backfill runs) or without locals (pre-028)
+ * uses the stored instants, as before — so durations don't vanish from existing trips.
  */
 export function flightDurationMinutes(f: FlightTimes): number | null {
-  if (f.depart_local || f.arrive_local) return flightMinutes(f.depart_local, f.from_tz, f.arrive_local, f.to_tz);
+  const noZones = !f.from_tz && !f.to_tz;
+  if ((f.depart_local || f.arrive_local) && !noZones) {
+    return flightMinutes(f.depart_local, f.from_tz, f.arrive_local, f.to_tz);
+  }
   if (!f.depart_at || !f.arrive_at) return null;
   const ms = new Date(f.arrive_at).getTime() - new Date(f.depart_at).getTime();
   return isFinite(ms) && ms > 0 ? Math.round(ms / 60000) : null;

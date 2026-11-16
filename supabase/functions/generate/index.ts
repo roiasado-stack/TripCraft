@@ -18,13 +18,13 @@ import {
   itineraryBookingLines,
   outsideTrip,
   partyLine,
-  splitAirportTerminal,
   staysLines,
   tripDays,
 } from "./bookings.ts";
 import { AGENDA_ITEM_SHAPE, AGENDA_RULES, sanitizeAgenda } from "./agenda.ts";
 import { type DayWindow, clipToWindow, parseDayWindow } from "./day-window.ts";
 import { extractJson, extractJsonObjects } from "./json-extract.ts";
+import { sanitizeScannedFlight } from "./scan-flight.ts";
 
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -846,7 +846,7 @@ ${hintLine}החזר JSON בלבד, ללא טקסט נוסף, במבנה:
 כל פריט ב-bookings הוא אחד מהבאים.
 
 טיסות (פריט אחד עם כל קטעי הטיסה שבמסמך):
-{"doc_type":"flight","segments":[{"direction":"outbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null},{"direction":"inbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null}]}
+{"doc_type":"flight","segments":[{"direction":"outbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"עיר וקוד השדה, למשל Bangkok (BKK)","from_iata":"BKK","to_airport":"עיר וקוד השדה, למשל Tel Aviv (TLV)","to_iata":"TLV","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null},{"direction":"inbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"עיר וקוד השדה, למשל Bangkok (BKK)","from_iata":"BKK","to_airport":"עיר וקוד השדה, למשל Tel Aviv (TLV)","to_iata":"TLV","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null}]}
 
 segments (כל קטעי הטיסה שבמסמך):
 - פריט אחד לכל קטע טיסה: טיסת ההלוך, טיסת החזור, וכל רגל של טיסת המשך (קונקשן) כקטע נפרד. אל תחזיר רק את הטיסה הראשונה.
@@ -855,6 +855,8 @@ segments (כל קטעי הטיסה שבמסמך):
 - direction לכל קטע: "outbound" אם הקטע יוצא מישראל, "inbound" אם הוא נוחת בישראל; רגל של טיסת המשך מקבלת את הכיוון של המסלול שהיא חלק ממנו (הלוך או חזור). אם לא ברור, "outbound".
 - seats: המושבים של כל הנוסעים בקטע הזה, אם מודפסים.
 - from_airport / to_airport: שם העיר וקוד השדה בלבד, למשל "Hangzhou (HGH)". בלי מילת "Terminal" ובלי מספר הטרמינל.
+- from_iata / to_iata: קוד IATA בן 3 אותיות לועזיות של שדה ההמראה ושל שדה הנחיתה (למשל "BKK", "TLV", "CNX"), כפי שמודפס במסמך או לפי שם השדה המודפס. אם לא ברור איזה שדה (למשל רק "Bangkok", ויש בעיר שני שדות) — null.
+- depart_at: שעת ההמראה המקומית בשדה ההמראה, בדיוק כפי שמודפסת. arrive_at: שעת הנחיתה המקומית בשדה הנחיתה, בדיוק כפי שמודפסת (כולל תאריך הנחיתה, גם כשהוא למחרת). בלי אזור זמן, בלי Z ובלי היסט (+07:00) — ואל תמיר בין אזורי זמן.
 - from_terminal / to_terminal: הטרמינל בלבד (למשל "3" או "A") כשהוא מודפס במסמך — גם אם הוא כתוב באותה שורה עם שם השדה.
 
 מלון (פריט נפרד לכל מלון):
@@ -958,28 +960,6 @@ ${AGENDA_RULES}`,
         return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
       };
 
-      // Airport names were capped at 10 characters, which cut "Hangzhou (HGH)
-      // Terminal 3" to "Hangzhou (" and lost the terminal with it.
-      const sanitizeFlight = (raw: Record<string, unknown>) => {
-        const from = splitAirportTerminal(str(raw.from_airport, 80), str(raw.from_terminal, 20));
-        const to = splitAirportTerminal(str(raw.to_airport, 80), str(raw.to_terminal, 20));
-        return {
-        direction: raw.direction === "inbound" ? "inbound" : "outbound",
-        airline: str(raw.airline, 120),
-        flight_number: str(raw.flight_number, 20),
-        from_airport: from.airport,
-        to_airport: to.airport,
-        depart_at: isoDateTime(raw.depart_at),
-        arrive_at: isoDateTime(raw.arrive_at),
-        from_terminal: from.terminal,
-        to_terminal: to.terminal,
-        seats: str(raw.seats, 60),
-        baggage: str(raw.baggage, 120),
-        booking_ref: str(raw.booking_ref, 60),
-        notes: str(raw.notes, 500),
-        };
-      };
-
       // Every flight segment in the document (outbound, return, connection
       // legs), across all flight bookings. Each booking falls back to a lone
       // `data` object if the model answered in the old single-flight shape. A
@@ -988,7 +968,7 @@ ${AGENDA_RULES}`,
       // flight printed on each passenger's page) is kept once. Sorted by
       // departure only when every segment has one, otherwise the model's
       // (already chronological) order is kept.
-      let segments: ReturnType<typeof sanitizeFlight>[] = [];
+      let segments: ReturnType<typeof sanitizeScannedFlight>[] = [];
       {
         const rawSegments: unknown[] = ofType("flight").flatMap((b) =>
           Array.isArray(b.segments) && b.segments.length ? (b.segments as unknown[]) : isObj(b.data) ? [b.data] : [],
@@ -996,7 +976,7 @@ ${AGENDA_RULES}`,
         const seen = new Set<string>();
         segments = rawSegments
           .filter(isObj)
-          .map(sanitizeFlight)
+          .map(sanitizeScannedFlight)
           .filter((s) => s.flight_number || (s.from_airport && s.to_airport))
           .filter((s) => {
             if (!s.flight_number || !s.depart_at) return true;

@@ -41,6 +41,24 @@ SELECT pg_temp.check('trigger: setting the zones recomputes the instants (BKK 10
   (SELECT depart_at FROM flights WHERE flight_number = 'TG900') = '2027-03-12 03:00+00'
   AND (SELECT arrive_at - depart_at FROM flights WHERE flight_number = 'TG900') = interval '1 hour 30 minutes');
 
+-- The transport-tab form (5d) saves locals + zones, never depart_at / arrive_at.
+-- Saved unchanged, the row stays identical, instants included.
+CREATE TEMP TABLE before_save ON COMMIT DROP AS
+  SELECT depart_local, arrive_local, from_tz, to_tz, depart_at, arrive_at FROM flights WHERE flight_number = 'LY81';
+UPDATE flights SET depart_local = '2027-03-10T22:40', arrive_local = '2027-03-11T14:50',
+                   from_tz = 'Asia/Jerusalem', to_tz = 'Asia/Bangkok'
+WHERE flight_number = 'LY81';
+SELECT pg_temp.check('form: an unchanged save leaves the row identical',
+  (SELECT (depart_local, arrive_local, from_tz, to_tz, depart_at, arrive_at)::text FROM flights WHERE flight_number = 'LY81')
+    = (SELECT (depart_local, arrive_local, from_tz, to_tz, depart_at, arrive_at)::text FROM before_save));
+-- Editing a leg's origin and time in one save reads the new time in the new zone.
+UPDATE flights SET from_airport = 'Chiang Mai (CNX)', depart_local = '2027-03-11 08:00', from_tz = 'Asia/Bangkok',
+                   arrive_local = '2027-03-11 09:15', to_tz = 'Asia/Bangkok'
+WHERE flight_number = 'TG900';
+SELECT pg_temp.check('form: new origin + new time in one save → the new zone (CNX 08:00 = 01:00 UTC, 1h15)',
+  (SELECT depart_at FROM flights WHERE flight_number = 'TG900') = '2027-03-11 01:00+00'
+  AND (SELECT arrive_at - depart_at FROM flights WHERE flight_number = 'TG900') = interval '1 hour 15 minutes');
+
 -- Old client: writes depart_at / arrive_at only --------------------------------------
 INSERT INTO flights (trip_id, flight_number, depart_at, arrive_at)
 VALUES (pg_temp.id('trip'), 'OLD1', '2027-03-10T20:40:00Z', '2027-07-01T05:00:00Z');

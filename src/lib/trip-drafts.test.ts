@@ -5,6 +5,7 @@ import {
   collectSourceDocs,
   countHe,
   defaultTripType,
+  flightDraftFromVoucher,
   joinHebrew,
   participantRows,
   travellerToDraft,
@@ -157,5 +158,38 @@ describe("isTripLimitError", () => {
     expect(isTripLimitError({ message: "duplicate key" })).toBe(false);
     expect(isTripLimitError(null)).toBe(false);
     expect(isTripLimitError("agent_trip_limit_reached")).toBe(false);
+  });
+});
+
+describe("flightDraftFromVoucher", () => {
+  const scanned = {
+    direction: "inbound",
+    airline: "EL AL",
+    flight_number: "LY84",
+    from_airport: "Bangkok (BKK)",
+    to_airport: "Tel Aviv (TLV)",
+    depart_at: "2026-03-28T17:00:00",
+    arrive_at: "2026-03-29T00:05:00",
+    from_terminal: null,
+    to_terminal: null,
+    seats: null,
+    baggage: null,
+    booking_ref: null,
+    notes: null,
+  };
+
+  it("keeps the ticket's wall clock in every process zone (no browser-zone conversion)", () => {
+    const env = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
+    const saved = env.TZ;
+    try {
+      for (const tz of ["Asia/Jerusalem", "America/Los_Angeles", "Asia/Bangkok"]) {
+        env.TZ = tz;
+        const d = flightDraftFromVoucher(scanned, null);
+        expect([d.depart_at, d.arrive_at]).toEqual(["2026-03-28T17:00", "2026-03-29T00:05"]);
+      }
+    } finally {
+      if (saved === undefined) delete env.TZ;
+      else env.TZ = saved;
+    }
   });
 });

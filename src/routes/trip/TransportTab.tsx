@@ -21,6 +21,20 @@ import {
 import { formatDateTimeHeb } from "@/lib/trip-options";
 import { durationHeb, flightDurationMinutes, flightEndHeb } from "@/lib/flight-display";
 import { dateRangeHeb } from "@/lib/trip-dates";
+import {
+  AIRLINES,
+  OTHER_AIRLINE,
+  arrivalMode,
+  arrivalPreview,
+  blankFlightForm,
+  flightToForm,
+  formToFlightRow,
+  formZones,
+  withDirection,
+  type FlightFormDraft,
+  loadZoneOf,
+  type ZoneOf,
+} from "@/lib/flight-form";
 
 // A native datetime-local input's hour format follows the OS/browser locale,
 // not the page's lang="he" — on a Windows box set to English that renders an
@@ -29,36 +43,6 @@ import { dateRangeHeb } from "@/lib/trip-dates";
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
 const DURATION_HOURS = Array.from({ length: 21 }, (_, i) => String(i));
-
-const ISRAEL_AIRPORT = "TLV";
-const OTHER_AIRLINE = "__other__";
-// A convenience shortlist, not a claim of who currently flies the route —
-// routes to/from Israel shift with the news, so "אחר" always stays an option.
-const AIRLINES = [
-  "אל על",
-  "ישראייר",
-  "ארקיע",
-  "Wizz Air",
-  "Ryanair",
-  "easyJet",
-  "Lufthansa",
-  "Air France",
-  "KLM",
-  "British Airways",
-  "SWISS",
-  "Turkish Airlines",
-  "Aegean Airlines",
-  "LOT Polish Airlines",
-  "Pegasus Airlines",
-  "United Airlines",
-  "Delta Air Lines",
-  "American Airlines",
-  "Emirates",
-  "Etihad Airways",
-  "flydubai",
-  "Ethiopian Airlines",
-  "Cyprus Airways",
-];
 
 function isoToDatePart(iso: string | null): string {
   if (!iso) return "";
@@ -80,74 +64,6 @@ function partsToIso(date: string, hour: string, minute: string): string | null {
   const d = new Date(`${date}T${hour || "00"}:${minute || "00"}:00`);
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
-function msToDurationParts(ms: number): { hours: string; minutes: string } {
-  const totalMin = Math.round(ms / 60000);
-  return { hours: String(Math.floor(totalMin / 60)), minutes: String(totalMin % 60).padStart(2, "0") };
-}
-/** Arrival = departure + flight duration, computed instead of asked for directly. */
-function addDurationIso(departIso: string | null, hours: string, minutes: string): string | null {
-  if (!departIso || (!hours && !minutes)) return null;
-  const d = new Date(departIso);
-  if (isNaN(d.getTime())) return null;
-  d.setMinutes(d.getMinutes() + (Number(hours) || 0) * 60 + (Number(minutes) || 0));
-  return d.toISOString();
-}
-
-type FlightDraft = {
-  id?: string;
-  direction: "outbound" | "inbound";
-  airline: string;
-  airlineOther: string;
-  flight_number: string;
-  /** The non-Israel side of the route — the Israel side is implied by direction. */
-  otherAirport: string;
-  depart_date: string;
-  depart_hour: string;
-  depart_minute: string;
-  duration_hours: string;
-  duration_minutes: string;
-  baggage: string;
-  notes: string;
-};
-
-const blankFlight: FlightDraft = {
-  direction: "outbound",
-  airline: "",
-  airlineOther: "",
-  flight_number: "",
-  otherAirport: "",
-  depart_date: "",
-  depart_hour: "",
-  depart_minute: "",
-  duration_hours: "",
-  duration_minutes: "",
-  baggage: "",
-  notes: "",
-};
-
-function flightToDraft(f: Flight): FlightDraft {
-  const airline = f.airline ?? "";
-  const knownAirline = AIRLINES.includes(airline);
-  const ms =
-    f.depart_at && f.arrive_at ? new Date(f.arrive_at).getTime() - new Date(f.depart_at).getTime() : NaN;
-  const dur = isFinite(ms) && ms > 0 ? msToDurationParts(ms) : { hours: "", minutes: "" };
-  return {
-    id: f.id,
-    direction: f.direction === "inbound" ? "inbound" : "outbound",
-    airline: knownAirline ? airline : airline ? OTHER_AIRLINE : "",
-    airlineOther: knownAirline ? "" : airline,
-    flight_number: f.flight_number ?? "",
-    otherAirport: (f.direction === "inbound" ? f.from_airport : f.to_airport) ?? "",
-    depart_date: isoToDatePart(f.depart_at),
-    depart_hour: isoToHour(f.depart_at),
-    depart_minute: isoToMinute(f.depart_at),
-    duration_hours: dur.hours,
-    duration_minutes: dur.minutes,
-    baggage: f.baggage ?? "",
-    notes: f.notes ?? "",
-  };
-}
-
 type StayDraft = {
   id?: string;
   hotel_name: string;
@@ -284,7 +200,9 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
   const [stays, setStays] = useState<Stay[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<FlightDraft | null>(null);
+  const [editing, setEditing] = useState<FlightFormDraft | null>(null);
+  // The airport → zone table, its own lazy chunk; null until it loads.
+  const [zoneOf, setZoneOf] = useState<ZoneOf | null>(null);
   const [editingStay, setEditingStay] = useState<StayDraft | null>(null);
   const [editingTransfer, setEditingTransfer] = useState<TransferDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -307,29 +225,33 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.id]);
 
+  useEffect(() => {
+    if (!canEdit) return;
+    let alive = true;
+    loadZoneOf()
+      .then((z) => alive && setZoneOf(() => z))
+      .catch(() => {}); // the form then asks for the arrival time; saving retries the load
+    return () => {
+      alive = false;
+    };
+  }, [canEdit]);
+
+  /** The row being edited, as loaded (null for a new flight). */
+  const editingRow = editing?.id ? (flights.find((f) => f.id === editing.id) ?? null) : null;
+
   const saveFlight = async () => {
     if (!editing) return;
     setSaving(true);
-    const airline = (editing.airline === OTHER_AIRLINE ? editing.airlineOther : editing.airline).trim() || null;
-    const otherAirport = editing.otherAirport.trim() || null;
-    const depart_at = partsToIso(editing.depart_date, editing.depart_hour, editing.depart_minute);
-    const payload = {
-      trip_id: trip.id,
-      direction: editing.direction,
-      airline,
-      flight_number: editing.flight_number.trim() || null,
-      from_airport: editing.direction === "outbound" ? ISRAEL_AIRPORT : otherAirport,
-      to_airport: editing.direction === "outbound" ? otherAirport : ISRAEL_AIRPORT,
-      depart_at,
-      arrive_at: addDurationIso(depart_at, editing.duration_hours, editing.duration_minutes),
-      baggage: editing.baggage.trim() || null,
-      notes: editing.notes.trim() || null,
-    };
-    const { error } = editing.id
-      ? await supabase.from("flights").update(payload).eq("id", editing.id)
-      : await supabase.from("flights").insert(payload);
+    let lookup = zoneOf;
+    if (!lookup) lookup = await loadZoneOf().catch(() => null);
+    // The ticket's wall clock + zones; the trigger (028) derives depart_at / arrive_at.
+    const payload = { trip_id: trip.id, ...formToFlightRow(editing, editingRow, lookup) };
+    // RLS hides a row the caller may no longer change: 0 rows, no error. Count the rows back.
+    const { data, error } = editing.id
+      ? await supabase.from("flights").update(payload).eq("id", editing.id).select("id")
+      : await supabase.from("flights").insert(payload).select("id");
     setSaving(false);
-    if (error) {
+    if (error || !(data as unknown[] | null)?.length) {
       toast.error("השמירה נכשלה");
       return;
     }
@@ -453,6 +375,11 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
 
   if (loading) return <FullSpinner />;
 
+  // The flight form: each airport's zone decides whether arrival = departure + duration.
+  const formZ = editing ? formZones(editing, editingRow, zoneOf) : null;
+  const formMode = editing && formZ ? arrivalMode(editing, formZ) : "arrival";
+  const formPreview = editing && formZ ? arrivalPreview(editing, formZ) : null;
+
   const arrivalAirport = flights.find((f) => f.direction === "outbound")?.to_airport ?? null;
 
   const now = new Date();
@@ -468,7 +395,7 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
         {canEdit && (
           <button
             type="button"
-            onClick={() => setEditing({ ...blankFlight })}
+            onClick={() => setEditing({ ...blankFlightForm })}
             aria-label="הוספת טיסה"
             className="grid size-11 place-items-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-95"
           >
@@ -517,7 +444,7 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
                           label: `שדה ${f.to_airport}`,
                           href: airportMapUrl(f.to_airport)!,
                         },
-                        canEdit && { icon: <Pencil className="size-5" />, label: "עריכה", onClick: () => setEditing(flightToDraft(f)) },
+                        canEdit && { icon: <Pencil className="size-5" />, label: "עריכה", onClick: () => setEditing(flightToForm(f, zoneOf)) },
                         canEdit && { icon: <Trash2 className="size-5" />, label: "מחיקה", destructive: true, onClick: () => removeFlight(f) },
                       ])
                     }
@@ -792,7 +719,7 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
                 { value: "inbound", label: "חזור" },
               ]}
               value={editing.direction}
-              onChange={(v) => setEditing({ ...editing, direction: v as "outbound" | "inbound" })}
+              onChange={(v) => setEditing(withDirection(editing, v as "outbound" | "inbound"))}
             />
             <div className="grid grid-cols-2 gap-2">
               <Field label="חברת תעופה">
@@ -826,18 +753,25 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
               </Field>
             )}
 
-            <Field label={editing.direction === "outbound" ? "לאן טסים" : "מאיפה חוזרים"}>
-              <Input
-                value={editing.otherAirport}
-                onChange={(e) => setEditing({ ...editing, otherAirport: e.target.value })}
-                placeholder="למשל CDG, פריז"
-              />
-            </Field>
-            <p className="-mt-2 text-xs text-muted-foreground">
-              {editing.direction === "outbound"
-                ? "המראה מישראל (TLV) מתמלאת אוטומטית."
-                : "נחיתה בישראל (TLV) מתמלאת אוטומטית."}
-            </p>
+            {/* Both airports as on the ticket: a domestic leg (BKK → CNX) keeps its own origin. */}
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="משדה">
+                <Input
+                  value={editing.from_airport}
+                  onChange={(e) => setEditing({ ...editing, from_airport: e.target.value })}
+                  placeholder="TLV"
+                  dir="auto"
+                />
+              </Field>
+              <Field label="לשדה">
+                <Input
+                  value={editing.to_airport}
+                  onChange={(e) => setEditing({ ...editing, to_airport: e.target.value })}
+                  placeholder="למשל CDG, פריז"
+                  dir="auto"
+                />
+              </Field>
+            </div>
 
             <div className="grid grid-cols-2 gap-2">
               <Field label="תאריך המראה">
@@ -848,65 +782,76 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
                 />
               </Field>
               <Field label="שעת המראה (24 שעות)">
-                <div className="flex items-center gap-1">
-                  <select
-                    value={editing.depart_hour}
-                    onChange={(e) => setEditing({ ...editing, depart_hour: e.target.value })}
-                    className="h-12 flex-1 rounded-2xl border border-input bg-card px-1 text-center text-sm"
-                  >
-                    <option value="">--</option>
-                    {HOURS.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="font-bold text-muted-foreground">:</span>
-                  <select
-                    value={editing.depart_minute}
-                    onChange={(e) => setEditing({ ...editing, depart_minute: e.target.value })}
-                    className="h-12 flex-1 rounded-2xl border border-input bg-card px-1 text-center text-sm"
-                  >
-                    <option value="">--</option>
-                    {MINUTES.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <TimeSelect
+                  hour={editing.depart_hour}
+                  minute={editing.depart_minute}
+                  onChange={(h, m) => setEditing({ ...editing, depart_hour: h, depart_minute: m })}
+                />
               </Field>
             </div>
+            <p className="-mt-2 text-xs text-muted-foreground">השעות כפי שמודפסות בכרטיס — שעון מקומי בכל שדה.</p>
 
-            <Field label="משך הטיסה">
-              <div className="flex items-center gap-2">
-                <select
-                  value={editing.duration_hours}
-                  onChange={(e) => setEditing({ ...editing, duration_hours: e.target.value })}
-                  className="h-12 flex-1 rounded-2xl border border-input bg-card px-2 text-center text-sm"
-                >
-                  <option value="">--</option>
-                  {DURATION_HOURS.map((h) => (
-                    <option key={h} value={h}>
-                      {h} שעות
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={editing.duration_minutes}
-                  onChange={(e) => setEditing({ ...editing, duration_minutes: e.target.value })}
-                  className="h-12 flex-1 rounded-2xl border border-input bg-card px-2 text-center text-sm"
-                >
-                  <option value="">--</option>
-                  {MINUTES.map((m) => (
-                    <option key={m} value={m}>
-                      {m} דק'
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </Field>
-            <p className="-mt-2 text-xs text-muted-foreground">שעת הנחיתה מחושבת אוטומטית לפי ההמראה ומשך הטיסה.</p>
+            {formMode === "duration" ? (
+              <>
+                <Field label="משך הטיסה">
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={editing.duration_hours}
+                      onChange={(e) => setEditing({ ...editing, duration_hours: e.target.value })}
+                      className="h-12 flex-1 rounded-2xl border border-input bg-card px-2 text-center text-sm"
+                      aria-label="שעות טיסה"
+                    >
+                      <option value="">--</option>
+                      {DURATION_HOURS.map((h) => (
+                        <option key={h} value={h}>
+                          {h} שעות
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={editing.duration_minutes}
+                      onChange={(e) => setEditing({ ...editing, duration_minutes: e.target.value })}
+                      className="h-12 flex-1 rounded-2xl border border-input bg-card px-2 text-center text-sm"
+                      aria-label="דקות טיסה"
+                    >
+                      <option value="">--</option>
+                      {MINUTES.map((m) => (
+                        <option key={m} value={m}>
+                          {m} דק'
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </Field>
+                <p className="-mt-2 text-xs font-semibold text-primary" aria-live="polite">
+                  {formPreview ?? "שעת הנחיתה תחושב לפי ההמראה ומשך הטיסה."}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="תאריך נחיתה">
+                    <Input
+                      type="date"
+                      value={editing.arrive_date}
+                      onChange={(e) => setEditing({ ...editing, arrive_date: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="שעת נחיתה (24 שעות)">
+                    <TimeSelect
+                      hour={editing.arrive_hour}
+                      minute={editing.arrive_minute}
+                      onChange={(h, m) => setEditing({ ...editing, arrive_hour: h, arrive_minute: m })}
+                    />
+                  </Field>
+                </div>
+                <p className="-mt-2 text-xs text-muted-foreground">
+                  {formZ?.from_tz && formZ?.to_tz
+                    ? "שעת הנחיתה המקומית, כפי שמודפסת בכרטיס."
+                    : "לא זיהינו את אזור הזמן של אחד השדות, אז אי אפשר לחשב לפי משך הטיסה. הזינו את שעת הנחיתה המקומית כפי שמודפסת בכרטיס (עם קוד השדה, למשל BKK, נחשב אוטומטית)."}
+                </p>
+              </>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
               <Field label="כבודה">

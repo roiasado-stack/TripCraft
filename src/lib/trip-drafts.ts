@@ -5,6 +5,7 @@
 import type { BookingsImportResult, BookingTraveller, PassengerType } from "@/components/ImportBookings";
 import type { VoucherCarData, VoucherFlightData, VoucherHotelData } from "@/components/ImportVoucher";
 import { AGE_RANGES, type TripType } from "./trip-options";
+import { wallOf } from "./flight-form";
 
 export type PartDraft = {
   name: string;
@@ -29,8 +30,9 @@ export type FlightDraft = {
   flight_number: string;
   from_airport: string;
   to_airport: string;
+  /** The ticket's wall clock at each airport, "YYYY-MM-DDTHH:MM" (a datetime-local value). */
   depart_at: string;
-  arrive_at?: string | null; // ISO / wall-clock datetime
+  arrive_at?: string | null;
   from_terminal?: string | null;
   to_terminal?: string | null;
   seats?: string | null;
@@ -93,8 +95,9 @@ export function flightDraftFromVoucher(d: VoucherFlightData, file: File | null):
     flight_number: d.flight_number ?? "",
     from_airport: d.from_airport ?? "",
     to_airport: d.to_airport ?? "",
-    depart_at: isoToDatetimeLocalInput(d.depart_at),
-    arrive_at: d.arrive_at,
+    // Kept as printed on the ticket — never read in the browser's zone.
+    depart_at: wallOf(d.depart_at) ?? "",
+    arrive_at: wallOf(d.arrive_at),
     from_terminal: d.from_terminal,
     to_terminal: d.to_terminal,
     seats: d.seats,
