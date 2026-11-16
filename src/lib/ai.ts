@@ -1,6 +1,14 @@
 import { supabase } from "./supabase";
 import type { AgentCard, KosherLookup, Participant, PendingAction, Trip } from "./types";
-import { type DayWindow, itineraryCalls, missingDaysText, runItineraryWindows, windowProgressLabel } from "./itinerary-windows";
+import {
+  type DayWindow,
+  ITINERARY_WINDOW_DAYS,
+  itineraryCalls,
+  missingDaysText,
+  runItineraryWindows,
+  windowProgressLabel,
+} from "./itinerary-windows";
+import type { FlightRow } from "../../supabase/functions/generate/bookings";
 import { daysBetween } from "./trip-options";
 
 export type TuneOption = "more_kids" | "calmer" | "cheaper" | "more_active";
@@ -146,7 +154,18 @@ export async function generateItinerary(
   opts: { plannedDays?: Iterable<string>; onProgress?: (label: string) => void; onWindowDone?: () => void } = {},
 ): Promise<ItineraryResult> {
   const tripDays = trip.start_date && trip.end_date ? daysBetween(trip.start_date, trip.end_date) : [];
-  const calls = itineraryCalls(tripDays, opts.plannedDays ?? []);
+  // The function plans only the days between landing and the flight home, on
+  // the browser's clock; the windows follow the same days. A short trip needs no flights.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  let flights: FlightRow[] = [];
+  if (tripDays.length > ITINERARY_WINDOW_DAYS) {
+    const { data } = await supabase
+      .from("flights")
+      .select("direction, from_airport, to_airport, depart_at, arrive_at")
+      .eq("trip_id", trip.id);
+    flights = (data ?? []) as FlightRow[];
+  }
+  const calls = itineraryCalls(trip.start_date, trip.end_date, flights, opts.plannedDays ?? [], timeZone);
   if (calls.length === 1 && calls[0] === null) {
     const res = await generateContent(trip, participants, "itinerary");
     return { ok: res.ok, inserted: res.inserted ?? 0, failed: [], error: res.error };

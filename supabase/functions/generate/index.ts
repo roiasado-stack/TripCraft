@@ -1172,10 +1172,21 @@ ${AGENDA_RULES}`,
     // finally), so it can't widen what one capped call plans.
     let dayWindow: DayWindow | null = null;
     if (body.kind === "itinerary") {
-      const { data: dates } = await supabase.from("trips").select("start_date, end_date").eq("id", body.trip_id).maybeSingle();
+      const { data: dates, error: datesError } = await supabase
+        .from("trips")
+        .select("start_date, end_date")
+        .eq("id", body.trip_id)
+        .maybeSingle();
       const tripDates = (dates ?? null) as { start_date: string | null; end_date: string | null } | null;
-      if (tripDates) body.trip = { ...body.trip, start_date: tripDates.start_date, end_date: tripDates.end_date };
-      const parsedWindow = parseDayWindow(body.days, body.trip?.start_date ?? null, body.trip?.end_date ?? null);
+      // Unreadable dates: fail closed rather than plan from the request's (the hold is released in finally).
+      if (datesError || !tripDates) {
+        return new Response(JSON.stringify({ error: "trip not found" }), {
+          status: 404,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+      body.trip = { ...body.trip, start_date: tripDates.start_date, end_date: tripDates.end_date };
+      const parsedWindow = parseDayWindow(body.days, tripDates.start_date, tripDates.end_date);
       if (!parsedWindow.ok) {
         return new Response(JSON.stringify({ error: "bad_window" }), {
           status: 400,
