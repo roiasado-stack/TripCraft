@@ -89,7 +89,22 @@ SELECT pg_temp.check('zone: an invalid zone on insert is rejected',
     pg_temp.id('trip'))) = -1);
 SELECT pg_temp.check('zone: three-part names and UTC are accepted',
   pg_temp.try($$UPDATE flights SET from_tz = 'America/Argentina/Buenos_Aires', to_tz = 'UTC' WHERE flight_number = 'LY81'$$) = 1);
+SELECT pg_temp.check('zone: a POSIX string in IANA shape is rejected (Ab/c1)',
+  pg_temp.try($$UPDATE flights SET from_tz = 'Ab/c1' WHERE flight_number = 'LY81'$$) = -1);
+SELECT pg_temp.check('zone: a POSIX string with a sign is rejected (Xyz/x+12)',
+  pg_temp.try($$UPDATE flights SET to_tz = 'Xyz/x+12' WHERE flight_number = 'LY81'$$) = -1);
+SELECT pg_temp.check('zone: Etc/GMT offsets and hyphenated names are still accepted',
+  pg_temp.try($$UPDATE flights SET from_tz = 'Etc/GMT+3', to_tz = 'America/Port-au-Prince' WHERE flight_number = 'LY81'$$) = 1);
 RESET ROLE;
+
+-- Rejected zone names must not grow the connection's time-zone cache (memory DoS).
+CREATE TEMP TABLE tz_mem AS
+  SELECT total_bytes FROM pg_backend_memory_contexts WHERE name = 'Timezones';
+SELECT pg_temp.try(format($$UPDATE flights SET from_tz = %L WHERE flight_number = 'LY81'$$, 'Qq/z' || i))
+FROM generate_series(1, 40) i;
+SELECT pg_temp.check('zone: rejected names do not grow the time-zone cache',
+  (SELECT total_bytes FROM pg_backend_memory_contexts WHERE name = 'Timezones')
+    < (SELECT total_bytes FROM tz_mem) + 40 * 20000);
 
 -- Who may write a flight: unchanged (015) ---------------------------------------------
 SELECT pg_temp.login(pg_temp.id('participant'));

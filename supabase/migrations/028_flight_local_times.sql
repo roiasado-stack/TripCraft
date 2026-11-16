@@ -68,14 +68,16 @@ ALTER TABLE public.flights ADD COLUMN IF NOT EXISTS from_tz TEXT;
 ALTER TABLE public.flights ADD COLUMN IF NOT EXISTS to_tz TEXT;
 
 -- 3. Zone shape: "Asia/Bangkok", "America/Argentina/Buenos_Aires", "UTC".
--- Excludes abbreviations ("IST") and POSIX strings ("UTC+3"), which Postgres
--- would accept but read in surprising ways.
+-- Excludes abbreviations ("IST") and POSIX strings ("UTC+3", "Ab/c1"), which Postgres
+-- would accept but read in surprising ways. No digits outside Etc/GMT±N: a digit-free
+-- name can't parse as a POSIX string, so a failed lookup is never cached (each cached
+-- fake name cost ~25 KB of the connection's memory — a demo user could loop it).
 ALTER TABLE public.flights DROP CONSTRAINT IF EXISTS flights_from_tz_check;
 ALTER TABLE public.flights ADD CONSTRAINT flights_from_tz_check
-  CHECK (from_tz IS NULL OR from_tz ~ '^(UTC|[A-Z][A-Za-z_]+(/[A-Za-z0-9_+-]+){1,2})$');
+  CHECK (from_tz IS NULL OR from_tz ~ '^(UTC|Etc/GMT[+-]?([0-9]|1[0-4])|[A-Z][A-Za-z_]+(/[A-Z][A-Za-z_-]*){1,2})$');
 ALTER TABLE public.flights DROP CONSTRAINT IF EXISTS flights_to_tz_check;
 ALTER TABLE public.flights ADD CONSTRAINT flights_to_tz_check
-  CHECK (to_tz IS NULL OR to_tz ~ '^(UTC|[A-Z][A-Za-z_]+(/[A-Za-z0-9_+-]+){1,2})$');
+  CHECK (to_tz IS NULL OR to_tz ~ '^(UTC|Etc/GMT[+-]?([0-9]|1[0-4])|[A-Z][A-Za-z_]+(/[A-Z][A-Za-z_-]*){1,2})$');
 
 -- 2. Trigger ------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.flights_local_times()
@@ -84,8 +86,13 @@ DECLARE
   z TEXT;
 BEGIN
   -- A well-shaped zone Postgres doesn't know is refused like a CHECK would be.
+  -- The shape is checked first: this trigger runs before the CHECK constraints, and
+  -- looking up a POSIX-like string makes Postgres cache it (see the CHECK above).
   FOREACH z IN ARRAY ARRAY[NEW.from_tz, NEW.to_tz] LOOP
     CONTINUE WHEN z IS NULL;
+    IF z !~ '^(UTC|Etc/GMT[+-]?([0-9]|1[0-4])|[A-Z][A-Za-z_]+(/[A-Z][A-Za-z_-]*){1,2})$' THEN
+      RAISE EXCEPTION 'unknown time zone: %', z USING ERRCODE = 'check_violation';
+    END IF;
     BEGIN
       PERFORM now() AT TIME ZONE z;
     EXCEPTION WHEN invalid_parameter_value THEN
