@@ -120,12 +120,17 @@ export function useSuggestionPhoto(opts: {
       if (placeId === null && opts.canResolve) {
         let pending = resolving.get(opts.id);
         if (!pending) {
-          pending = resolvePlaceId(opts.tripId, `${opts.title} ${opts.destination}`, { lat: opts.lat, lng: opts.lng }).then(
-            async (found) => {
-              if (found !== null) await supabase.from("suggestions").update({ google_place_id: found }).eq("id", opts.id);
-              return found;
-            },
-          );
+          const lookup: Promise<string | null> = resolvePlaceId(opts.tripId, `${opts.title} ${opts.destination}`, {
+            lat: opts.lat,
+            lng: opts.lng,
+          }).then(async (found) => {
+            // Renamed meanwhile (forgetSuggestionPlace): don't write the old venue's ID back.
+            if (found !== null && resolving.get(opts.id) === lookup) {
+              await supabase.from("suggestions").update({ google_place_id: found }).eq("id", opts.id);
+            }
+            return found;
+          });
+          pending = lookup;
           resolving.set(opts.id, pending);
         }
         placeId = await pending;

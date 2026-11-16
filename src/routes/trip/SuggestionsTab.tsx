@@ -183,10 +183,11 @@ export default function SuggestionsTab() {
       }
 
       if (manual.id) {
-        // The old Google place belongs to the old name; editors re-resolve it on display.
+        // The old Google place, location and map link belong to the old name; the map
+        // buttons fall back to the new title, and editors re-resolve the place on display.
         const { data, error } = await supabase
           .from("suggestions")
-          .update({ ...fields, ...place, ...(renamed ? { google_place_id: null } : {}) })
+          .update({ ...fields, ...place, ...(renamed ? { google_place_id: null, location: null, map_url: null } : {}) })
           .eq("id", manual.id)
           .select("id");
         if (error || !data?.length) {
@@ -547,11 +548,13 @@ export default function SuggestionsTab() {
       {/* manual add / edit modal */}
       <Modal
         open={!!manual}
-        onClose={() => setManual(null)}
+        onClose={() => {
+          if (!saving) setManual(null);
+        }}
         title={manual?.id ? "עריכת המלצה" : "הוספה ידנית"}
         footer={
           <>
-            <Button variant="ghost" className="flex-1" onClick={() => setManual(null)}>
+            <Button variant="ghost" className="flex-1" disabled={saving} onClick={() => setManual(null)}>
               ביטול
             </Button>
             <Button className="flex-1" loading={saving} onClick={saveManual}>
