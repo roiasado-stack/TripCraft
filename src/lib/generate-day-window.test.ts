@@ -111,10 +111,13 @@ describe("the multi-stop trip planned window by window", () => {
       itineraryBookingLines(stays, flights, clipToWindow(allDays, START, w), TZ),
     );
     expect(first).toContain("ביום ההגעה (2027-03-11) התחל רק אחרי הנחיתה ב-14:50");
-    expect(first).toContain("2027-03-13 הוא יום מעבר");
+    // Moves by plane get the flight-day rule, not "a transport between the hotels".
+    expect(first).toContain("2027-03-13 הוא יום טיסות");
+    expect(first).not.toContain("2027-03-13 הוא יום מעבר");
     expect(first).not.toContain("ביום החזרה");
-    expect(second).toContain("2027-03-16 הוא יום מעבר");
-    expect(second).toContain("2027-03-20 הוא יום מעבר");
+    expect(second).toContain("2027-03-16 הוא יום טיסות");
+    expect(second).toContain("2027-03-20 הוא יום טיסות (DAD → DMK 08:30–10:30, DMK → CNX 13:00–14:10)");
+    expect(second).not.toContain("2027-03-24 הוא יום טיסות");
     expect(second).not.toContain("ביום ההגעה");
     expect(last).toContain("ביום החזרה (2027-03-28) הטיסה ב-14:00");
     expect(last).toContain("- טיסת פנים: CNX → HKT");

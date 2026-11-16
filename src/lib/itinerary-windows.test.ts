@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   ITINERARY_WINDOW_DAYS,
+  dayWindows,
+  emptyTripDays,
+  fillEmptyDays,
   itineraryCalls,
+  retryWindow,
   missingDaysText,
   runItineraryWindows,
   splitDayWindows,
@@ -12,6 +16,7 @@ import {
 import { MAX_WINDOW_DAYS, clipToWindow, parseDayWindow } from "../../supabase/functions/generate/day-window";
 import {
   type FlightRow,
+  flightDayRules,
   flightWindow,
   itineraryBookingLines,
   outsideTrip,
@@ -200,6 +205,122 @@ describe("itineraryCalls", () => {
       expect(lines).toContain("עד 22:30");
       expect(outsideTrip({ day_date: "2027-03-25", start_time: "22:30" }, windowDays, flightWindow(early, TZ))).toBe(false);
     });
+  });
+});
+
+// Runtime verification, 2026-11-16: one of two runs left 20.3 (DAD→DMK 08:30,
+// DMK→CNX 13:00) with no item while the toast said "נוצר מסלול מוצע". The
+// model's answer simply skipped the day (items=19 rows=19, nothing dropped).
+describe("a two-flight travel day left empty", () => {
+  const start = "2027-03-11";
+  const end = "2027-03-28";
+  const without20 = abadaDays.filter((d) => d !== "2027-03-20");
+
+  it("the prompt gives that day its own flight-day rule instead of a light move day", () => {
+    const days = tripDays(start, end, abadaFlights, TZ);
+    const rules = flightDayRules(abadaFlights, days, TZ);
+    expect([...rules.keys()]).toEqual(["2027-03-13", "2027-03-16", "2027-03-20", "2027-03-24"]);
+    const rule = rules.get("2027-03-20")!;
+    expect(rule).toContain("DAD → DMK 08:30–10:30, DMK → CNX 13:00–14:10");
+    expect(rule).toContain("עד 06:30");
+    expect(rule).toContain("צ'ק-אין במלון אחרי הנחיתה ב-14:10");
+    expect(rule).toContain("פעילות ערב");
+    expect(rule).toContain("אל תשאיר אותו ריק");
+    const text = itineraryBookingLines([], abadaFlights, days, TZ);
+    expect(text).toContain("2027-03-20 הוא יום טיסות");
+    // The flights home are not "flights inside the trip".
+    expect(rules.has("2027-03-11")).toBe(false);
+    expect(rules.has("2027-03-28")).toBe(false);
+  });
+
+  it("finds the empty in-trip day and the smallest window around it", () => {
+    const empty = emptyTripDays(start, end, abadaFlights, without20, TZ);
+    expect(empty).toEqual(["2027-03-20"]);
+    expect(retryWindow(start, end, empty)).toEqual([10, 10]);
+    expect(retryWindow(start, end, ["2027-03-16", "2027-03-28"])).toEqual([6, 12]); // capped at 7 days
+    expect(dayWindows(start, end, empty)).toEqual([[10, 10]]);
+  });
+
+  const reader = (sequence: string[][]) => {
+    let i = 0;
+    return async () => sequence[Math.min(i++, sequence.length - 1)];
+  };
+
+  it("an empty day → exactly one more call, for that day's window", async () => {
+    const calls: DayWindow[] = [];
+    const res = await fillEmptyDays({
+      start,
+      end,
+      flights: abadaFlights,
+      timeZone: TZ,
+      readPlannedDays: reader([without20, abadaDays]),
+      call: async (w) => {
+        calls.push(w);
+        return { ok: true, inserted: 4 };
+      },
+    });
+    expect(calls).toEqual([[10, 10]]);
+    expect(res).toEqual({ inserted: 4, retried: [10, 10], stillEmpty: [] });
+  });
+
+  it("still empty after the retry → the day is reported, and the toast names it", async () => {
+    const res = await fillEmptyDays({
+      start,
+      end,
+      flights: abadaFlights,
+      timeZone: TZ,
+      readPlannedDays: reader([without20, without20]),
+      call: async () => ({ ok: true, inserted: 0, empty: true }),
+    });
+    expect(res.stillEmpty).toEqual(["2027-03-20"]);
+    const failed = dayWindows(start, end, res.stillEmpty!);
+    expect(missingDaysText(failed, abadaDays)).toBe("יום 10 (20.3)");
+  });
+
+  it("no empty day → no extra call", async () => {
+    let called = 0;
+    const res = await fillEmptyDays({
+      start,
+      end,
+      flights: abadaFlights,
+      timeZone: TZ,
+      readPlannedDays: reader([abadaDays]),
+      call: async () => {
+        called++;
+        return { ok: true, inserted: 1 };
+      },
+    });
+    expect(called).toBe(0);
+    expect(res).toEqual({ inserted: 0, retried: null, stillEmpty: [] });
+  });
+
+  it("days outside the trip (before an overnight landing, after the flight home) never trigger a retry", async () => {
+    let called = 0;
+    const res = await fillEmptyDays({
+      start: "2027-03-10",
+      end: "2027-03-29",
+      flights: abadaFlights,
+      timeZone: TZ,
+      readPlannedDays: reader([abadaDays]),
+      call: async () => {
+        called++;
+        return { ok: true };
+      },
+    });
+    expect(called).toBe(0);
+    expect(res.stillEmpty).toEqual([]);
+  });
+
+  it("items that can't be read back → no retry, nothing claimed", async () => {
+    const res = await fillEmptyDays({
+      start,
+      end,
+      flights: abadaFlights,
+      timeZone: TZ,
+      readPlannedDays: async () => null,
+      call: async () => ({ ok: true }),
+    });
+    expect(res).toEqual({ inserted: 0, retried: null, stillEmpty: null });
   });
 });
 

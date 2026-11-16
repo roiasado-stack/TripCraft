@@ -2,7 +2,9 @@ import { supabase } from "./supabase";
 import type { AgentCard, KosherLookup, Participant, PendingAction, Trip } from "./types";
 import {
   type DayWindow,
-  ITINERARY_WINDOW_DAYS,
+  FATAL,
+  dayWindows,
+  fillEmptyDays,
   itineraryCalls,
   missingDaysText,
   runItineraryWindows,
@@ -158,28 +160,56 @@ export async function generateItinerary(
   // the browser's clock; the windows follow the same days. A short trip needs no flights.
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   let flights: FlightRow[] = [];
-  if (tripDays.length > ITINERARY_WINDOW_DAYS) {
+  if (tripDays.length) {
     const { data } = await supabase
       .from("flights")
       .select("direction, from_airport, to_airport, depart_at, arrive_at, depart_local, arrive_local")
       .eq("trip_id", trip.id);
     flights = (data ?? []) as FlightRow[];
   }
+  const callWindow = (w: DayWindow) => generateContent(trip, participants, "itinerary", undefined, w);
   const calls = itineraryCalls(trip.start_date, trip.end_date, flights, opts.plannedDays ?? [], timeZone);
+  let run: { inserted: number; failed: DayWindow[]; error?: string };
   if (calls.length === 1 && calls[0] === null) {
     const res = await generateContent(trip, participants, "itinerary");
-    return { ok: res.ok, inserted: res.inserted ?? 0, failed: [], error: res.error };
+    // A single call that failed keeps its usual message; nothing to top up.
+    if (!res.ok || !tripDays.length) return { ok: res.ok, inserted: res.inserted ?? 0, failed: [], error: res.error };
+    run = { inserted: res.inserted ?? 0, failed: [] };
+  } else {
+    run = await runItineraryWindows(
+      calls.filter((w): w is DayWindow => w !== null),
+      callWindow,
+      (w, phase) => {
+        if (phase === "start") opts.onProgress?.(windowProgressLabel(w, tripDays.length));
+        else opts.onWindowDone?.();
+      },
+    );
+    // A cap or access error: another call would fail the same way.
+    if (run.error && FATAL.has(run.error)) return { ok: false, ...run };
   }
-  const windows = calls.filter((w): w is DayWindow => w !== null);
-  const run = await runItineraryWindows(
-    windows,
-    (w) => generateContent(trip, participants, "itinerary", undefined, w),
-    (w, phase) => {
-      if (phase === "start") opts.onProgress?.(windowProgressLabel(w, tripDays.length));
-      else opts.onWindowDone?.();
+
+  // No in-trip day may end up silently empty: one more call for what's missing.
+  const fill = await fillEmptyDays({
+    start: trip.start_date,
+    end: trip.end_date,
+    flights,
+    timeZone,
+    readPlannedDays: async () => {
+      const { data, error } = await supabase.from("itinerary_items").select("day_date").eq("trip_id", trip.id);
+      return error ? null : ((data ?? []) as { day_date: string }[]).map((r) => r.day_date);
     },
-  );
-  return { ok: run.failed.length === 0, inserted: run.inserted, failed: run.failed, error: run.error };
+    call: async (w) => {
+      opts.onProgress?.(`משלים ${windowProgressLabel(w, tripDays.length).replace("בונה ", "")}`);
+      const res = await callWindow(w);
+      opts.onWindowDone?.();
+      return res;
+    },
+  });
+  const inserted = run.inserted + fill.inserted;
+  // The items couldn't be read back: report what the calls themselves said.
+  if (fill.stillEmpty === null) return { ok: run.failed.length === 0, inserted, failed: run.failed, error: run.error };
+  const failed = dayWindows(trip.start_date, trip.end_date, fill.stillEmpty);
+  return { ok: failed.length === 0, inserted, failed, error: failed.length ? (fill.error ?? run.error) : undefined };
 }
 
 /**

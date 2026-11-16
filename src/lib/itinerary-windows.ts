@@ -69,6 +69,82 @@ export function itineraryCalls(
   return open.length ? open.map(([from, to]): DayWindow => [from + offset, to + offset]) : [null];
 }
 
+/** The days the function plans (landing to the flight home) that hold no item. */
+export function emptyTripDays(
+  start: string | null,
+  end: string | null,
+  flights: FlightRow[],
+  plannedDays: Iterable<string>,
+  timeZone?: string,
+): string[] {
+  const planned = new Set(plannedDays);
+  return tripDays(start, end, flights, timeZone).filter((d) => !planned.has(d));
+}
+
+/** Longest retry window: the function accepts up to 7 days (MAX_WINDOW_DAYS). */
+const RETRY_WINDOW_DAYS = 7;
+
+/**
+ * The smallest window (numbered from start_date) covering the empty days, cut
+ * to 7 days from the first one; null when there is none or a day is outside
+ * start..end.
+ */
+export function retryWindow(start: string | null, end: string | null, emptyDays: string[]): DayWindow | null {
+  const calendar = dayRange(start, end);
+  const idx = emptyDays.map((d) => calendar.indexOf(d)).filter((i) => i >= 0).sort((a, b) => a - b);
+  if (!idx.length) return null;
+  const from = idx[0] + 1;
+  const to = Math.min(idx[idx.length - 1] + 1, from + RETRY_WINDOW_DAYS - 1);
+  return [from, to];
+}
+
+/** Single days as windows numbered from start_date, for missingDaysText. */
+export function dayWindows(start: string | null, end: string | null, days: string[]): DayWindow[] {
+  const calendar = dayRange(start, end);
+  return days.map((d) => calendar.indexOf(d) + 1).filter((n) => n > 0).map((n): DayWindow => [n, n]);
+}
+
+export type FillResult = {
+  inserted: number;
+  /** The window of the one extra call, or null when none was needed (or possible). */
+  retried: DayWindow | null;
+  /** Days of the trip still without any item after it; null when the items couldn't be read. */
+  stillEmpty: string[] | null;
+  error?: string;
+};
+
+/**
+ * After the windows: a model answer can skip a day without failing (the ABADA
+ * demo's two-flight 20.3, 2026-11-16), which used to end in a plain success
+ * toast. Reads which trip days are still empty; if any, makes ONE more call
+ * for the smallest window covering them, then reads again. What is still
+ * empty is reported, never silently left.
+ */
+export async function fillEmptyDays(opts: {
+  start: string | null;
+  end: string | null;
+  flights: FlightRow[];
+  timeZone?: string;
+  readPlannedDays: () => Promise<string[] | null>;
+  call: (window: DayWindow) => Promise<WindowCallResult>;
+}): Promise<FillResult> {
+  const { start, end, flights, timeZone } = opts;
+  const before = await opts.readPlannedDays();
+  if (!before) return { inserted: 0, retried: null, stillEmpty: null };
+  const empty = emptyTripDays(start, end, flights, before, timeZone);
+  if (!empty.length) return { inserted: 0, retried: null, stillEmpty: [] };
+  const w = retryWindow(start, end, empty);
+  if (!w) return { inserted: 0, retried: null, stillEmpty: empty };
+  const res = await opts.call(w);
+  const after = (await opts.readPlannedDays()) ?? before;
+  return {
+    inserted: res.ok ? (res.inserted ?? 0) : 0,
+    retried: w,
+    stillEmpty: emptyTripDays(start, end, flights, after, timeZone),
+    error: res.ok ? undefined : res.error,
+  };
+}
+
 /** "בונה ימים 6–10 מתוך 18" while a window is being planned. */
 export function windowProgressLabel(window: DayWindow, total: number): string {
   const [from, to] = window;
@@ -86,7 +162,7 @@ export type WindowRunResult = {
 };
 
 // Errors that will fail every later window too: stop instead of spending more calls.
-const FATAL = new Set(["daily_cap_reached", "monthly_cap_reached", "not_deployed", "forbidden", "unauthorized", "demo_not_allowed"]);
+export const FATAL =new Set(["daily_cap_reached", "monthly_cap_reached", "not_deployed", "forbidden", "unauthorized", "demo_not_allowed"]);
 
 /**
  * Runs the windows one after the other, so each call sees what the earlier
