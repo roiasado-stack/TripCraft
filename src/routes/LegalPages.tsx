@@ -406,6 +406,15 @@ export function CreditsPage() {
         (דרך Overpass API) ומ-Google Maps (Google Places), ומוצגים כלא מאומתים.
       </P>
 
+      <H>שדות תעופה ואזורי זמן</H>
+      <P>
+        אזורי הזמן של שדות התעופה מגיעים מ-
+        <a href="https://github.com/mwgg/Airports" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">mwgg/Airports</a>{" "}
+        (© 2014 mwgg, ברישיון MIT), יחד עם רשימת השדות של{" "}
+        <a href="https://ourairports.com/data/" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">OurAirports</a>{" "}
+        ומאגר אזורי הזמן של IANA, ששניהם בנחלת הכלל.
+      </P>
+
       <H>זמני שבת וחג</H>
       <P>
         זמני הדלקת נרות, הבדלה וחגים מחושבים על ידי{" "}
