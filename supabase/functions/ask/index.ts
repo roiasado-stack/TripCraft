@@ -704,7 +704,11 @@ Deno.serve(async (req) => {
         .order("day_date")
         .order("sort_order"),
       supabase.from("stays").select("hotel_name, address, check_in, check_out").eq("trip_id", body.trip_id),
-      supabase.from("flights").select("direction, from_airport, to_airport, depart_at").eq("trip_id", body.trip_id),
+      supabase
+        .from("flights")
+        .select("direction, from_airport, to_airport, depart_at, arrive_at, depart_local, arrive_local")
+        .eq("trip_id", body.trip_id)
+        .order("depart_at"),
       supabase.from("suggestions").select("title").eq("trip_id", body.trip_id),
       supabase
         .from("checklist_items")

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarPlus, Compass, Heart, List, Map as MapIcon, MapPin, MessageCircle, MoreHorizontal, Navigation, PenLine, Plus, Sparkles, Trash2 } from "lucide-react";
+import { CalendarPlus, Compass, Heart, List, Map as MapIcon, MapPin, MessageCircle, MoreHorizontal, Navigation, Pencil, PenLine, Plus, Sparkles, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Suggestion } from "@/lib/types";
 import { useTrip } from "./TripLayout";
@@ -8,7 +8,8 @@ import { can } from "@/lib/permissions";
 import { TripHeader } from "@/components/TripHeader";
 import { Button, Card, Chip, EmptyState, Field, GroupedList, Input, Modal, SheetRow, Spinner, Textarea } from "@/components/ui";
 import { useToast } from "@/hooks/use-toast";
-import { useSuggestionPhoto } from "@/lib/photos";
+import { forgetSuggestionPlace, useSuggestionPhoto } from "@/lib/photos";
+import { parseTags, tagsToText } from "@/lib/suggestion-tags";
 import { FillPhotos } from "@/components/FillPhotos";
 import { aiErrorMessage, generateContent, searchCoordinates, searchPhoto, type TuneOption } from "@/lib/ai";
 import { cn } from "@/lib/utils";
@@ -42,7 +43,16 @@ export default function SuggestionsTab() {
   const [generating, setGenerating] = useState(false);
   const [showGen, setShowGen] = useState(false);
   const [tune, setTune] = useState<TuneOption | null>(null);
-  const [manual, setManual] = useState<{ kind: string; title: string; description: string } | null>(null);
+  // The add form doubles as the edit form: `id` and `savedTitle` are set when editing.
+  const [manual, setManual] = useState<{
+    id?: string;
+    savedTitle?: string;
+    kind: string;
+    title: string;
+    description: string;
+    tags: string;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
   const [view, setView] = useState<"list" | "map">("list");
   const [addOpen, setAddOpen] = useState(false);
@@ -153,20 +163,55 @@ export default function SuggestionsTab() {
       toast.error("צריך שם");
       return;
     }
-    const query = `${manual.title.trim()} ${trip.destination}`;
-    const [image_url, coords] = await Promise.all([searchPhoto(trip.id, query), searchCoordinates(trip.id, query)]);
-    await supabase.from("suggestions").insert({
-      trip_id: trip.id,
-      kind: manual.kind,
-      title: manual.title.trim(),
-      description: manual.description || null,
-      image_url,
-      lat: coords?.lat ?? null,
-      lng: coords?.lng ?? null,
-    });
-    setManual(null);
-    toast.success("נוסף");
-    load();
+    if (saving) return;
+    setSaving(true);
+    try {
+      const title = manual.title.trim();
+      const fields = {
+        kind: manual.kind,
+        title,
+        description: manual.description.trim() || null,
+        tags: parseTags(manual.tags),
+      };
+      // A new suggestion, or a renamed one, gets a fresh photo and map pin for its name.
+      const renamed = manual.id === undefined || manual.savedTitle !== title;
+      let place = {};
+      if (renamed) {
+        const query = `${title} ${trip.destination}`;
+        const [image_url, coords] = await Promise.all([searchPhoto(trip.id, query), searchCoordinates(trip.id, query)]);
+        place = { image_url, lat: coords?.lat ?? null, lng: coords?.lng ?? null };
+      }
+
+      if (manual.id) {
+        // The old Google place, location and map link belong to the old name; the map
+        // buttons fall back to the new title, and editors re-resolve the place on display.
+        const { data, error } = await supabase
+          .from("suggestions")
+          .update({ ...fields, ...place, ...(renamed ? { google_place_id: null, location: null, map_url: null } : {}) })
+          .eq("id", manual.id)
+          .select("id");
+        if (error || !data?.length) {
+          toast.error("שמירת ההמלצה נכשלה. נסו שוב.");
+          return;
+        }
+        if (renamed) forgetSuggestionPlace(manual.id);
+        setManual(null);
+        toast.success("ההמלצה עודכנה");
+        load();
+        return;
+      }
+
+      const { error } = await supabase.from("suggestions").insert({ trip_id: trip.id, ...fields, ...place });
+      if (error) {
+        toast.error("ההוספה נכשלה. נסו שוב.");
+        return;
+      }
+      setManual(null);
+      toast.success("נוסף");
+      load();
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Places with a photo (attractions, restaurants) read best as photo cards; tips and
@@ -277,6 +322,8 @@ export default function SuggestionsTab() {
             return (
               <article key={s.id} className="overflow-hidden rounded-3xl bg-card text-card-foreground">
                 <SuggestionCover
+                  // A rename remounts the cover, so the old name's Google photo isn't kept.
+                  key={s.title}
                   s={s}
                   tripId={trip.id}
                   destination={trip.destination}
@@ -402,7 +449,7 @@ export default function SuggestionsTab() {
             label="הוספה ידנית"
             onClick={() => {
               setAddOpen(false);
-              setManual({ kind: "attraction", title: "", description: "" });
+              setManual({ kind: "attraction", title: "", description: "", tags: "" });
             }}
           />
           <SheetRow
@@ -433,6 +480,24 @@ export default function SuggestionsTab() {
                   const item = actionsFor;
                   setActionsFor(null);
                   addToItinerary(item);
+                }}
+              />
+            )}
+            {canEdit && (
+              <SheetRow
+                icon={<Pencil className="size-5" />}
+                label="עריכה"
+                onClick={() => {
+                  const s = actionsFor;
+                  setActionsFor(null);
+                  setManual({
+                    id: s.id,
+                    savedTitle: s.title,
+                    kind: s.kind,
+                    title: s.title,
+                    description: s.description ?? "",
+                    tags: tagsToText(s.tags),
+                  });
                 }}
               />
             )}
@@ -480,18 +545,20 @@ export default function SuggestionsTab() {
         </div>
       </Modal>
 
-      {/* manual add modal */}
+      {/* manual add / edit modal */}
       <Modal
         open={!!manual}
-        onClose={() => setManual(null)}
-        title="הוספה ידנית"
+        onClose={() => {
+          if (!saving) setManual(null);
+        }}
+        title={manual?.id ? "עריכת המלצה" : "הוספה ידנית"}
         footer={
           <>
-            <Button variant="ghost" className="flex-1" onClick={() => setManual(null)}>
+            <Button variant="ghost" className="flex-1" disabled={saving} onClick={() => setManual(null)}>
               ביטול
             </Button>
-            <Button className="flex-1" onClick={saveManual}>
-              הוספה
+            <Button className="flex-1" loading={saving} onClick={saveManual}>
+              {manual?.id ? "שמירה" : "הוספה"}
             </Button>
           </>
         }
@@ -510,6 +577,9 @@ export default function SuggestionsTab() {
             </Field>
             <Field label="תיאור">
               <Textarea value={manual.description} onChange={(e) => setManual({ ...manual, description: e.target.value })} />
+            </Field>
+            <Field label="תגיות" hint="מופרדות בפסיק, למשל: מתאים לילדים, כניסה חינם">
+              <Input value={manual.tags} onChange={(e) => setManual({ ...manual, tags: e.target.value })} />
             </Field>
           </div>
         )}

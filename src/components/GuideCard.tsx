@@ -32,7 +32,7 @@ export function GuideCard({
           target="_blank"
           rel="noopener noreferrer"
           aria-label={en?.whatsappTo(trip.guide_name) ?? `וואטסאפ ל${trip.guide_name}`}
-          className="pressable grid size-11 shrink-0 place-items-center rounded-full bg-[#25D366] text-white"
+          className="pressable grid size-11 shrink-0 place-items-center rounded-full bg-[#25D366] text-white print:hidden"
         >
           <MessageCircle className="size-5" />
         </a>

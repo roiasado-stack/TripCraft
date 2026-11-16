@@ -107,6 +107,10 @@
   --shadow-pop: 0 12px 32px -14px oklch(0.3 0.1 255 / 0.3);
 }
 
+/* Dark mode is screen-only: a printed page or a saved PDF always gets the light
+ * palette above (the share page's "שמירה כ-PDF"). `.dark {` stays at column 0
+ * because npm run rules reads the dark tokens from it. */
+@media not print {
 .dark {
   --background: oklch(0.17 0.035 258);
   --foreground: oklch(0.97 0.005 250);
@@ -152,6 +156,7 @@
   --tile-foreground: oklch(0.78 0.12 232);
   --tile-accent: oklch(0.32 0.06 70);
   --tile-accent-foreground: oklch(0.8 0.15 72);
+}
 }
 
 @layer base {
@@ -308,5 +313,21 @@
  * unaffected — only .trip-map-tiles (the <TileLayer>'s own class) is hit. */
 .dark .trip-map-tiles {
   filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.9);
+}
+
+/* Print and "Save as PDF" (the share page's PDF export, plan 2026-11-15 phase 2).
+ * The light tokens always apply (dark mode is screen-only, above), and the page
+ * tint, hero gradient and icon tiles print as on screen instead of being dropped
+ * by the browser. What hides or stays whole is set with print: utilities in place. */
+@page {
+  size: A4;
+  margin: 12mm 10mm;
+}
+
+@media print {
+  html {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 
