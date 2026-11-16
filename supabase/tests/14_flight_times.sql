@@ -227,3 +227,30 @@ SELECT pg_temp.check('agency vs ordinary trip: a local written with a stray depa
   AND (SELECT bool_and(depart_at = '2027-03-10 20:40+00') FROM flights WHERE flight_number = 'CMP1'));
 SELECT pg_temp.check('agency vs ordinary trip: an old-client write gets the same Jerusalem local on both',
   (SELECT count(*) FROM flights WHERE flight_number = 'CMP2' AND depart_local = '2027-03-10 22:40') = 2);
+
+-- 5d writer shape under RLS (eng-security): locals + zones only, the trigger derives instants
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('editor: inserts a flight with locals + zones only (5d writer shape)',
+  pg_temp.try(format($$INSERT INTO flights (trip_id, flight_number, from_airport, to_airport, depart_local, arrive_local, from_tz, to_tz)
+                      VALUES (%L, 'ED5D', 'Chiang Mai (CNX)', 'Bangkok (DMK)', '2027-03-12 08:00', '2027-03-12 09:15', 'Asia/Bangkok', 'Asia/Bangkok')$$,
+                      pg_temp.id('trip'))) = 1);
+-- try() undoes its statement, so insert for real to read the derived instants back.
+INSERT INTO flights (trip_id, flight_number, from_airport, to_airport, depart_local, arrive_local, from_tz, to_tz)
+VALUES (pg_temp.id('trip'), 'ED5D', 'Chiang Mai (CNX)', 'Bangkok (DMK)', '2027-03-12 08:00', '2027-03-12 09:15', 'Asia/Bangkok', 'Asia/Bangkok');
+SELECT pg_temp.check('editor: the 5d insert gets its instants from the trigger (CNX 08:00 = 01:00 UTC)',
+  (SELECT depart_at = '2027-03-12 01:00+00' AND arrive_at - depart_at = interval '1 hour 15 minutes'
+     FROM flights WHERE flight_number = 'ED5D'));
+RESET ROLE;
+
+SELECT pg_temp.login(pg_temp.id('participant'));
+SELECT pg_temp.check('participant: cannot insert a flight with locals + zones',
+  pg_temp.try(format($$INSERT INTO flights (trip_id, flight_number, depart_local, from_tz) VALUES (%L, 'PX5D', '2027-03-12 08:00', 'Asia/Bangkok')$$,
+                     pg_temp.id('trip'))) = -1);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('viewer'));
+SELECT pg_temp.check('viewer: cannot insert a flight with locals + zones',
+  pg_temp.try(format($$INSERT INTO flights (trip_id, flight_number, depart_local, from_tz) VALUES (%L, 'VX5D', '2027-03-12 08:00', 'Asia/Bangkok')$$,
+                     pg_temp.id('trip'))) = -1);
+RESET ROLE;
+SELECT pg_temp.check('participant / viewer: no 5d rows were created',
+  NOT EXISTS (SELECT 1 FROM flights WHERE flight_number IN ('PX5D', 'VX5D')));
