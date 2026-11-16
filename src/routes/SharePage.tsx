@@ -354,15 +354,13 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
         </Section>
       )}
 
-      {/* On an agent's page TripCraft stays a quiet credit, not an invitation. */}
-      {isAgencyPage ? (
-        <p className="mt-8 text-center text-xs text-muted-foreground">{en?.builtWith ?? "נבנה עם"} TripCraft</p>
-      ) : (
+      {/* An agent's page carries only the agency's brand: no TripCraft credit. */}
+      {!isAgencyPage && (
         <p className="mt-8 text-center text-xs text-muted-foreground">
           {en?.builtWith ?? "נבנה עם"} <span className="font-bold">TripCraft</span> 🌴
         </p>
       )}
-      <LegalLinks className="mt-2" />
+      <LegalLinks className={isAgencyPage ? "mt-8" : "mt-2"} />
     </div>
   );
 }
