@@ -113,3 +113,37 @@ SELECT pg_temp.check('anon: the share page shows the edited title, description a
   public.get_shared_trip('test-slug-0123456789') -> 'suggestions' -> 0
     @> '{"title": "Colosseo", "description": "Edited description", "kind": "restaurant"}'::jsonb);
 RESET ROLE;
+
+-- Moving a suggestion between trips (eng-security, Phase 6) -----------------------
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('editor: cannot move a suggestion into a trip they have no role on (demo clone)',
+  pg_temp.try(format('UPDATE suggestions SET trip_id = %L WHERE trip_id = %L',
+    pg_temp.id('demo_trip'), pg_temp.id('trip'))) = -1);
+RESET ROLE;
+
+SELECT pg_temp.login(pg_temp.id('participant'));
+SELECT pg_temp.check('participant: cannot move a suggestion to another trip',
+  pg_temp.try(format('UPDATE suggestions SET trip_id = %L WHERE trip_id = %L',
+    pg_temp.id('agent_trip'), pg_temp.id('trip'))) = -1);
+RESET ROLE;
+
+SELECT pg_temp.login(pg_temp.id('demo'), true);
+SELECT pg_temp.check('demo user: cannot move their suggestion into a real trip',
+  pg_temp.try(format('UPDATE suggestions SET trip_id = %L WHERE trip_id = %L',
+    pg_temp.id('trip'), pg_temp.id('demo_trip'))) = -1);
+RESET ROLE;
+
+-- The brochure shows the edit but not the editable extras --------------------------
+SELECT pg_temp.login(pg_temp.id('editor'));
+UPDATE suggestions SET tags = '{SECRET-TAG}', image_url = 'https://x.test/SECRET-IMG.jpg',
+  google_place_id = 'SECRET-PLACE-ID', lat = 41.9, lng = 12.5
+ WHERE trip_id = pg_temp.id('trip');
+RESET ROLE;
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: share payload suggestions carry no tags / image_url / google_place_id / lat / lng',
+  NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(public.get_shared_trip('test-slug-0123456789') -> 'suggestions') s
+     WHERE s ? 'tags' OR s ? 'image_url' OR s ? 'google_place_id' OR s ? 'lat' OR s ? 'lng'));
+SELECT pg_temp.check('anon: no SECRET-* marker from a suggestion edit reaches the brochure',
+  public.get_shared_trip('test-slug-0123456789')::text NOT LIKE '%SECRET-%');
+RESET ROLE;
