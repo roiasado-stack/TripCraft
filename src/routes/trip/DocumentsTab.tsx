@@ -203,7 +203,7 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
     const docType = result.docType;
     try {
       if (result.docType === "flight") {
-        const zoneOf = await loadZoneOf();
+        const zoneOf = await loadZoneOf().catch(() => () => null); // a stale chunk saves without zones
         // Every segment (outbound, return, connection legs) in one insert —
         // all or nothing, and the source file below is still uploaded once.
         const { error } = await supabase.from("flights").insert(
