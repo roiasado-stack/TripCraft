@@ -82,6 +82,11 @@ export async function fillMissingPhotos(tripId: string, destination: string): Pr
 const googlePhotos = new Map<string, Promise<PlacePhoto | null>>();
 const resolving = new Map<string, Promise<string | null>>();
 
+/** After a suggestion is renamed: drop its cached place lookup so the new title is looked up. */
+export function forgetSuggestionPlace(id: string) {
+  resolving.delete(id);
+}
+
 /**
  * The photo a suggestion card shows, best first:
  *  1. its stored Wikipedia photo (image_url),
