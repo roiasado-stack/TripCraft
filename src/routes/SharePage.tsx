@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Plane, Wand2 } from "lucide-react";
+import { FileDown, Plane, Wand2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
@@ -14,6 +14,7 @@ import { Flag } from "@/components/Flag";
 import { ImageCredit } from "@/components/MediaCard";
 import { isTripPhotoUrl } from "@/lib/photo-url";
 import { agencyPageTitle } from "@/lib/share-og";
+import { settleForPrint, shouldAutoPrint } from "@/lib/share-print";
 import { AGENCY_LOGO_BUCKET, isAgencyLogoPath, safeAgencyColor } from "@/lib/agency-brand";
 import { cn } from "@/lib/utils";
 import { resolveMapUrl, stayMapUrl } from "@/lib/maps";
@@ -52,6 +53,7 @@ export default function SharePage() {
 
 function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
   const { slug } = useParams();
+  const { search } = useLocation();
   const [shared, setShared] = useState<SharedTripPayload | null>(null);
   const [trying, setTrying] = useState(false);
   const { session } = useAuth();
@@ -123,6 +125,22 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
     };
   }, [en, shared, state]);
 
+  // `?print=1` (the agency's "PDF ללקוח"): open the print dialog once, after the
+  // trip is on screen and its photos and fonts have settled.
+  const printed = useRef(false);
+  useEffect(() => {
+    if (!shouldAutoPrint({ search, state, printed: printed.current })) return;
+    let cancelled = false;
+    void settleForPrint().then(() => {
+      if (cancelled || printed.current) return;
+      printed.current = true;
+      window.print();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [search, state]);
+
   if (state === "loading") return <FullSpinner label={en?.loading ?? "טוען טיול…"} />;
   if (state === "notfound" || !shared)
     return (
@@ -154,13 +172,15 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
   const sortedDays = [...days].sort();
 
   return (
-    <div className="mx-auto min-h-screen max-w-lg px-4 pb-16">
+    // Printed (PDF), the page uses the sheet's full width; print: classes below
+    // hide what can't be tapped on paper and keep each card whole on one page.
+    <div className="mx-auto min-h-screen max-w-lg px-4 pb-16 print:min-h-0 print:max-w-none print:px-0 print:pb-0">
       {/* agency header */}
       {/* The agency's own colour is a stripe, never a text background: any
           colour an agent picks keeps the name readable in both modes. */}
       {isAgencyPage && (
         <div
-          className="mt-4 flex items-center gap-3 rounded-2xl border-s-4 border-primary bg-card px-4 py-3 text-card-foreground shadow-soft"
+          className="mt-4 flex items-center gap-3 rounded-2xl border-s-4 border-primary bg-card px-4 py-3 text-card-foreground shadow-soft print:mt-0 print:break-inside-avoid"
           style={accent ? { borderInlineStartColor: accent } : undefined}
         >
           {agencyLogo && (
@@ -182,7 +202,7 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
       {/* hero */}
       <div
         className={cn(
-          "relative mt-4 overflow-hidden rounded-4xl text-white shadow-pop",
+          "relative mt-4 overflow-hidden rounded-4xl text-white shadow-pop print:break-inside-avoid print:shadow-none",
           heroPhoto ? "flex min-h-72 flex-col justify-end" : "bg-gradient-sea",
         )}
       >
@@ -213,9 +233,17 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
         </div>
       </div>
 
+      {/* The client can save the brochure too; the browser's dialog has "Save as PDF". */}
+      <div className="mt-3 flex justify-end print:hidden">
+        <Button variant="outline" size="sm" onClick={() => window.print()}>
+          <FileDown className="size-4" aria-hidden />
+          {en?.savePdf ?? "שמירה כ-PDF"}
+        </Button>
+      </div>
+
       {/* "Try it yourself" opens the full app, which is Hebrew only. */}
       {trip.is_showcase && !en && (
-        <div className="mt-4 flex flex-col gap-2 rounded-2xl bg-card p-5 text-center text-card-foreground">
+        <div className="mt-4 flex flex-col gap-2 rounded-2xl bg-card p-5 text-center text-card-foreground print:hidden">
           <div className="type-headline">רוצים לנסות בעצמכם?</div>
           <p className="type-footnote text-muted-foreground">
             קבלו עותק אישי של הטיול הזה, שנו מה שבא לכם ונסו את הסוכן החכם. בלי הרשמה.
@@ -239,7 +267,7 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
         <Section title={en?.flights ?? "טיסות"}>
           <GroupedList>
             {flights.map((f) => (
-              <div key={f.id} className="flex items-center gap-3 px-4 py-3">
+              <div key={f.id} className="flex items-center gap-3 px-4 py-3 print:break-inside-avoid">
                 <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
                   <Plane className="size-5" />
                 </span>
@@ -266,7 +294,7 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
         <Section title={en?.stays ?? "לינה"}>
           <GroupedList>
             {stays.map((st) => (
-              <div key={st.id} className="flex items-start gap-3 px-4 py-3">
+              <div key={st.id} className="flex items-start gap-3 px-4 py-3 print:break-inside-avoid">
                 <div className="min-w-0 flex-1">
                   <div className="type-headline [overflow-wrap:anywhere]">
                     <bdi>{st.hotel_name}</bdi>
@@ -282,7 +310,7 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
                     </div>
                   )}
                 </div>
-                <MapLink url={stayMapUrl(st, trip.destination)} />
+                <MapLink url={stayMapUrl(st, trip.destination)} className="print:hidden" />
               </div>
             ))}
           </GroupedList>
@@ -297,7 +325,7 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
               const dayItems = itinerary.filter((i) => i.day_date === day);
               if (dayItems.length === 0) return null;
               return (
-                <div key={day}>
+                <div key={day} className="print:break-inside-avoid">
                   <div className="mb-1.5 flex items-baseline gap-2 px-1">
                     <span className="type-footnote font-semibold text-primary">{en?.day(idx + 1) ?? `יום ${idx + 1}`}</span>
                     <h3 className="type-headline">{(en ? formatDayEn : formatDayHeb)(day)}</h3>
@@ -306,7 +334,7 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
                     {dayItems.map((it) => {
                       const cat = itineraryCategory(it.category);
                       return (
-                        <div key={it.id} className="flex items-start gap-3 px-4 py-3">
+                        <div key={it.id} className="flex items-start gap-3 px-4 py-3 print:break-inside-avoid">
                           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted text-lg" aria-hidden>
                             {cat.emoji}
                           </span>
@@ -322,7 +350,7 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
                             )}
                           </div>
                           {(it.map_url || it.location) && (
-                            <MapLink url={resolveMapUrl(it.map_url, it.location, trip.destination)} />
+                            <MapLink url={resolveMapUrl(it.map_url, it.location, trip.destination)} className="print:hidden" />
                           )}
                         </div>
                       );
@@ -342,7 +370,7 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
             {suggestions.map((sg) => {
               const kind = SUGGESTION_KINDS.find((k) => k.value === sg.kind);
               return (
-                <div key={sg.id} className="flex items-start gap-3 px-4 py-3">
+                <div key={sg.id} className="flex items-start gap-3 px-4 py-3 print:break-inside-avoid">
                   <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted text-lg" aria-hidden>
                     {kind?.emoji ?? "📍"}
                   </span>
@@ -356,7 +384,7 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
                     )}
                   </div>
                   {(sg.map_url || sg.location) && (
-                    <MapLink url={resolveMapUrl(sg.map_url, sg.location ?? sg.title, trip.destination)} />
+                    <MapLink url={resolveMapUrl(sg.map_url, sg.location ?? sg.title, trip.destination)} className="print:hidden" />
                   )}
                 </div>
               );
@@ -371,7 +399,7 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
           {en?.builtWith ?? "נבנה עם"} <span className="font-bold">TripCraft</span> 🌴
         </p>
       )}
-      <LegalLinks className={isAgencyPage ? "mt-8" : "mt-2"} />
+      <LegalLinks className={cn(isAgencyPage ? "mt-8" : "mt-2", "print:hidden")} />
     </div>
   );
 }
@@ -379,7 +407,7 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mt-8">
-      <h2 className="type-title mb-2 px-1">{title}</h2>
+      <h2 className="type-title mb-2 px-1 print:break-after-avoid">{title}</h2>
       {children}
     </section>
   );

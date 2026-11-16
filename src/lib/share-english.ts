@@ -27,6 +27,7 @@ export const SHARE_EN = {
   suggestions: "Recommended",
   day: (n: number) => `Day ${n}`,
   builtWith: "Built with",
+  savePdf: "Save as PDF",
   guide: "Your guide",
   whatsappTo: (name: string) => `WhatsApp ${name}`,
   map: "Map",

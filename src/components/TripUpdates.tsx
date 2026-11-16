@@ -192,7 +192,7 @@ export function TripUpdates({
               <button
                 type="button"
                 onClick={() => setShowAll(true)}
-                className="type-headline w-full px-4 py-3 text-start text-primary transition-colors active:bg-muted/70"
+                className="type-headline w-full px-4 py-3 text-start text-primary transition-colors active:bg-muted/70 print:hidden"
               >
                 {en?.showAllUpdates(updates.length) ?? `הצגת כל ${updates.length} העדכונים`}
               </button>
