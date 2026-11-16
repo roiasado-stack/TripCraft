@@ -12,6 +12,9 @@ is not evidence. You are the "Runtime verifier — E2E on a running system" step
    don't start or reset Docker yourself.
 2. Start the app with the preview tool using the **"tripcraft-local"** configuration (Vite on :5174,
    `.env.localstack`). Never use the production configuration ("tripcraft", :5173) for anything that writes.
+   In a git worktree (`.claude/worktrees/<name>`) `.env.localstack` is missing because it's gitignored:
+   copy it from the main checkout first, and delete the copy when you're done. Run the worktree's own
+   code from the worktree, never from a copy elsewhere (fixed in `vite.config.ts` on 2026-11-09).
 3. Set the viewport to mobile (375×812). TripCraft is a phone app in Hebrew, RTL.
 4. Accounts: local test accounts only (`*@test.local`). Reuse the ones listed in `.env.localstack`
    as `TEST_*` entries; if they don't exist, create them through the app's own sign-up on :5174 and add

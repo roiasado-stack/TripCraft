@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AlertTriangle, ChevronRight, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { AgentRun, StaleKnowledgeChunk } from "@/lib/types";
+import type { AgentRun, InstallMetricsRow, StaleKnowledgeChunk } from "@/lib/types";
 import { Badge, Card, EmptyState, FullSpinner } from "@/components/ui";
 import { LinkChip } from "@/components/MapLink";
 
@@ -26,6 +26,18 @@ const KIND_LABEL: Record<string, string> = {
   generate_passports: "סריקת דרכונים",
 };
 
+// Window for the install / push section (admin_install_metrics, migration 027).
+const INSTALL_WINDOW_DAYS = 30;
+
+const PLATFORM_LABEL: Record<InstallMetricsRow["platform"], string> = {
+  ios: "iPhone / iPad",
+  android: "אנדרואיד",
+  desktop: "מחשב",
+  other: "אחר",
+};
+
+const pct = (value: number | null) => (value === null ? "—" : `${Number(value).toFixed(0)}%`);
+
 function startOfTodayIso(): string {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -36,12 +48,13 @@ export default function AdminMonitoringPage() {
   const navigate = useNavigate();
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [staleChunks, setStaleChunks] = useState<StaleKnowledgeChunk[]>([]);
+  const [installRows, setInstallRows] = useState<InstallMetricsRow[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     (async () => {
-      const [{ data: runsData }, { data: staleData }] = await Promise.all([
+      const [{ data: runsData }, { data: staleData }, { data: installData, error: installError }] = await Promise.all([
         supabase
           .from("agent_runs")
           .select("*")
@@ -49,10 +62,13 @@ export default function AdminMonitoringPage() {
           .order("created_at", { ascending: false })
           .limit(500),
         supabase.rpc("stale_knowledge_chunks", { threshold_months: STALE_THRESHOLD_MONTHS }),
+        supabase.rpc("admin_install_metrics", { p_days: INSTALL_WINDOW_DAYS }),
       ]);
       if (!active) return;
       setRuns((runsData as AgentRun[]) ?? []);
       setStaleChunks((staleData as StaleKnowledgeChunk[]) ?? []);
+      if (installError) console.error(installError);
+      setInstallRows(installError ? null : ((installData as InstallMetricsRow[]) ?? []));
       setLoading(false);
     })();
     return () => {
@@ -123,6 +139,46 @@ export default function AdminMonitoringPage() {
             ))}
           </div>
         )}
+      </Card>
+
+      <Card className="mb-4 p-4">
+        <h2 className="mb-1 font-bold">התקנה והתראות</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          משתמשים מחוברים שפתחו את האפליקציה ב-{INSTALL_WINDOW_DAYS} הימים האחרונים, לפי סוג מכשיר.
+        </p>
+        {installRows === null ? (
+          <p className="text-sm text-destructive">לא הצלחנו לטעון את נתוני ההתקנה.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs text-muted-foreground">
+                  <th className="pb-2 text-start font-medium">מכשיר</th>
+                  <th className="pb-2 text-center font-medium">פתחו</th>
+                  <th className="pb-2 text-center font-medium">מותקנת</th>
+                  <th className="pb-2 text-center font-medium">עם התראות</th>
+                </tr>
+              </thead>
+              <tbody>
+                {installRows.map((r) => (
+                  <tr key={r.platform} className="border-b border-border last:border-0">
+                    <td className="py-2 font-medium">{PLATFORM_LABEL[r.platform] ?? r.platform}</td>
+                    <td className="py-2 text-center">{r.users_opened}</td>
+                    <td className="py-2 text-center">
+                      {r.users_installed} <span className="text-xs text-muted-foreground">({pct(r.pct_installed)})</span>
+                    </td>
+                    <td className="py-2 text-center">
+                      {r.users_with_push} <span className="text-xs text-muted-foreground">({pct(r.pct_push)})</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="mt-3 text-xs text-muted-foreground">
+          מי שרק פותח את קישור השיתוף הציבורי בלי להתחבר לא נספר כאן, וגם לא משתמשי דמו.
+        </p>
       </Card>
 
       {runs.length === 0 ? (

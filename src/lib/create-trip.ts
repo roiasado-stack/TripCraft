@@ -5,6 +5,7 @@ import { uploadTripDocument } from "./documents";
 import { clientRow, type BookingImport } from "./agency-import";
 import type { Participant, Trip } from "./types";
 import type { ParsedItem } from "./import-itinerary";
+import { flightTimesRow, loadZoneOf } from "./flight-form";
 import {
   participantRows,
   toIso,
@@ -76,6 +77,9 @@ export async function insertTripWithDrafts(input: {
     );
   }
   if (input.flights.length) {
+    // A failed zone-table load must not lose the flights: they are saved without zones
+    // (ticket times still as printed, durations hidden) rather than not at all.
+    const zoneOf = await loadZoneOf().catch(() => () => null);
     jobs.push(
       supabase.from("flights").insert(
         input.flights.map((f) => ({
@@ -85,8 +89,8 @@ export async function insertTripWithDrafts(input: {
           flight_number: f.flight_number || null,
           from_airport: f.from_airport || null,
           to_airport: f.to_airport || null,
-          depart_at: f.depart_at ? new Date(f.depart_at).toISOString() : null,
-          arrive_at: toIso(f.arrive_at),
+          // The ticket's wall clock + each airport's zone; the trigger (028) derives the instants.
+          ...flightTimesRow(f, zoneOf),
           from_terminal: f.from_terminal || null,
           to_terminal: f.to_terminal || null,
           seats: f.seats || null,

@@ -35,6 +35,11 @@ runs Vite on :5174 against it via `.env.localstack`. Test accounts belong there,
   reached regular trips (caught only in final review, #13).
 - Unit tests only for pure logic in `src/lib` (parsers, permissions, URL builders). No component tests,
   no mocking Supabase — RLS is tested against the real database instead.
+- Logic that reads flights or trip days (`supabase/functions/generate/bookings.ts`, the itinerary, the
+  `ask` snapshot) is also tested on a multi-stop trip with domestic flights. The scan saves every leg
+  that doesn't land in Israel as `outbound`, so domestic legs are `outbound` too. Single-destination
+  fixtures hid that, and an agency's 4-stop trip was planned only from its last domestic flight
+  (production, 2026-11-15, #42).
 - ESLint is limited to bug-catching rules on purpose; there is no formatter. A justified exception to
   a repo rule goes in `ALLOW` in `scripts/check-rules.mjs` with its reason — never loosen the rule.
 
@@ -87,6 +92,10 @@ there are the business team; they never touch code.
   format them only through `@/lib/trip-dates` (`parseLocalDate`, `localDateString`, `daysFrom`…).
   `new Date("2026-11-15")` is UTC midnight and `toISOString().slice(0, 10)` is the UTC day — both
   were real bugs, and `npm run rules` now rejects them.
+- The database's day is different: `current_date` / `now()::date` is the **UTC** day. A client
+  check that has to agree with a day the server writes (e.g. "already recorded today") uses
+  `serverDay()` from `@/lib/install-metrics`, never the local day — mixing them lost every app open
+  just after Israeli midnight (caught in review, 2026-11-09).
 
 ## Supabase schema
 

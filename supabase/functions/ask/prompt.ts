@@ -7,6 +7,8 @@
  * function that actually ships — a copy-pasted prompt would drift silently.
  */
 
+import { parseWallClock } from "../_shared/flight-time.ts";
+
 export const MODEL = "claude-haiku-5-5";
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
@@ -159,6 +161,18 @@ export function formatWallClock(value: unknown, timeZone?: unknown): string | nu
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
+/**
+ * A flight time as printed on the ticket, "YYYY-MM-DD HH:MM": the row's wall clock at its
+ * own airport (`depart_local` / `arrive_local`, migration 028), whatever zone the viewer is
+ * in. A row without one falls back to the instant on the viewer's clock, as before.
+ */
+export function flightWallClock(local: unknown, instant: unknown, timeZone?: unknown): string | null {
+  const w = parseWallClock(local);
+  if (!w) return formatWallClock(instant, timeZone);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${String(w.year).padStart(4, "0")}-${p(w.month)}-${p(w.day)} ${p(w.hour)}:${p(w.minute)}`;
+}
+
 /** Compact Hebrew snapshot of the trip, used as the agent's system context. */
 export function buildSnapshot(
   trip: Record<string, unknown>,
@@ -191,10 +205,12 @@ export function buildSnapshot(
   if (flights.length) {
     lines.push("", "טיסות:");
     for (const f of flights) {
-      const departs = formatWallClock(f.depart_at, timeZone);
+      // Each time on its own airport's clock, as printed on the ticket.
+      const departs = flightWallClock(f.depart_local, f.depart_at, timeZone);
+      const lands = flightWallClock(f.arrive_local, f.arrive_at, timeZone);
       lines.push(
         `- ${f.direction === "inbound" ? "חזור" : "הלוך"}: ${f.from_airport ?? "?"} → ${f.to_airport ?? "?"}` +
-          `${departs ? ` ביציאה ${departs}` : ""}`,
+          `${departs ? ` ביציאה ${departs}` : ""}${lands ? `, נחיתה ${lands}` : ""}`,
       );
     }
   }

@@ -141,6 +141,18 @@ const at = (offset, hhmm) => {
   d.setHours(h, m, 0, 0);
   return d.toISOString(); // a full instant, not a calendar day
 };
+/** A flight's ticket time: that day's wall clock at its own airport, no zone (migration 028). */
+const wall = (offset, hhmm) => `${day(offset)}T${hhmm}`;
+/** The seeded airports' zones; the flights_local_times trigger derives depart_at / arrive_at. */
+const AIRPORT_TZ = {
+  TLV: "Asia/Jerusalem",
+  FCO: "Europe/Rome",
+  PRG: "Europe/Prague",
+  CDG: "Europe/Paris",
+  BCN: "Europe/Madrid",
+  AMS: "Europe/Amsterdam",
+  LHR: "Europe/London",
+};
 /** Offset (from today) of the first day on or after `offset` that falls on `weekday` (0 = Sunday). */
 const firstWeekdayFrom = (offset, weekday) => {
   let o = offset;
@@ -199,8 +211,8 @@ function buildTrips() {
       ],
       passportsFor: 3, // Maya's is missing
       flights: [
-        { direction: "outbound", airline: "אל על", flight_number: "LY383", from_airport: "TLV", to_airport: "FCO", depart_at: at(21, "07:10"), arrive_at: at(21, "10:05"), booking_ref: "DEMO-R1" },
-        { direction: "inbound", airline: "אל על", flight_number: "LY384", from_airport: "FCO", to_airport: "TLV", depart_at: at(26, "16:40"), arrive_at: at(26, "21:15"), booking_ref: "DEMO-R1" },
+        { direction: "outbound", airline: "אל על", flight_number: "LY383", from_airport: "TLV", to_airport: "FCO", depart_local: wall(21, "07:10"), arrive_local: wall(21, "10:05"), booking_ref: "DEMO-R1" },
+        { direction: "inbound", airline: "אל על", flight_number: "LY384", from_airport: "FCO", to_airport: "TLV", depart_local: wall(26, "16:40"), arrive_local: wall(26, "21:15"), booking_ref: "DEMO-R1" },
       ],
       stays: [
         { hotel_name: "Albergo Esempio Trastevere", address: "Trastevere, Roma", check_in: day(21), check_out: day(26), booking_ref: "DEMO-H1", notes: "חדר משפחתי, ארוחת בוקר כלולה (דמו)" },
@@ -230,8 +242,8 @@ function buildTrips() {
       people: barMitzvahPeople.map((name) => ({ name, preferences: ["kosher"] })),
       passportsFor: barMitzvahPeople.length,
       flights: [
-        { direction: "outbound", airline: "ישראייר", flight_number: "6H761", from_airport: "TLV", to_airport: "PRG", depart_at: at(pragueStart, "06:00"), arrive_at: at(pragueStart, "09:30"), booking_ref: "DEMO-P2" },
-        { direction: "inbound", airline: "ישראייר", flight_number: "6H762", from_airport: "PRG", to_airport: "TLV", depart_at: at(pragueStart + 4, "18:20"), arrive_at: at(pragueStart + 4, "23:10"), booking_ref: "DEMO-P2" },
+        { direction: "outbound", airline: "ישראייר", flight_number: "6H761", from_airport: "TLV", to_airport: "PRG", depart_local: wall(pragueStart, "06:00"), arrive_local: wall(pragueStart, "09:30"), booking_ref: "DEMO-P2" },
+        { direction: "inbound", airline: "ישראייר", flight_number: "6H762", from_airport: "PRG", to_airport: "TLV", depart_local: wall(pragueStart + 4, "18:20"), arrive_local: wall(pragueStart + 4, "23:10"), booking_ref: "DEMO-P2" },
       ],
       stays: [
         { hotel_name: "Hotel Příklad Old Town", address: "Staré Město, Praha", check_in: day(pragueStart), check_out: day(pragueStart + 4), booking_ref: "DEMO-H2", notes: "18 חדרים, קומה שלמה (דמו)" },
@@ -265,8 +277,8 @@ function buildTrips() {
       ],
       passportsFor: 2,
       flights: [
-        { direction: "outbound", airline: "אל על", flight_number: "LY325", from_airport: "TLV", to_airport: "CDG", depart_at: at(parisStart, "08:15"), arrive_at: at(parisStart, "12:05"), booking_ref: "DEMO-F3" },
-        { direction: "inbound", airline: "אל על", flight_number: "LY326", from_airport: "CDG", to_airport: "TLV", depart_at: at(parisEnd, "15:30"), arrive_at: at(parisEnd, "20:20"), booking_ref: "DEMO-F3" },
+        { direction: "outbound", airline: "אל על", flight_number: "LY325", from_airport: "TLV", to_airport: "CDG", depart_local: wall(parisStart, "08:15"), arrive_local: wall(parisStart, "12:05"), booking_ref: "DEMO-F3" },
+        { direction: "inbound", airline: "אל על", flight_number: "LY326", from_airport: "CDG", to_airport: "TLV", depart_local: wall(parisEnd, "15:30"), arrive_local: wall(parisEnd, "20:20"), booking_ref: "DEMO-F3" },
       ],
       stays: [
         { hotel_name: "Hôtel Exemple Marais", address: "Le Marais, Paris", check_in: day(parisStart), check_out: day(parisEnd), booking_ref: "DEMO-H3", notes: "קרוב לרחוב רוזייה, בהליכה לבית הכנסת (דמו)" },
@@ -301,8 +313,8 @@ function buildTrips() {
       ],
       passportsFor: 12,
       flights: [
-        { direction: "outbound", airline: "ארקיע", flight_number: "IZ261", from_airport: "TLV", to_airport: "BCN", depart_at: at(-3, "05:50"), arrive_at: at(-3, "09:40"), booking_ref: "DEMO-B4" },
-        { direction: "inbound", airline: "ארקיע", flight_number: "IZ262", from_airport: "BCN", to_airport: "TLV", depart_at: at(4, "17:00"), arrive_at: at(4, "22:10"), booking_ref: "DEMO-B4" },
+        { direction: "outbound", airline: "ארקיע", flight_number: "IZ261", from_airport: "TLV", to_airport: "BCN", depart_local: wall(-3, "05:50"), arrive_local: wall(-3, "09:40"), booking_ref: "DEMO-B4" },
+        { direction: "inbound", airline: "ארקיע", flight_number: "IZ262", from_airport: "BCN", to_airport: "TLV", depart_local: wall(4, "17:00"), arrive_local: wall(4, "22:10"), booking_ref: "DEMO-B4" },
       ],
       stays: [
         { hotel_name: "Hotel Ejemplo Eixample", address: "Eixample, Barcelona", check_in: day(-3), check_out: day(4), booking_ref: "DEMO-H4", notes: "חצי פנסיון (דמו)" },
@@ -339,8 +351,8 @@ function buildTrips() {
       ],
       passportsFor: 0,
       flights: [
-        { direction: "outbound", airline: "אל על", flight_number: "LY335", from_airport: "TLV", to_airport: "AMS", depart_at: at(60, "09:00"), arrive_at: at(60, "13:10"), booking_ref: "DEMO-A5" },
-        { direction: "inbound", airline: "אל על", flight_number: "LY336", from_airport: "AMS", to_airport: "TLV", depart_at: at(65, "15:00"), arrive_at: at(65, "20:30"), booking_ref: "DEMO-A5" },
+        { direction: "outbound", airline: "אל על", flight_number: "LY335", from_airport: "TLV", to_airport: "AMS", depart_local: wall(60, "09:00"), arrive_local: wall(60, "13:10"), booking_ref: "DEMO-A5" },
+        { direction: "inbound", airline: "אל על", flight_number: "LY336", from_airport: "AMS", to_airport: "TLV", depart_local: wall(65, "15:00"), arrive_local: wall(65, "20:30"), booking_ref: "DEMO-A5" },
       ],
       stays: [],
       transfers: [],
@@ -365,8 +377,8 @@ function buildTrips() {
       ],
       passportsFor: 2,
       flights: [
-        { direction: "outbound", airline: "בריטיש איירווייז", flight_number: "BA164", from_airport: "TLV", to_airport: "LHR", depart_at: at(-20, "10:30"), arrive_at: at(-20, "14:15"), booking_ref: "DEMO-L6" },
-        { direction: "inbound", airline: "בריטיש איירווייז", flight_number: "BA165", from_airport: "LHR", to_airport: "TLV", depart_at: at(-14, "22:00"), arrive_at: at(-13, "04:50"), booking_ref: "DEMO-L6" },
+        { direction: "outbound", airline: "בריטיש איירווייז", flight_number: "BA164", from_airport: "TLV", to_airport: "LHR", depart_local: wall(-20, "10:30"), arrive_local: wall(-20, "14:15"), booking_ref: "DEMO-L6" },
+        { direction: "inbound", airline: "בריטיש איירווייז", flight_number: "BA165", from_airport: "LHR", to_airport: "TLV", depart_local: wall(-14, "22:00"), arrive_local: wall(-13, "04:50"), booking_ref: "DEMO-L6" },
       ],
       stays: [
         { hotel_name: "The Example Hotel Covent Garden", address: "Covent Garden, London", check_in: day(-20), check_out: day(-14), booking_ref: "DEMO-H6", notes: null },
@@ -494,7 +506,7 @@ async function seed(user) {
 
   const rowsFor = (key, extra) =>
     plans.flatMap((p, i) => (p[key] ?? []).map((r) => ({ trip_id: ids[i], ...extra(r) })));
-  const flights = rowsFor("flights", (r) => r);
+  const flights = rowsFor("flights", (r) => ({ ...r, from_tz: AIRPORT_TZ[r.from_airport], to_tz: AIRPORT_TZ[r.to_airport] }));
   const stays = rowsFor("stays", (r) => ({ address: null, booking_ref: null, notes: null, ...r }));
   const transfers = rowsFor("transfers", (r) => r);
   const itinerary = plans.flatMap((p, i) =>

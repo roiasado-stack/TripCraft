@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { daysBetween, destinationFlag, flagCountryCode, formatDayHeb, formatHeb } from "./trip-options";
+import { daysBetween, destinationFlag, flagCountryCode, formatDayHeb, formatHeb, formatTimeHeb } from "./trip-options";
 
 describe("destinationFlag", () => {
   it("matches a city or a country anywhere in the text", () => {
@@ -46,6 +46,34 @@ describe("formatHeb / formatDayHeb", () => {
       expect(formatDayHeb("2026-11-15")).toContain("15");
     } finally {
       vi.unstubAllEnvs();
+    }
+  });
+
+  // LY84 lands in Israel on 29.3 at 00:05 (IDT), stored as 21:05 UTC on the 28th. The date
+  // used to come from the UTC prefix while the time came from the phone's clock: "28.3 00:05".
+  it("reads a timestamp with an offset on the same clock as its time, not its UTC date prefix", () => {
+    const ly84 = "2026-03-28T21:05:00+00:00";
+    try {
+      vi.stubEnv("TZ", "Asia/Jerusalem");
+      expect(formatHeb(ly84)).toMatch(/^29 /);
+      expect(formatTimeHeb(ly84)).toBe("00:05");
+      expect(formatHeb("2026-03-28T21:05:00Z")).toMatch(/^29 /);
+      vi.stubEnv("TZ", "America/Los_Angeles");
+      expect(formatHeb(ly84)).toMatch(/^28 /);
+      expect(formatTimeHeb(ly84)).toBe("14:05");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("keeps a wall-clock time without an offset on its own day in any zone", () => {
+    for (const tz of ["Asia/Jerusalem", "America/Los_Angeles", "Asia/Bangkok"]) {
+      vi.stubEnv("TZ", tz);
+      try {
+        expect(formatHeb("2026-03-29T00:05:00")).toMatch(/^29 /);
+      } finally {
+        vi.unstubAllEnvs();
+      }
     }
   });
 });

@@ -1,4 +1,4 @@
-import { localDateString, parseLocalDate, tripLength } from "./trip-dates";
+import { isInstant, localDateString, parseLocalDate, tripLength } from "./trip-dates";
 
 export const TRIP_TYPES = [
   { value: "family", label: "משפחה", emoji: "👨‍👩‍👧‍👦" },
@@ -6,6 +6,7 @@ export const TRIP_TYPES = [
   { value: "friends", label: "חברים", emoji: "🎉" },
   { value: "organized", label: "מאורגן", emoji: "🚌" },
 ] as const;
+export type TripType = (typeof TRIP_TYPES)[number]["value"];
 
 export const PREFERENCES = [
   { value: "beach", label: "חוף", emoji: "🏖️" },
@@ -163,11 +164,14 @@ export function itineraryCategory(value: string) {
   return ITINERARY_CATEGORIES.find((c) => c.value === value) ?? ITINERARY_CATEGORIES[0];
 }
 
-// Date-only strings are the traveller's calendar day — parse them as local
-// (see trip-dates), or a phone west of Greenwich shows the day before.
+// Date-only strings (and wall-clock times without an offset) are the traveller's
+// calendar day — parse them as local (see trip-dates), or a phone west of Greenwich
+// shows the day before. An instant is read whole, in the viewer's zone like
+// formatTimeHeb: its date prefix is the UTC day, so LY84 landing in Israel on
+// 29.3 at 00:05 showed as 28.3 next to the right time.
 export function formatHeb(date?: string | null) {
   if (!date) return "";
-  return (parseLocalDate(date) ?? new Date(date)).toLocaleDateString("he-IL", {
+  return ((isInstant(date) ? null : parseLocalDate(date)) ?? new Date(date)).toLocaleDateString("he-IL", {
     day: "numeric",
     month: "short",
     year: "numeric",

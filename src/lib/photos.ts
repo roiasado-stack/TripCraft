@@ -82,6 +82,11 @@ export async function fillMissingPhotos(tripId: string, destination: string): Pr
 const googlePhotos = new Map<string, Promise<PlacePhoto | null>>();
 const resolving = new Map<string, Promise<string | null>>();
 
+/** After a suggestion is renamed: drop its cached place lookup so the new title is looked up. */
+export function forgetSuggestionPlace(id: string) {
+  resolving.delete(id);
+}
+
 /**
  * The photo a suggestion card shows, best first:
  *  1. its stored Wikipedia photo (image_url),
@@ -115,12 +120,17 @@ export function useSuggestionPhoto(opts: {
       if (placeId === null && opts.canResolve) {
         let pending = resolving.get(opts.id);
         if (!pending) {
-          pending = resolvePlaceId(opts.tripId, `${opts.title} ${opts.destination}`, { lat: opts.lat, lng: opts.lng }).then(
-            async (found) => {
-              if (found !== null) await supabase.from("suggestions").update({ google_place_id: found }).eq("id", opts.id);
-              return found;
-            },
-          );
+          const lookup: Promise<string | null> = resolvePlaceId(opts.tripId, `${opts.title} ${opts.destination}`, {
+            lat: opts.lat,
+            lng: opts.lng,
+          }).then(async (found) => {
+            // Renamed meanwhile (forgetSuggestionPlace): don't write the old venue's ID back.
+            if (found !== null && resolving.get(opts.id) === lookup) {
+              await supabase.from("suggestions").update({ google_place_id: found }).eq("id", opts.id);
+            }
+            return found;
+          });
+          pending = lookup;
           resolving.set(opts.id, pending);
         }
         placeId = await pending;
@@ -138,7 +148,7 @@ export function useSuggestionPhoto(opts: {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opts.id, opts.placeId, wantsGoogle]);
+  }, [opts.id, opts.placeId, opts.title, wantsGoogle]);
 
   if (isPhotoUrl(opts.imageUrl)) return { url: opts.imageUrl!, illustrative: false, google: null };
   if (google) return { url: google.url, illustrative: false, google };

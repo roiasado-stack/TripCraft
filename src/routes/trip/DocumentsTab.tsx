@@ -13,6 +13,7 @@ import { ImportVoucher, type VoucherResult } from "@/components/ImportVoucher";
 import { DOCS_BUCKET as BUCKET, uploadTripDocument } from "@/lib/documents";
 import { isSafeHttpUrl } from "@/lib/maps";
 import { canEditDocument, documentTravellerProblem, PASSPORT_CATEGORY, type TravellerProblem } from "@/lib/document-rules";
+import { flightTimesRow, loadZoneOf } from "@/lib/flight-form";
 
 const TRAVELLER_PROBLEM_TEXT: Record<TravellerProblem, string> = {
   no_travellers: "כדי לשמור דרכון צריך קודם להוסיף נוסע לטיול",
@@ -202,6 +203,7 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
     const docType = result.docType;
     try {
       if (result.docType === "flight") {
+        const zoneOf = await loadZoneOf().catch(() => () => null); // a stale chunk saves without zones
         // Every segment (outbound, return, connection legs) in one insert —
         // all or nothing, and the source file below is still uploaded once.
         const { error } = await supabase.from("flights").insert(
@@ -212,8 +214,8 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
             flight_number: d.flight_number,
             from_airport: d.from_airport,
             to_airport: d.to_airport,
-            depart_at: localToIso(d.depart_at),
-            arrive_at: localToIso(d.arrive_at),
+            // The ticket's wall clock + each airport's zone; the trigger (028) derives the instants.
+            ...flightTimesRow(d, zoneOf),
             from_terminal: d.from_terminal,
             to_terminal: d.to_terminal,
             seats: d.seats,

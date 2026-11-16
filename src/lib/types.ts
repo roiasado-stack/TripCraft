@@ -117,7 +117,9 @@ export interface SharedTripPayload {
    * agency-logos folder, or null — never a URL; the page builds it with getPublicUrl.
    */
   agency: { name: string | null; color: string | null; logo_path: string | null } | null;
-  flights: Pick<Flight, "id" | "from_airport" | "to_airport" | "airline" | "flight_number" | "depart_at">[];
+  /** Since 028 also the arrival, the ticket's wall-clock times and the airports' zones (all optional: an old payload lacks them). */
+  flights: (Pick<Flight, "id" | "from_airport" | "to_airport" | "airline" | "flight_number" | "depart_at"> &
+    Partial<Pick<Flight, "arrive_at" | "depart_local" | "arrive_local" | "from_tz" | "to_tz">>)[];
   stays: Pick<Stay, "id" | "hotel_name" | "address" | "check_in" | "check_out" | "map_url">[];
   itinerary: Pick<
     ItineraryItem,
@@ -148,6 +150,16 @@ export interface Flight {
   to_airport: string | null;
   depart_at: string | null;
   arrive_at: string | null;
+  /**
+   * The ticket's wall-clock times, "YYYY-MM-DDTHH:MM:SS" with no offset (028). Display these
+   * as strings — never through Date in the viewer's zone. depart_at / arrive_at are the true
+   * instants, derived from them by the flights_local_times trigger.
+   */
+  depart_local?: string | null;
+  arrive_local?: string | null;
+  /** IANA zones of the departure / arrival airports; null = unknown (028). */
+  from_tz?: string | null;
+  to_tz?: string | null;
   booking_ref: string | null;
   from_terminal: string | null;
   to_terminal: string | null;
@@ -356,6 +368,16 @@ export interface StaleKnowledgeChunk {
   source_url: string;
   source_verified_on: string;
   days_stale: number;
+}
+
+/** One row per platform from `admin_install_metrics(p_days)` (migration 027). Percentages are null when nobody opened. */
+export interface InstallMetricsRow {
+  platform: "ios" | "android" | "desktop" | "other";
+  users_opened: number;
+  users_installed: number;
+  pct_installed: number | null;
+  users_with_push: number;
+  pct_push: number | null;
 }
 
 /** A tool call the agent proposed but did not execute — shown as an approval

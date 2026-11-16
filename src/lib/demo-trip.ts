@@ -43,6 +43,9 @@ export async function createDemoTrip(userId: string): Promise<string> {
     d.setHours(h, m, 0, 0);
     return d.toISOString();
   };
+  /** A flight's ticket time: the wall clock at its own airport, no zone. */
+  const wall = (dayOffset: number, time: string) => `${dayN(dayOffset)}T${time}`;
+  const ZONES: Record<string, string> = { TLV: "Asia/Jerusalem", RHO: "Europe/Athens" };
 
   const { data: trip, error: tripErr } = await supabase
     .from("trips")
@@ -96,8 +99,8 @@ export async function createDemoTrip(userId: string): Promise<string> {
     flight_number: string,
     from_airport: string,
     to_airport: string,
-    depart_at: string,
-    arrive_at: string,
+    depart_local: string,
+    arrive_local: string,
     from_terminal: string,
     to_terminal: string,
   ): Row => ({
@@ -107,8 +110,11 @@ export async function createDemoTrip(userId: string): Promise<string> {
     flight_number,
     from_airport,
     to_airport,
-    depart_at,
-    arrive_at,
+    // The trigger (028) derives depart_at / arrive_at from these.
+    depart_local,
+    arrive_local,
+    from_tz: ZONES[from_airport] ?? null,
+    to_tz: ZONES[to_airport] ?? null,
     booking_ref: "ABC123",
     from_terminal,
     to_terminal,
@@ -177,8 +183,8 @@ export async function createDemoTrip(userId: string): Promise<string> {
   ): Row => ({ trip_id: tripId, name, category, external_url, storage_path: null, participant_id });
 
   await insertAll("flights", [
-    flight("outbound", "LY381", "TLV", "RHO", at(0, "06:40"), at(0, "09:15"), "3", "1"),
-    flight("inbound", "LY382", "RHO", "TLV", at(5, "20:10"), at(5, "22:35"), "1", "3"),
+    flight("outbound", "LY381", "TLV", "RHO", wall(0, "06:40"), wall(0, "09:15"), "3", "1"),
+    flight("inbound", "LY382", "RHO", "TLV", wall(5, "20:10"), wall(5, "22:35"), "1", "3"),
   ]);
 
   await insertAll("stays", [
