@@ -60,6 +60,10 @@ SELECT f.id, f.trip_id, f.flight_number, f.from_airport, f.to_airport, f.created
          - (f.depart_local AT TIME ZONE coalesce(f.from_tz, mf.zone, 'Asia/Jerusalem')) AS duration_new,
        CASE
          WHEN f.created_at < '2026-09-30 00:00+03' THEN 'created before 30.9 (may be stored 3h late)'
+         -- Only one side resolves (e.g. BKK -> an unmapped field): that side's instant would move
+         -- while the other stays read as Jerusalem, so the stored duration shifts unchecked.
+         WHEN (coalesce(f.from_tz, mf.zone) IS NULL) <> (coalesce(f.to_tz, mt.zone) IS NULL)
+           THEN 'only one airport has a zone'
          WHEN coalesce(f.from_tz, mf.zone) IS NOT NULL AND coalesce(f.to_tz, mt.zone) IS NOT NULL
               AND (f.arrive_local AT TIME ZONE coalesce(f.to_tz, mt.zone))
                   - (f.depart_local AT TIME ZONE coalesce(f.from_tz, mf.zone)) <= interval '0'
@@ -106,34 +110,44 @@ SET from_tz = coalesce(f.from_tz, p.from_tz),
 FROM ops.flight_zone_plan p
 WHERE p.id = f.id AND p.hold IS NULL;
 
--- Check: must return zero rows. If any row comes back, run ROLLBACK instead of COMMIT.
-SELECT 'ticket time moved' AS problem, b.id::text AS detail
-FROM ops.flights_zone_backup_20261116 b JOIN public.flights f ON f.id = b.id
-WHERE f.depart_local IS DISTINCT FROM b.depart_local OR f.arrive_local IS DISTINCT FROM b.arrive_local
-UNION ALL
-SELECT 'instant does not follow the local in its zone', f.id::text
-FROM ops.flights_zone_backup_20261116 b JOIN public.flights f ON f.id = b.id
-WHERE b.hold IS NULL
-  AND (f.depart_at IS DISTINCT FROM (f.depart_local AT TIME ZONE coalesce(f.from_tz, 'Asia/Jerusalem'))
-       OR f.arrive_at IS DISTINCT FROM (f.arrive_local AT TIME ZONE coalesce(f.to_tz, 'Asia/Jerusalem')))
-UNION ALL
-SELECT 'zone not set as planned', f.id::text
-FROM ops.flight_zone_plan p JOIN public.flights f ON f.id = p.id
-WHERE p.hold IS NULL AND (f.from_tz IS DISTINCT FROM p.from_tz OR f.to_tz IS DISTINCT FROM p.to_tz)
-UNION ALL
-SELECT 'held row was changed', f.id::text
-FROM ops.flights_zone_backup_20261116 b JOIN public.flights f ON f.id = b.id
-WHERE b.hold IS NOT NULL
-  AND (f.depart_at, f.arrive_at, f.from_tz, f.to_tz) IS DISTINCT FROM (b.depart_at, b.arrive_at, b.from_tz, b.to_tz)
-UNION ALL
-SELECT 'duration <= 0 or > 20h after the change', f.id::text
-FROM ops.flights_zone_backup_20261116 b JOIN public.flights f ON f.id = b.id
-WHERE b.hold IS NULL AND f.from_tz IS NOT NULL AND f.to_tz IS NOT NULL
-  AND (f.arrive_at - f.depart_at <= interval '0' OR f.arrive_at - f.depart_at > interval '20 hours')
-UNION ALL
-SELECT 'flight with a time but no ticket time', f.id::text
-FROM public.flights f
-WHERE (f.depart_at IS NOT NULL AND f.depart_local IS NULL) OR (f.arrive_at IS NOT NULL AND f.arrive_local IS NULL);
+-- Check: any problem row aborts the whole transaction, so the COMMIT below can only
+-- commit a clean run (the SQL Editor shows just the last result, so nothing is read by eye).
+-- To see the problem rows, run the SELECT inside on its own before COMMIT.
+DO $check$
+BEGIN
+  IF EXISTS (
+    SELECT 'ticket time moved' AS problem, b.id::text AS detail
+    FROM ops.flights_zone_backup_20261116 b JOIN public.flights f ON f.id = b.id
+    WHERE f.depart_local IS DISTINCT FROM b.depart_local OR f.arrive_local IS DISTINCT FROM b.arrive_local
+    UNION ALL
+    SELECT 'instant does not follow the local in its zone', f.id::text
+    FROM ops.flights_zone_backup_20261116 b JOIN public.flights f ON f.id = b.id
+    WHERE b.hold IS NULL
+      AND (f.depart_at IS DISTINCT FROM (f.depart_local AT TIME ZONE coalesce(f.from_tz, 'Asia/Jerusalem'))
+           OR f.arrive_at IS DISTINCT FROM (f.arrive_local AT TIME ZONE coalesce(f.to_tz, 'Asia/Jerusalem')))
+    UNION ALL
+    SELECT 'zone not set as planned', f.id::text
+    FROM ops.flight_zone_plan p JOIN public.flights f ON f.id = p.id
+    WHERE p.hold IS NULL AND (f.from_tz IS DISTINCT FROM p.from_tz OR f.to_tz IS DISTINCT FROM p.to_tz)
+    UNION ALL
+    SELECT 'held row was changed', f.id::text
+    FROM ops.flights_zone_backup_20261116 b JOIN public.flights f ON f.id = b.id
+    WHERE b.hold IS NOT NULL
+      AND (f.depart_at, f.arrive_at, f.from_tz, f.to_tz) IS DISTINCT FROM (b.depart_at, b.arrive_at, b.from_tz, b.to_tz)
+    UNION ALL
+    SELECT 'duration <= 0 or > 20h after the change', f.id::text
+    FROM ops.flights_zone_backup_20261116 b JOIN public.flights f ON f.id = b.id
+    WHERE b.hold IS NULL AND f.from_tz IS NOT NULL AND f.to_tz IS NOT NULL
+      AND (f.arrive_at - f.depart_at <= interval '0' OR f.arrive_at - f.depart_at > interval '20 hours')
+    UNION ALL
+    SELECT 'flight with a time but no ticket time', f.id::text
+    FROM public.flights f
+    WHERE (f.depart_at IS NOT NULL AND f.depart_local IS NULL) OR (f.arrive_at IS NOT NULL AND f.arrive_local IS NULL)
+  ) THEN
+    RAISE EXCEPTION 'zone backfill check failed: nothing was changed (transaction aborted)';
+  END IF;
+END
+$check$;
 
 COMMIT;
 
