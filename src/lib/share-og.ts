@@ -31,8 +31,18 @@ export interface ShareOgMeta {
 // always the canonical one, and index.html is fetched only from one of our own
 // deployment hosts.
 
-/** The live production host (README). VERCEL_PROJECT_PRODUCTION_URL wins when set. */
-export const PRODUCTION_HOST = "tripcraft-lac.vercel.app";
+/**
+ * The live production domain (client share links are on it). The card's
+ * canonical origin when VERCEL_PROJECT_PRODUCTION_URL isn't set.
+ */
+export const PRODUCTION_HOST = "tripcraft.co.il";
+
+/**
+ * Hosts that serve this project's production build. The fallback for an
+ * unknown host is VERCEL_URL, which deployment protection may guard, so every
+ * public production host must be listed here or prod shares would get a 502.
+ */
+const PRODUCTION_HOSTS = [PRODUCTION_HOST, "www.tripcraft.co.il", "tripcraft-lac.vercel.app"];
 
 /** The Vercel system env vars this reads (all bare hosts, no protocol). */
 export interface ShareOgEnv {
@@ -63,7 +73,7 @@ export function canonicalOrigin(env: ShareOgEnv): string {
  * deployment's own URL, then to production.
  */
 export function trustedFetchOrigin(requestHost: string | null | undefined, env: ShareOgEnv): string {
-  const own = [PRODUCTION_HOST, env.VERCEL_PROJECT_PRODUCTION_URL, env.VERCEL_URL, env.VERCEL_BRANCH_URL]
+  const own = [...PRODUCTION_HOSTS, env.VERCEL_PROJECT_PRODUCTION_URL, env.VERCEL_URL, env.VERCEL_BRANCH_URL]
     .map(normalizeHost)
     .filter((h): h is string => Boolean(h));
   const host = normalizeHost(requestHost);

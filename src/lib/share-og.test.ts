@@ -182,6 +182,11 @@ describe("trusted origins", () => {
   };
 
   it("fetches index.html from the request host only when it is one of ours", () => {
+    // Every public production host, even when Vercel's env names another one:
+    // otherwise prod would fall back to the (protected) deployment URL.
+    expect(trustedFetchOrigin("tripcraft.co.il", ENV)).toBe("https://tripcraft.co.il");
+    expect(trustedFetchOrigin("www.tripcraft.co.il", ENV)).toBe("https://www.tripcraft.co.il");
+    expect(trustedFetchOrigin("tripcraft.co.il.evil.example", ENV)).toBe("https://tripcraft-abc123-team.vercel.app");
     expect(trustedFetchOrigin("tripcraft-lac.vercel.app", ENV)).toBe("https://tripcraft-lac.vercel.app");
     expect(trustedFetchOrigin("TRIPCRAFT-GIT-FEATURE-TEAM.vercel.app", ENV)).toBe("https://tripcraft-git-feature-team.vercel.app");
     expect(trustedFetchOrigin("tripcraft-abc123-team.vercel.app", ENV)).toBe("https://tripcraft-abc123-team.vercel.app");
@@ -192,7 +197,7 @@ describe("trusted origins", () => {
     expect(trustedFetchOrigin("tripcraft-lac.vercel.app.evil.example", ENV)).toBe("https://tripcraft-abc123-team.vercel.app");
     expect(trustedFetchOrigin("evil.example/@x", ENV)).toBe("https://tripcraft-abc123-team.vercel.app");
     expect(trustedFetchOrigin(null, ENV)).toBe("https://tripcraft-abc123-team.vercel.app");
-    expect(trustedFetchOrigin("evil.example", {})).toBe("https://tripcraft-lac.vercel.app");
+    expect(trustedFetchOrigin("evil.example", {})).toBe("https://tripcraft.co.il");
     // localhost only when this deployment says it is localhost (vercel dev / the local script).
     expect(trustedFetchOrigin("localhost:5181", ENV)).toBe("https://tripcraft-abc123-team.vercel.app");
     expect(trustedFetchOrigin("localhost:5181", { VERCEL_URL: "localhost:5181" })).toBe("http://localhost:5181");
@@ -201,9 +206,9 @@ describe("trusted origins", () => {
   it("builds the card's URLs from production, never from the request", () => {
     expect(canonicalOrigin(ENV)).toBe("https://tripcraft-lac.vercel.app");
     expect(canonicalOrigin({ VERCEL_PROJECT_PRODUCTION_URL: "trips.example.co.il" })).toBe("https://trips.example.co.il");
-    expect(canonicalOrigin({})).toBe("https://tripcraft-lac.vercel.app");
+    expect(canonicalOrigin({})).toBe("https://tripcraft.co.il");
     const meta = shareOgMeta(payload(), { ...opts, origin: canonicalOrigin({}) });
-    expect(meta.url).toBe("https://tripcraft-lac.vercel.app/share/abc123def456");
+    expect(meta.url).toBe("https://tripcraft.co.il/share/abc123def456");
     expect(meta.image).toBe(PHOTO);
   });
 });
