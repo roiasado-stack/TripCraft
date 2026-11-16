@@ -1,4 +1,4 @@
-// Runs api/share-og.ts locally, without Vercel, against the LOCAL Supabase.
+// Runs api/share-og/[slug].ts locally, without Vercel, against the LOCAL Supabase.
 //
 //   npm run build
 //   npx vite-node scripts/share-og-local.ts            # serves on :5181

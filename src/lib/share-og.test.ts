@@ -185,7 +185,7 @@ describe("trusted origins", () => {
     // Every public production host, even when Vercel's env names another one:
     // otherwise prod would fall back to the (protected) deployment URL.
     expect(trustedFetchOrigin("tripcraft.co.il", ENV)).toBe("https://tripcraft.co.il");
-    expect(trustedFetchOrigin("www.tripcraft.co.il", ENV)).toBe("https://www.tripcraft.co.il");
+    expect(trustedFetchOrigin("tripcraft-lac.vercel.app", ENV)).toBe("https://tripcraft-lac.vercel.app");
     expect(trustedFetchOrigin("tripcraft.co.il.evil.example", ENV)).toBe("https://tripcraft-abc123-team.vercel.app");
     expect(trustedFetchOrigin("tripcraft-lac.vercel.app", ENV)).toBe("https://tripcraft-lac.vercel.app");
     expect(trustedFetchOrigin("TRIPCRAFT-GIT-FEATURE-TEAM.vercel.app", ENV)).toBe("https://tripcraft-git-feature-team.vercel.app");

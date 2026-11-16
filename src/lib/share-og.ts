@@ -42,7 +42,9 @@ export const PRODUCTION_HOST = "tripcraft.co.il";
  * unknown host is VERCEL_URL, which deployment protection may guard, so every
  * public production host must be listed here or prod shares would get a 502.
  */
-const PRODUCTION_HOSTS = [PRODUCTION_HOST, "www.tripcraft.co.il", "tripcraft-lac.vercel.app"];
+// www.tripcraft.co.il is left out: Vercel redirects it (308) before the function runs,
+// and the index.html fetch refuses redirects.
+const PRODUCTION_HOSTS = [PRODUCTION_HOST, "tripcraft-lac.vercel.app"];
 
 /** The Vercel system env vars this reads (all bare hosts, no protocol). */
 export interface ShareOgEnv {
