@@ -5,9 +5,13 @@
 //   curl http://localhost:5181/share/<slug>
 //
 // It plays Vercel's part: /index.html is the built dist/index.html (a static
-// file), and /share/:slug is rewritten to the function as ?slug=, as in
-// vercel.json. Env comes from .env.localstack (never production). Run through
-// vite-node because the function imports .ts files with .js specifiers.
+// file), and /share/:slug is rewritten to /api/share-og/:slug, as in
+// vercel.json. Like @vercel/node, the request URL takes its host from
+// x-forwarded-host when a client sends one, so a forged host can be tried:
+//   curl -H "X-Forwarded-Host: evil.example" http://localhost:5181/share/<slug>
+// Env comes from .env.localstack (never production); VERCEL_URL is this
+// server. Run through vite-node because the function imports .ts files with
+// .js specifiers.
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -22,7 +26,9 @@ for (const line of readFileSync(join(ROOT, ".env.localstack"), "utf8").split(/\r
 if (!/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(process.env.VITE_SUPABASE_URL ?? ""))
   throw new Error(".env.localstack must point at the local Supabase");
 
-const { GET } = await import("../api/share-og.ts");
+process.env.VERCEL_URL = `localhost:${PORT}`;
+
+const { GET } = await import("../api/share-og/[slug].ts");
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
@@ -36,8 +42,9 @@ createServer(async (req, res) => {
     res.writeHead(404).end();
     return;
   }
-  const rewritten = new URL(`/api/share-og?slug=${share[1]}`, url.origin);
-  const response = await GET(new Request(rewritten, { headers: { cookie: req.headers.cookie ?? "" } }));
+  const forwarded = req.headers["x-forwarded-host"];
+  const host = (Array.isArray(forwarded) ? forwarded[0] : forwarded) ?? req.headers.host ?? `localhost:${PORT}`;
+  const response = await GET(new Request(`http://${host}/api/share-og/${share[1]}`));
   res.writeHead(response.status, Object.fromEntries(response.headers));
   res.end(await response.text());
 }).listen(PORT, () => console.log(`share-og local on http://localhost:${PORT}/share/<slug>`));

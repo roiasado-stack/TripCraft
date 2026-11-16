@@ -13,6 +13,7 @@ import { MapLink } from "@/components/MapLink";
 import { Flag } from "@/components/Flag";
 import { ImageCredit } from "@/components/MediaCard";
 import { isTripPhotoUrl } from "@/lib/photo-url";
+import { agencyPageTitle } from "@/lib/share-og";
 import { AGENCY_LOGO_BUCKET, isAgencyLogoPath, safeAgencyColor } from "@/lib/agency-brand";
 import { cn } from "@/lib/utils";
 import { resolveMapUrl, stayMapUrl } from "@/lib/maps";
@@ -84,14 +85,11 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
   useEffect(() => {
     if (!en) return;
     const root = document.documentElement;
-    const title = document.title;
     root.lang = "en";
     root.dir = "ltr";
-    document.title = en.pageTitle;
     return () => {
       root.lang = "he";
       root.dir = "rtl";
-      document.title = title;
     };
   }, [en]);
 
@@ -111,6 +109,19 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
       setState("ready");
     })();
   }, [slug]);
+
+  // Tab title. An agency's page names the trip and the agency in both
+  // languages, never TripCraft; other pages keep index.html's title, or the
+  // English one with ?lang=en once we know the trip isn't an agency's.
+  useEffect(() => {
+    const next = (shared && agencyPageTitle(shared)) ?? (en && state !== "loading" ? en.pageTitle : null);
+    if (!next) return;
+    const prev = document.title;
+    document.title = next;
+    return () => {
+      document.title = prev;
+    };
+  }, [en, shared, state]);
 
   if (state === "loading") return <FullSpinner label={en?.loading ?? "טוען טיול…"} />;
   if (state === "notfound" || !shared)

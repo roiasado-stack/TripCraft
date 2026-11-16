@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/share/:slug", "destination": "/api/share-og?slug=:slug" },
+    { "source": "/share/:slug", "destination": "/api/share-og/:slug" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

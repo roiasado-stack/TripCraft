@@ -1,7 +1,8 @@
 // Link-preview card for the public brochure (/share/:slug). WhatsApp, Facebook
-// and friends don't run JavaScript, so api/share-og.ts serves index.html with
-// these tags already in its <head>, built from the public get_shared_trip(slug)
-// payload. On an agency's trip the card carries only the agency's brand.
+// and friends don't run JavaScript, so api/share-og/[slug].ts serves index.html
+// with these tags already in its <head>, built from the public
+// get_shared_trip(slug) payload. On an agency's trip the card carries only the
+// agency's brand.
 //
 // Imported by the Vercel function too (Node ESM), hence the explicit .js
 // extensions and no "@/" alias.
@@ -18,18 +19,98 @@ export interface ShareOgMeta {
   largeImage: boolean;
   /** The agency's name on an agency trip (or nothing when it has none), else TripCraft. */
   siteName: string | null;
+  /** Home-screen label (apple-mobile-web-app-title) on an agency trip; null keeps index.html's. */
+  appTitle: string | null;
   /** The page's own absolute URL. */
   url: string;
 }
 
-/** The share slug as the app makes it, or null for anything else. */
-export function shareSlug(value: string | null | undefined): string | null {
-  return typeof value === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value) ? value : null;
+// Origins -------------------------------------------------------------------------
+// The request's host can't be trusted: the Node runtime builds request.url from
+// headers a client can send (x-forwarded-host). So the page URL in the card is
+// always the canonical one, and index.html is fetched only from one of our own
+// deployment hosts.
+
+/** The live production host (README). VERCEL_PROJECT_PRODUCTION_URL wins when set. */
+export const PRODUCTION_HOST = "tripcraft-lac.vercel.app";
+
+/** The Vercel system env vars this reads (all bare hosts, no protocol). */
+export interface ShareOgEnv {
+  VERCEL_URL?: string;
+  VERCEL_BRANCH_URL?: string;
+  VERCEL_PROJECT_PRODUCTION_URL?: string;
 }
+
+function normalizeHost(host: string | null | undefined): string | null {
+  const h = host?.trim().toLowerCase().replace(/\.$/, "");
+  return h && /^[a-z0-9.-]+(:\d{1,5})?$/.test(h) ? h : null;
+}
+
+/** https, except for a local `vercel dev` / script host. */
+function originOf(host: string): string {
+  return /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host) ? `http://${host}` : `https://${host}`;
+}
+
+/** Where the card's page URL and default image point: production, never the request. */
+export function canonicalOrigin(env: ShareOgEnv): string {
+  return originOf(normalizeHost(env.VERCEL_PROJECT_PRODUCTION_URL) ?? PRODUCTION_HOST);
+}
+
+/**
+ * Where to fetch index.html from. The request's host only when it is one of
+ * this project's own hosts (the production domain or this deployment's URLs);
+ * anything else — a forged x-forwarded-host included — falls back to this
+ * deployment's own URL, then to production.
+ */
+export function trustedFetchOrigin(requestHost: string | null | undefined, env: ShareOgEnv): string {
+  const own = [PRODUCTION_HOST, env.VERCEL_PROJECT_PRODUCTION_URL, env.VERCEL_URL, env.VERCEL_BRANCH_URL]
+    .map(normalizeHost)
+    .filter((h): h is string => Boolean(h));
+  const host = normalizeHost(requestHost);
+  if (host && own.includes(host)) return originOf(host);
+  const deployment = normalizeHost(env.VERCEL_URL);
+  return deployment ? originOf(deployment) : canonicalOrigin(env);
+}
+
+// Slug ----------------------------------------------------------------------------
+
+/** The share slug as the app makes it (18 hex chars today), or null for anything else. */
+export function shareSlug(value: string | null | undefined): string | null {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{12,64}$/.test(value) ? value : null;
+}
+
+/**
+ * The slug from the request's path — `/share/<slug>` as the visitor typed it, or
+ * `/api/share-og/<slug>` after the rewrite. Never from the query string, which
+ * the visitor controls and Vercel merges with the rewrite's own parameters.
+ */
+export function slugFromPath(pathname: string): string | null {
+  const m = /^\/(?:share|api\/share-og)\/([^/]+)\/?$/.exec(pathname);
+  return m ? shareSlug(m[1]) : null;
+}
+
+// Card ----------------------------------------------------------------------------
 
 /** Public URL of an agency logo — what supabase.storage.getPublicUrl builds on the share page. */
 export function agencyLogoPublicUrl(supabaseUrl: string, logoPath: string): string {
   return `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/${AGENCY_LOGO_BUCKET}/${logoPath}`;
+}
+
+/** The trip's title, or its destination when it has none. */
+function tripTitle(trip: SharedTripPayload["trip"]): string {
+  return trip.title?.trim() || trip.destination?.trim() || "טיול";
+}
+
+/**
+ * The page title on an agency's trip ("<trip> | <agency>", or the trip alone for
+ * a logo-only agency), or null when the trip isn't an agency's. Same test as
+ * the share page: an agency trip is one with a name or a valid logo.
+ */
+export function agencyPageTitle(payload: Pick<SharedTripPayload, "trip" | "agency">): string | null {
+  const name = payload.agency?.name?.trim() || null;
+  if (!name && !isAgencyLogoPath(payload.agency?.logo_path)) return null;
+  const title = tripTitle(payload.trip);
+  return name ? `${title} | ${name}` : title;
 }
 
 /** "11.3–28.3.2027" from two YYYY-MM-DD days, without going through Date. */
@@ -46,8 +127,8 @@ function dateRange(start: string | null, end: string | null): string | null {
 }
 
 /**
- * What the card shows. `origin` is the site's own origin (for the page URL and
- * the default image); `supabaseUrl` is the project the logo lives in.
+ * What the card shows. `origin` is the canonical origin (canonicalOrigin), for
+ * the page URL and the default image; `supabaseUrl` is the project the logo lives in.
  */
 export function shareOgMeta(
   payload: SharedTripPayload,
@@ -56,22 +137,23 @@ export function shareOgMeta(
   const { trip, agency } = payload;
   const origin = opts.origin.replace(/\/+$/, "");
   const url = `${origin}/share/${opts.slug}`;
-  const title = trip.title?.trim() || trip.destination?.trim() || "טיול";
+  const title = tripTitle(trip);
   const destination = trip.destination?.trim() || null;
   const dates = dateRange(trip.start_date, trip.end_date);
   const description = [destination, dates].filter(Boolean).join(" · ") || title;
   const photo = isTripPhotoUrl(trip.image_url) ? (trip.image_url as string) : null;
 
-  // Same test as the share page: an agency trip is one with a name or a logo.
-  const agencyName = agency?.name?.trim() || null;
-  const logo = isAgencyLogoPath(agency?.logo_path) ? agencyLogoPublicUrl(opts.supabaseUrl, agency!.logo_path!) : null;
-  if (agencyName || logo) {
+  const agencyTitle = agencyPageTitle(payload);
+  if (agencyTitle) {
+    const agencyName = agency?.name?.trim() || null;
+    const logo = isAgencyLogoPath(agency?.logo_path) ? agencyLogoPublicUrl(opts.supabaseUrl, agency!.logo_path!) : null;
     return {
-      title: agencyName ? `${title} | ${agencyName}` : title,
+      title: agencyTitle,
       description,
       image: logo ?? photo,
       largeImage: !logo && Boolean(photo),
       siteName: agencyName,
+      appTitle: agencyName ?? title,
       url,
     };
   }
@@ -82,6 +164,7 @@ export function shareOgMeta(
     image: photo ?? `${origin}/icon-512.png`,
     largeImage: Boolean(photo),
     siteName: "TripCraft",
+    appTitle: null,
     url,
   };
 }
@@ -116,12 +199,17 @@ export function shareOgTags(meta: ShareOgMeta): string {
 }
 
 /**
- * index.html with its <title> and description replaced by `tags`. Functions are
- * used as replacements so a "$&" in a trip title stays literal text.
+ * index.html with its <title> and description replaced by the card's tags, and
+ * on an agency trip its home-screen label too. Functions are used as
+ * replacements so a "$&" in a trip title stays literal text.
  */
-export function injectShareOg(html: string, tags: string): string {
-  const withoutDescription = html.replace(/[ \t]*<meta\s+name=["']description["'][^>]*>\r?\n?/i, () => "");
-  if (/<title>[\s\S]*?<\/title>/i.test(withoutDescription))
-    return withoutDescription.replace(/<title>[\s\S]*?<\/title>/i, () => tags);
-  return withoutDescription.replace(/<\/head>/i, () => `${tags}\n  </head>`);
+export function injectShareOg(html: string, meta: ShareOgMeta): string {
+  const tags = shareOgTags(meta);
+  let out = html.replace(/[ \t]*<meta\s+name=["']description["'][^>]*>\r?\n?/i, () => "");
+  if (meta.appTitle) {
+    const label = `<meta name="apple-mobile-web-app-title" content="${escapeHtml(meta.appTitle)}" />`;
+    out = out.replace(/<meta\s+name=["']apple-mobile-web-app-title["'][^>]*>/i, () => label);
+  }
+  if (/<title>[\s\S]*?<\/title>/i.test(out)) return out.replace(/<title>[\s\S]*?<\/title>/i, () => tags);
+  return out.replace(/<\/head>/i, () => `${tags}\n  </head>`);
 }

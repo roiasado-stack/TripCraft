@@ -1,4 +1,5 @@
-// GET /share/:slug (vercel.json rewrites it here, before the SPA catch-all).
+// GET /share/:slug (vercel.json rewrites it to /api/share-og/:slug, before the
+// SPA catch-all).
 //
 // Link previews (WhatsApp, Facebook, Telegram…) don't run JavaScript, so the
 // SPA's index.html alone always shows the generic TripCraft card. This returns
@@ -7,23 +8,24 @@
 // exactly what an anonymous visitor's browser can already read. The page then
 // boots as usual.
 //
-// index.html is fetched from this deployment's own origin: /index.html is a
-// static file, which Vercel serves before any rewrite, so it is always the
-// build that matches this function. The visitor's cookies go along so a
-// preview deployment behind Vercel Authentication still answers.
+// index.html is fetched over HTTP from one of this project's own hosts
+// (trustedFetchOrigin): /index.html is a static file, which Vercel serves
+// before any rewrite. The request's host is used only when it is on that list —
+// request.url is built from headers a client can forge — and no visitor
+// cookies are forwarded. A deployment behind Vercel Authentication answers
+// only when "Protection Bypass for Automation" is on (its secret is sent).
 //
-// Anything wrong with the trip (unknown slug, sharing off, RPC or env missing)
-// returns the plain index.html with 200, and the SPA shows its not-found state.
-import { injectShareOg, shareOgMeta, shareOgTags, shareSlug } from "../src/lib/share-og.js";
-import type { SharedTripPayload } from "../src/lib/types";
+// Anything wrong with the trip (unknown or short slug, sharing off, RPC or env
+// missing) returns the plain index.html with 200, and the SPA shows its
+// not-found state.
+import { canonicalOrigin, injectShareOg, shareOgMeta, slugFromPath, trustedFetchOrigin } from "../../src/lib/share-og.js";
+import type { SharedTripPayload } from "../../src/lib/types";
 
 // Vercel exposes the project's env vars to functions at runtime. Declared here
 // rather than pulling in @types/node for one property.
 declare const process: { env: Record<string, string | undefined> };
 
-const HTML_HEADERS = { "Content-Type": "text/html; charset=utf-8" };
-const FOUND_CACHE = "public, max-age=0, s-maxage=300, stale-while-revalidate=60";
-const PLAIN_CACHE = "public, max-age=0, s-maxage=60";
+const HTML_HEADERS = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=0, s-maxage=60" };
 
 async function sharedTrip(slug: string): Promise<SharedTripPayload | null> {
   const url = process.env.VITE_SUPABASE_URL;
@@ -44,10 +46,12 @@ async function sharedTrip(slug: string): Promise<SharedTripPayload | null> {
   }
 }
 
-async function indexHtml(origin: string, cookie: string | null): Promise<string | null> {
+async function indexHtml(origin: string): Promise<string | null> {
+  const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
   try {
     const res = await fetch(`${origin}/index.html`, {
-      headers: cookie ? { cookie } : {},
+      headers: bypass ? { "x-vercel-protection-bypass": bypass } : {},
+      redirect: "error",
       signal: AbortSignal.timeout(4000),
     });
     if (!res.ok) return null;
@@ -60,24 +64,19 @@ async function indexHtml(origin: string, cookie: string | null): Promise<string 
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  // The rewrite passes ?slug=; the path is the fallback if it ever arrives unrewritten.
-  const slug = shareSlug(url.searchParams.get("slug") ?? /^\/share\/([^/]+)\/?$/.exec(url.pathname)?.[1]);
+  const slug = slugFromPath(url.pathname);
 
   const [html, payload] = await Promise.all([
-    indexHtml(url.origin, request.headers.get("cookie")),
+    indexHtml(trustedFetchOrigin(url.host, process.env)),
     slug ? sharedTrip(slug) : Promise.resolve(null),
   ]);
   if (!html) return new Response("Service unavailable", { status: 502, headers: { "Cache-Control": "no-store" } });
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  if (!slug || !payload || !supabaseUrl)
-    return new Response(html, { status: 200, headers: { ...HTML_HEADERS, "Cache-Control": PLAIN_CACHE } });
+  if (!slug || !payload || !supabaseUrl) return new Response(html, { status: 200, headers: HTML_HEADERS });
 
-  const meta = shareOgMeta(payload, { origin: url.origin, slug, supabaseUrl });
-  return new Response(injectShareOg(html, shareOgTags(meta)), {
-    status: 200,
-    headers: { ...HTML_HEADERS, "Cache-Control": FOUND_CACHE },
-  });
+  const meta = shareOgMeta(payload, { origin: canonicalOrigin(process.env), slug, supabaseUrl });
+  return new Response(injectShareOg(html, meta), { status: 200, headers: HTML_HEADERS });
 }
 
 // Some crawlers check a link with HEAD first; Node drops the body.
