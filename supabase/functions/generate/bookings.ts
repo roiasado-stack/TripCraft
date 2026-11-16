@@ -6,7 +6,7 @@
  * src/lib/generate-bookings.test.ts.
  */
 
-import { formatWallClock } from "../ask/prompt.ts";
+import { flightWallClock } from "../ask/prompt.ts";
 
 export type StayRow = {
   hotel_name: string | null;
@@ -19,8 +19,12 @@ export type FlightRow = {
   direction: string | null;
   from_airport: string | null;
   to_airport: string | null;
+  /** True instants (028 derives them from the locals and zones): ordering and gaps only. */
   depart_at: string | null;
   arrive_at: string | null;
+  /** The ticket's wall clock at each airport (028): every day and time the prompt states. */
+  depart_local?: string | null;
+  arrive_local?: string | null;
 };
 
 export type PartyMember = { age: number | null; age_range: string | null };
@@ -44,9 +48,17 @@ export function dayRange(start: string | null, end: string | null): string[] {
 
 type Clock = { day: string; time: string };
 
-function clock(value: string | null, timeZone?: unknown): Clock | null {
-  const s = formatWallClock(value, timeZone);
+/** A ticket time as a day and HH:MM: the row's local time when it has one, else the instant on the viewer's clock. */
+function clock(local: string | null | undefined, instant: string | null, timeZone?: unknown): Clock | null {
+  const s = flightWallClock(local, instant, timeZone);
   return s ? { day: s.slice(0, 10), time: s.slice(11, 16) } : null;
+}
+
+/** When the leg lands, or when it leaves if the landing time is missing. */
+function landing(f: FlightRow, timeZone?: unknown): Clock | null {
+  return f.arrive_at || f.arrive_local
+    ? clock(f.arrive_local, f.arrive_at, timeZone)
+    : clock(f.depart_local, f.depart_at, timeZone);
 }
 
 // A leg that leaves within this long of the previous leg's landing is a
@@ -96,14 +108,17 @@ function homeLegs(flights: FlightRow[]): { outbound: Leg[]; inbound: Leg[] } {
 /**
  * Landing at the destination (the end of the journey from home, so a connection
  * counts but a later domestic flight doesn't) and take-off for home (the start
- * of the journey back), on the clock the app shows them in.
+ * of the journey back), each on its own airport's clock as printed on the ticket
+ * (rows without local times fall back to the viewer's clock).
  */
 export function flightWindow(flights: FlightRow[], timeZone?: unknown): { arrival: Clock | null; departure: Clock | null } {
   const { outbound, inbound } = homeLegs(flights);
   const last = outbound[outbound.length - 1];
-  const arrivalAt = last ? (last.f.arrive_at ?? last.f.depart_at) : null;
-  const departureAt = inbound.find((l) => l.f.depart_at)?.f.depart_at ?? null;
-  return { arrival: clock(arrivalAt, timeZone), departure: clock(departureAt, timeZone) };
+  const takeoff = inbound.find((l) => l.f.depart_at || l.f.depart_local)?.f;
+  return {
+    arrival: last ? landing(last.f, timeZone) : null,
+    departure: takeoff ? clock(takeoff.depart_local, takeoff.depart_at, timeZone) : null,
+  };
 }
 
 /**
@@ -187,8 +202,8 @@ export function itineraryBookingLines(stays: StayRow[], flights: FlightRow[], da
     const kind = (f: FlightRow) =>
       home.outbound.some((l) => l.f === f) ? "הלוך" : home.inbound.some((l) => l.f === f) ? "חזור" : "טיסת פנים";
     for (const f of [...fl].sort((a, b) => ((a.depart_at ?? "") < (b.depart_at ?? "") ? -1 : 1))) {
-      const dep = formatWallClock(f.depart_at, timeZone);
-      const arr = formatWallClock(f.arrive_at, timeZone);
+      const dep = flightWallClock(f.depart_local, f.depart_at, timeZone);
+      const arr = flightWallClock(f.arrive_local, f.arrive_at, timeZone);
       lines.push(
         `- ${kind(f)}: ${f.from_airport ?? "?"} → ${f.to_airport ?? "?"}` +
           `${dep ? `, המראה ${dep}` : ""}${arr ? `, נחיתה ${arr}` : ""}`,
@@ -199,19 +214,94 @@ export function itineraryBookingLines(stays: StayRow[], flights: FlightRow[], da
 
   const rules: string[] = [];
   if (staysText) rules.push("- כל יום מתוכנן בעיר של המלון שבו ישנים באותו לילה; ביום האחרון — העיר של הלילה הקודם.");
+  const flightDays = flightDayRules(fl, days, timeZone);
   for (const m of moveDays(stays, days)) {
+    // A move by plane gets the flight-day rule below instead of "a transport between the hotels".
+    if (flightDays.has(m.day)) continue;
     rules.push(`- ${m.day} הוא יום מעבר מ-${stayLabel(m.from)} ל-${stayLabel(m.to)}: פריט transport לנסיעה ביניהן, ותוכנית קלה בלבד.`);
   }
+  rules.push(...flightDays.values());
   const { arrival, departure } = flightWindow(fl, timeZone);
   if (arrival && days.includes(arrival.day)) {
     rules.push(`- ביום ההגעה (${arrival.day}) התחל רק אחרי הנחיתה ב-${arrival.time} והגעה למלון.`);
   }
-  if (departure && days.includes(departure.day)) {
-    rules.push(
-      `- ביום החזרה (${departure.day}) הטיסה ב-${departure.time}: סיים כ-3 שעות לפני (נסיעה לשדה), בלי שום פריט אחרי ההמראה ובלי ימים אחריה.`,
+  if (departure && days.includes(departure.day)) rules.push(departureDayRule(departure));
+  return [...lines, ...rules].join("\n");
+}
+
+const hhmm = (minutes: number): string =>
+  `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+
+const minutesOf = (time: string): number => {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+};
+
+/**
+ * One rule per planned day that has flights inside the trip (domestic legs —
+ * saved as "outbound" by the scan — not the flights to and from home), keyed
+ * by day. Such a day came back with no items at all (the ABADA demo's 20.3,
+ * DAD→DMK→CNX, local run 2026-11-16): the model read it as "all travel".
+ * The rule asks for the transfer to the airport, the arrival and check-in
+ * after the last landing, and an evening activity when the landing leaves time.
+ */
+export function flightDayRules(flights: FlightRow[], days: string[], timeZone?: unknown): Map<string, string> {
+  const home = homeLegs(flights);
+  const isHome = (f: FlightRow) => home.outbound.some((l) => l.f === f) || home.inbound.some((l) => l.f === f);
+  const byDay = new Map<string, { from: string; to: string; dep: Clock; arr: Clock | null }[]>();
+  for (const f of flights) {
+    if (isHome(f)) continue;
+    const dep = clock(f.depart_local, f.depart_at, timeZone);
+    if (!dep || !days.includes(dep.day)) continue;
+    const arr = f.arrive_at || f.arrive_local ? clock(f.arrive_local, f.arrive_at, timeZone) : null;
+    byDay.set(dep.day, [...(byDay.get(dep.day) ?? []), { from: f.from_airport ?? "?", to: f.to_airport ?? "?", dep, arr }]);
+  }
+  const out = new Map<string, string>();
+  for (const day of [...byDay.keys()].sort()) {
+    const legs = byDay.get(day)!.sort((a, b) => (a.dep.time < b.dep.time ? -1 : 1));
+    const first = legs[0];
+    const last = legs[legs.length - 1];
+    const legsText = legs.map((l) => `${l.from} → ${l.to} ${l.dep.time}${l.arr ? `–${l.arr.time}` : ""}`).join(", ");
+    const airportBy = minutesOf(first.dep.time) - 120;
+    const toAirport =
+      airportBy >= 0
+        ? `פריט transport של נסיעה לשדה התעופה שמגיעה לשדה עד ${hhmm(airportBy)} (שעתיים לפני ההמראה)`
+        : "פריט transport של נסיעה לשדה התעופה";
+    const landed = last.arr && last.arr.day === day ? last.arr.time : null;
+    const arrival = landed ? `, פריט הגעה וצ'ק-אין במלון אחרי הנחיתה ב-${landed}` : "";
+    const evening = landed && minutesOf(landed) <= 18 * 60 ? ", ואם נשאר זמן — פעילות ערב קלה ביעד" : "";
+    out.set(
+      day,
+      `- ${day} הוא יום טיסות (${legsText}): ${toAirport}${arrival}${evening}. גם ליום הזה חייבים להיות פריטים — אל תשאיר אותו ריק.`,
     );
   }
-  return [...lines, ...rules].join("\n");
+  return out;
+}
+
+/**
+ * The return day's prompt rule. The day used to come back nearly empty (only
+ * "finish ~3h before"), so it now asks for what that morning really holds:
+ * breakfast and check-out, then a transfer that reaches the airport 3 hours
+ * before take-off (2 at the latest). An early flight leaves no time for
+ * breakfast; one before 03:00 means leaving the evening before.
+ */
+export function departureDayRule(departure: Clock): string {
+  const [h, m] = departure.time.split(":").map(Number);
+  const takeoff = h * 60 + m;
+  const airportBy = takeoff - 180;
+  const latest = takeoff - 120;
+  const head = `- ביום החזרה (${departure.day}) הטיסה ב-${departure.time}:`;
+  const tail = "בלי שום פריט אחרי ההמראה ובלי ימים אחריה.";
+  const transfer = (by: number, last: number) =>
+    `פריט transport של נסיעה לשדה התעופה שמגיעה לשדה עד ${hhmm(by)} (3 שעות לפני ההמראה, ולכל המאוחר ${hhmm(last)}) — כתוב בתיאור שלו את שעת ההגעה לשדה`;
+  if (airportBy < 0) {
+    return `${head} אחרי חצות. את הצ'ק-אאוט והנסיעה לשדה תכנן בערב של ${addDays(departure.day, -1)}: ${transfer(airportBy + 1440, latest < 0 ? latest + 1440 : latest)}. ביום ${departure.day} עצמו אל תתכנן פריטים. ${tail}`;
+  }
+  if (airportBy < 8 * 60) {
+    return `${head} טיסה מוקדמת — רק צ'ק-אאוט מהמלון ו${transfer(airportBy, latest)}. בלי ארוחת בוקר ובלי פעילויות. ${tail}`;
+  }
+  const extra = airportBy >= 12 * 60 ? " אם נשאר זמן לפני היציאה לשדה — פעילות קצרה וקרובה למלון בלבד." : "";
+  return `${head} ארוחת בוקר וצ'ק-אאוט מהמלון, ואחריהם ${transfer(airportBy, latest)}.${extra} ${tail}`;
 }
 
 /**

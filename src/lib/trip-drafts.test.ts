@@ -4,6 +4,8 @@ import {
   bookingsToDrafts,
   collectSourceDocs,
   countHe,
+  defaultTripType,
+  flightDraftFromVoucher,
   joinHebrew,
   participantRows,
   travellerToDraft,
@@ -71,6 +73,54 @@ describe("travellerToDraft", () => {
   });
 });
 
+describe("defaultTripType", () => {
+  const scanned = (name: string, type: "adult" | "child" | "infant" | null, age: number | null = null) =>
+    travellerToDraft({ name, age, age_range: type === "infant" && age == null ? "0-3" : null, preferences: [], type });
+
+  it("two adults → couple (the ABADA booking that came out as a family)", () => {
+    expect(defaultTripType([scanned("ROI COHEN", "adult"), scanned("DANA COHEN", "adult")])).toBe("couple");
+  });
+
+  it("two adults with a child → family, even with no birth date on the child", () => {
+    expect(defaultTripType([scanned("A", "adult"), scanned("B", "adult"), scanned("C", "child")])).toBe("family");
+  });
+
+  it("an infant → family", () => {
+    expect(defaultTripType([scanned("A", "adult"), scanned("B", "infant")])).toBe("family");
+  });
+
+  it("an under-18 age or range → family", () => {
+    expect(defaultTripType([scanned("A", null, 40), scanned("B", null, 12)])).toBe("family");
+    const range = { name: "B", ageMode: "range" as const, age: "", age_range: "13-17", preferences: [] };
+    expect(defaultTripType([scanned("A", null, 40), range])).toBe("family");
+  });
+
+  it("a typed age beats the booking marker", () => {
+    expect(defaultTripType([scanned("A", "adult"), scanned("B", "child", 19)])).toBe("couple");
+  });
+
+  it("one adult → friends", () => {
+    expect(defaultTripType([scanned("A", "adult")])).toBe("friends");
+  });
+
+  it("four adults → friends", () => {
+    expect(defaultTripType(["A", "B", "C", "D"].map((n) => scanned(n, "adult")))).toBe("friends");
+  });
+
+  it("travellers with no type or age count as adults", () => {
+    expect(defaultTripType([scanned("A", null), scanned("B", null)])).toBe("couple");
+  });
+
+  it("no travellers → friends, never family", () => {
+    expect(defaultTripType([])).toBe("friends");
+  });
+
+  it("ignores rows with no name (they are not saved)", () => {
+    const blank = { name: "  ", ageMode: "age" as const, age: "5", age_range: "30-49", preferences: [] };
+    expect(defaultTripType([scanned("A", "adult"), scanned("B", "adult"), blank])).toBe("couple");
+  });
+});
+
 describe("bookingsToDrafts", () => {
   it("routes each booking to its draft list with its file", () => {
     const f = file("all.pdf");
@@ -108,5 +158,38 @@ describe("isTripLimitError", () => {
     expect(isTripLimitError({ message: "duplicate key" })).toBe(false);
     expect(isTripLimitError(null)).toBe(false);
     expect(isTripLimitError("agent_trip_limit_reached")).toBe(false);
+  });
+});
+
+describe("flightDraftFromVoucher", () => {
+  const scanned = {
+    direction: "inbound",
+    airline: "EL AL",
+    flight_number: "LY84",
+    from_airport: "Bangkok (BKK)",
+    to_airport: "Tel Aviv (TLV)",
+    depart_at: "2026-03-28T17:00:00",
+    arrive_at: "2026-03-29T00:05:00",
+    from_terminal: null,
+    to_terminal: null,
+    seats: null,
+    baggage: null,
+    booking_ref: null,
+    notes: null,
+  };
+
+  it("keeps the ticket's wall clock in every process zone (no browser-zone conversion)", () => {
+    const env = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
+    const saved = env.TZ;
+    try {
+      for (const tz of ["Asia/Jerusalem", "America/Los_Angeles", "Asia/Bangkok"]) {
+        env.TZ = tz;
+        const d = flightDraftFromVoucher(scanned, null);
+        expect([d.depart_at, d.arrive_at]).toEqual(["2026-03-28T17:00", "2026-03-29T00:05"]);
+      }
+    } finally {
+      if (saved === undefined) delete env.TZ;
+      else env.TZ = saved;
+    }
   });
 });

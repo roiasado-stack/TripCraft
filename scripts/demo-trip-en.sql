@@ -57,12 +57,14 @@ BEGIN
   DELETE FROM suggestions WHERE trip_id = v_trip;
   DELETE FROM trip_updates WHERE trip_id = v_trip;
 
-  -- Flight times are on the departure airport's clock.
-  INSERT INTO flights (trip_id, direction, airline, flight_number, from_airport, to_airport, depart_at, arrive_at) VALUES
+  -- Ticket times: each the wall clock at its own airport, with the airport's zone.
+  -- The flights_local_times trigger (028) derives depart_at / arrive_at from them.
+  INSERT INTO flights (trip_id, direction, airline, flight_number, from_airport, to_airport,
+                       depart_local, arrive_local, from_tz, to_tz) VALUES
     (v_trip, 'outbound', 'ITA Airways', 'AZ 809', 'TLV', 'FCO',
-     (d0 + time '06:40') AT TIME ZONE 'Asia/Jerusalem', (d0 + time '09:35') AT TIME ZONE 'Europe/Rome'),
+     d0 + time '06:40', d0 + time '09:35', 'Asia/Jerusalem', 'Europe/Rome'),
     (v_trip, 'inbound', 'ITA Airways', 'AZ 808', 'FCO', 'TLV',
-     (d0 + 4 + time '20:05') AT TIME ZONE 'Europe/Rome', (d0 + 5 + time '00:40') AT TIME ZONE 'Asia/Jerusalem');
+     d0 + 4 + time '20:05', d0 + 5 + time '00:40', 'Europe/Rome', 'Asia/Jerusalem');
 
   INSERT INTO stays (trip_id, hotel_name, address, check_in, check_out, notes) VALUES
     (v_trip, 'Residenza Navona (family suite)', 'Via dei Coronari 12, 00186 Rome', d0, d0 + 4,

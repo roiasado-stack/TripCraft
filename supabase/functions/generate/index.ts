@@ -18,12 +18,13 @@ import {
   itineraryBookingLines,
   outsideTrip,
   partyLine,
-  splitAirportTerminal,
   staysLines,
   tripDays,
 } from "./bookings.ts";
 import { AGENDA_ITEM_SHAPE, AGENDA_RULES, sanitizeAgenda } from "./agenda.ts";
+import { type DayWindow, clipToWindow, parseDayWindow } from "./day-window.ts";
 import { extractJson, extractJsonObjects } from "./json-extract.ts";
+import { sanitizeScannedFlight } from "./scan-flight.ts";
 
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -134,6 +135,8 @@ type Body = {
   participants: Participant[];
   /** The browser's IANA zone; flight times go into the prompt on that clock (as in `ask`). */
   time_zone?: string;
+  /** For kind: "itinerary" — plan only trip days from..to (1 = start_date); validated by parseDayWindow. */
+  days?: unknown;
 };
 
 /** The trip's stays and flights, read server-side under the caller's RLS. */
@@ -199,9 +202,13 @@ const WIKIPEDIA_TITLE_RULE =
 // Upper bound on existing titles listed in the prompt (the server-side
 // duplicate filter still checks every existing row).
 const MAX_EXISTING_IN_PROMPT = 60;
+// A long trip is planned window by window, so by its last window the earlier
+// ones already hold ~20 items each; all of them have to reach the prompt, or
+// the latest days (last in day order, so cut first) get repeated.
+const MAX_EXISTING_ITINERARY_IN_PROMPT = 150;
 
 /** Existing rows with duplicate titles collapsed, in the given order, capped for the prompt. */
-function uniqueForPrompt(rows: ExistingRow[]): ExistingRow[] {
+function uniqueForPrompt(rows: ExistingRow[], limit = MAX_EXISTING_IN_PROMPT): ExistingRow[] {
   const seen = new Set<string>();
   const out: ExistingRow[] = [];
   for (const r of rows) {
@@ -209,22 +216,29 @@ function uniqueForPrompt(rows: ExistingRow[]): ExistingRow[] {
     if (!key || seen.has(key)) continue;
     seen.add(key);
     out.push(r);
-    if (out.length >= MAX_EXISTING_IN_PROMPT) break;
+    if (out.length >= limit) break;
   }
   return out;
 }
 
-function buildPrompt(body: Body, existing: ExistingRow[] = [], bookings: Bookings = { stays: [], flights: [] }): string {
+function buildPrompt(
+  body: Body,
+  existing: ExistingRow[] = [],
+  bookings: Bookings = { stays: [], flights: [] },
+  window: DayWindow | null = null,
+): string {
   const { trip, participants, kind, tune } = body;
   // Only the days the traveller is actually there: the trip dates clipped to the flights.
-  const days = tripDays(trip.start_date, trip.end_date, bookings.flights, body.time_zone);
+  const allDays = tripDays(trip.start_date, trip.end_date, bookings.flights, body.time_zone);
+  // A long trip's itinerary is asked for a few days at a time (day-window.ts).
+  const days = clipToWindow(allDays, trip.start_date, window);
   const tuneLine = tune && TUNE_HE[tune] ? `\nכיוונון מיוחד: ${TUNE_HE[tune]}` : "";
   const party = partyLine(participants, trip.trip_type);
 
   const context = `יעד: ${trip.destination}
 סוג טיול: ${trip.trip_type}
 תקציב: ${trip.budget_level ?? "לא צוין"}
-תאריכים: ${trip.start_date ?? "?"} עד ${trip.end_date ?? "?"}${days.length ? ` (${days.length} ימים)` : ""}
+תאריכים: ${trip.start_date ?? "?"} עד ${trip.end_date ?? "?"}${allDays.length ? ` (${allDays.length} ימים)` : ""}
 משתתפים:
 ${describeParticipants(participants)}${party ? `\n${party}` : ""}${tuneLine}`;
 
@@ -265,7 +279,7 @@ ${saved.map((r) => r.title).join("; ")}
     let existingLines = "";
     if (existing.length) {
       const byDay = new Map<string, string[]>();
-      for (const r of uniqueForPrompt(existing)) {
+      for (const r of uniqueForPrompt(existing, MAX_EXISTING_ITINERARY_IN_PROMPT)) {
         const day = r.day_date ?? "?";
         const time = r.start_time ? `${r.start_time.slice(0, 5)} ` : "";
         byDay.set(day, [...(byDay.get(day) ?? []), `${time}${r.title}`]);
@@ -284,14 +298,18 @@ ${scope}
 - לעולם אל תחזור על פעילות או מקום שכבר קיימים במסלול — גם לא בשם אחר, בכתיב אחר או ביום אחר.`;
     }
     const bookingBlock = itineraryBookingLines(bookings.stays, bookings.flights, days, body.time_zone);
+    const windowLine =
+      days.length && days.length < allDays.length
+        ? `\nהטיול ארוך ומתוכנן בחלקים: עכשיו תכנן רק את הימים ${days[0]} עד ${days[days.length - 1]}. שאר הימים מתוכננים בנפרד.`
+        : "";
     return `${context}${bookingBlock ? `\n${bookingBlock}` : ""}
 
-צור מסלול יומי מוצע. הימים: ${dayList}
+צור מסלול יומי מוצע. הימים: ${dayList}${windowLine}
 החזר JSON בלבד במבנה:
 {"items":[{"day_date":"YYYY-MM-DD","start_time":"HH:MM","title":"שם הפעילות בעברית","description":"פרטים קצרים","category":"activity|food|transport|free","location":"שם מקום","wikipedia_title":"כותרת הערך בוויקיפדיה האנגלית או null","lat":32.0853,"lng":34.7818}]}
 
 דרישות:
-- ${allPlanned ? "כל פריט בשעה הגיונית ביחס לפריטים הקיימים באותו יום." : "3-5 פריטים לכל יום שאתה מתכנן, בסדר הגיוני לפי שעות (בוקר/צהריים/ערב)."}
+- ${allPlanned ? "כל פריט בשעה הגיונית ביחס לפריטים הקיימים באותו יום." : "3-5 פריטים לכל יום שאתה מתכנן, בסדר הגיוני לפי שעות (בוקר/צהריים/ערב). אסור להשאיר יום שאתה מתכנן בלי פריטים — גם ימי טיסות ומעבר: נסיעה לשדה סביב הטיסות, הגעה וצ'ק-אין, ופעילות ערב ביעד אם הזמן מאפשר."}
 - התאם לקצב המשתתפים (ילדים/מבוגרים) ולהעדפות.
 - day_date חייב להיות אחד מהתאריכים שצוינו. כל הטקסט בעברית.${existingLines}
 - ${WIKIPEDIA_TITLE_RULE}
@@ -828,7 +846,7 @@ ${hintLine}החזר JSON בלבד, ללא טקסט נוסף, במבנה:
 כל פריט ב-bookings הוא אחד מהבאים.
 
 טיסות (פריט אחד עם כל קטעי הטיסה שבמסמך):
-{"doc_type":"flight","segments":[{"direction":"outbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null},{"direction":"inbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"קוד שדה תעופה בן 3 אותיות או שם","to_airport":"קוד שדה תעופה בן 3 אותיות או שם","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null}]}
+{"doc_type":"flight","segments":[{"direction":"outbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"עיר וקוד השדה, למשל Bangkok (BKK)","from_iata":"BKK","to_airport":"עיר וקוד השדה, למשל Tel Aviv (TLV)","to_iata":"TLV","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null},{"direction":"inbound","airline":"שם חברת התעופה כפי שמופיע במסמך","flight_number":"מספר טיסה","from_airport":"עיר וקוד השדה, למשל Bangkok (BKK)","from_iata":"BKK","to_airport":"עיר וקוד השדה, למשל Tel Aviv (TLV)","to_iata":"TLV","depart_at":"YYYY-MM-DDTHH:MM:00","arrive_at":"YYYY-MM-DDTHH:MM:00","from_terminal":null,"to_terminal":null,"seats":null,"baggage":null,"booking_ref":null,"notes":null}]}
 
 segments (כל קטעי הטיסה שבמסמך):
 - פריט אחד לכל קטע טיסה: טיסת ההלוך, טיסת החזור, וכל רגל של טיסת המשך (קונקשן) כקטע נפרד. אל תחזיר רק את הטיסה הראשונה.
@@ -837,6 +855,8 @@ segments (כל קטעי הטיסה שבמסמך):
 - direction לכל קטע: "outbound" אם הקטע יוצא מישראל, "inbound" אם הוא נוחת בישראל; רגל של טיסת המשך מקבלת את הכיוון של המסלול שהיא חלק ממנו (הלוך או חזור). אם לא ברור, "outbound".
 - seats: המושבים של כל הנוסעים בקטע הזה, אם מודפסים.
 - from_airport / to_airport: שם העיר וקוד השדה בלבד, למשל "Hangzhou (HGH)". בלי מילת "Terminal" ובלי מספר הטרמינל.
+- from_iata / to_iata: קוד IATA בן 3 אותיות לועזיות של שדה ההמראה ושל שדה הנחיתה (למשל "BKK", "TLV", "CNX"), כפי שמודפס במסמך או לפי שם השדה המודפס. אם לא ברור איזה שדה (למשל רק "Bangkok", ויש בעיר שני שדות) — null.
+- depart_at: שעת ההמראה המקומית בשדה ההמראה, בדיוק כפי שמודפסת. arrive_at: שעת הנחיתה המקומית בשדה הנחיתה, בדיוק כפי שמודפסת (כולל תאריך הנחיתה, גם כשהוא למחרת). בלי אזור זמן, בלי Z ובלי היסט (+07:00) — ואל תמיר בין אזורי זמן.
 - from_terminal / to_terminal: הטרמינל בלבד (למשל "3" או "A") כשהוא מודפס במסמך — גם אם הוא כתוב באותה שורה עם שם השדה.
 
 מלון (פריט נפרד לכל מלון):
@@ -940,28 +960,6 @@ ${AGENDA_RULES}`,
         return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
       };
 
-      // Airport names were capped at 10 characters, which cut "Hangzhou (HGH)
-      // Terminal 3" to "Hangzhou (" and lost the terminal with it.
-      const sanitizeFlight = (raw: Record<string, unknown>) => {
-        const from = splitAirportTerminal(str(raw.from_airport, 80), str(raw.from_terminal, 20));
-        const to = splitAirportTerminal(str(raw.to_airport, 80), str(raw.to_terminal, 20));
-        return {
-        direction: raw.direction === "inbound" ? "inbound" : "outbound",
-        airline: str(raw.airline, 120),
-        flight_number: str(raw.flight_number, 20),
-        from_airport: from.airport,
-        to_airport: to.airport,
-        depart_at: isoDateTime(raw.depart_at),
-        arrive_at: isoDateTime(raw.arrive_at),
-        from_terminal: from.terminal,
-        to_terminal: to.terminal,
-        seats: str(raw.seats, 60),
-        baggage: str(raw.baggage, 120),
-        booking_ref: str(raw.booking_ref, 60),
-        notes: str(raw.notes, 500),
-        };
-      };
-
       // Every flight segment in the document (outbound, return, connection
       // legs), across all flight bookings. Each booking falls back to a lone
       // `data` object if the model answered in the old single-flight shape. A
@@ -970,7 +968,7 @@ ${AGENDA_RULES}`,
       // flight printed on each passenger's page) is kept once. Sorted by
       // departure only when every segment has one, otherwise the model's
       // (already chronological) order is kept.
-      let segments: ReturnType<typeof sanitizeFlight>[] = [];
+      let segments: ReturnType<typeof sanitizeScannedFlight>[] = [];
       {
         const rawSegments: unknown[] = ofType("flight").flatMap((b) =>
           Array.isArray(b.segments) && b.segments.length ? (b.segments as unknown[]) : isObj(b.data) ? [b.data] : [],
@@ -978,7 +976,7 @@ ${AGENDA_RULES}`,
         const seen = new Set<string>();
         segments = rawSegments
           .filter(isObj)
-          .map(sanitizeFlight)
+          .map(sanitizeScannedFlight)
           .filter((s) => s.flight_number || (s.from_airport && s.to_airport))
           .filter((s) => {
             if (!s.flight_number || !s.depart_at) return true;
@@ -1146,6 +1144,36 @@ ${AGENDA_RULES}`,
         status: 404,
         headers: { ...cors, "Content-Type": "application/json" },
       });
+    }
+
+    // The itinerary plans the trip's real dates (read here under RLS, not taken
+    // from the request), optionally one `days` window of them at a time. A bad
+    // window is refused before any model call (the reservation is released in
+    // finally), so it can't widen what one capped call plans.
+    let dayWindow: DayWindow | null = null;
+    if (body.kind === "itinerary") {
+      const { data: dates, error: datesError } = await supabase
+        .from("trips")
+        .select("start_date, end_date")
+        .eq("id", body.trip_id)
+        .maybeSingle();
+      const tripDates = (dates ?? null) as { start_date: string | null; end_date: string | null } | null;
+      // Unreadable dates: fail closed rather than plan from the request's (the hold is released in finally).
+      if (datesError || !tripDates) {
+        return new Response(JSON.stringify({ error: "trip not found" }), {
+          status: 404,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+      body.trip = { ...body.trip, start_date: tripDates.start_date, end_date: tripDates.end_date };
+      const parsedWindow = parseDayWindow(body.days, tripDates.start_date, tripDates.end_date);
+      if (!parsedWindow.ok) {
+        return new Response(JSON.stringify({ error: "bad_window" }), {
+          status: 400,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+      dayWindow = parsedWindow.window;
     }
 
     // Used by kind:"geocode" (Nominatim lookup), which needs a Latin-script
@@ -1421,7 +1449,7 @@ Never answer with the article of the surrounding city, region or country — e.g
         const [stays, flights] = await Promise.all([
           supabase.from("stays").select("hotel_name, address, check_in, check_out").eq("trip_id", body.trip_id).limit(50),
           body.kind === "itinerary"
-            ? supabase.from("flights").select("direction, from_airport, to_airport, depart_at, arrive_at").eq("trip_id", body.trip_id).limit(50)
+            ? supabase.from("flights").select("direction, from_airport, to_airport, depart_at, arrive_at, depart_local, arrive_local").eq("trip_id", body.trip_id).limit(50)
             : Promise.resolve({ data: [] }),
         ]);
         bookings.stays = (stays.data ?? []) as StayRow[];
@@ -1429,6 +1457,17 @@ Never answer with the article of the surrounding city, region or country — e.g
       } catch (e) {
         console.error("Bookings lookup threw", e);
       }
+    }
+
+    // A window that falls wholly outside the days the traveller is there
+    // (before landing, after flying home) has nothing to plan: no model call.
+    if (
+      dayWindow &&
+      !clipToWindow(tripDays(body.trip.start_date, body.trip.end_date, bookings.flights, body.time_zone), body.trip.start_date, dayWindow).length
+    ) {
+      return new Response(JSON.stringify({ ok: true, inserted: 0, skipped: "no_days" }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
     }
 
     const runStart = Date.now();
@@ -1442,7 +1481,7 @@ Never answer with the article of the surrounding city, region or country — e.g
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        messages: [{ role: "user", content: buildPrompt(body, existing, bookings) }],
+        messages: [{ role: "user", content: buildPrompt(body, existing, bookings, dayWindow) }],
       }),
     });
     const latencyMs = Date.now() - runStart;
@@ -1633,7 +1672,12 @@ Never answer with the article of the surrounding city, region or country — e.g
       inserted = rows.length;
       dupStats = `dup_dropped=${dupDropped} photo_dup_cleared=${cleared} existing=${existing.length}`;
     } else if (body.kind === "itinerary") {
-      const tripDayList = tripDays(body.trip.start_date, body.trip.end_date, bookings.flights, body.time_zone);
+      // Rows outside this call's window are dropped like rows outside the trip.
+      const tripDayList = clipToWindow(
+        tripDays(body.trip.start_date, body.trip.end_date, bookings.flights, body.time_zone),
+        body.trip.start_date,
+        dayWindow,
+      );
       const flightTimes = flightWindow(bookings.flights, body.time_zone);
       const built = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;

@@ -7,7 +7,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 export default tseslint.config(
   { ignores: ["dist", "node_modules", "supabase/functions", "evals", ".claude", "design", "docs", "presentation"] },
   {
-    files: ["src/**/*.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}", "api/**/*.ts"],
     extends: [tseslint.configs.base],
     plugins: { "react-hooks": reactHooks },
     rules: {

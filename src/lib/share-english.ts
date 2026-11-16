@@ -1,4 +1,4 @@
-import { parseLocalDate } from "@/lib/trip-dates";
+import { isInstant, parseLocalDate } from "@/lib/trip-dates";
 
 /**
  * English for the public share page only (`/share/:slug?lang=en`) — a demo for
@@ -22,11 +22,14 @@ export const SHARE_EN = {
   agencyLogo: (name: string | null) => (name ? `${name} logo` : "Agency logo"),
   days: (n: number) => (n === 1 ? "1 day" : `${n} days`),
   flights: "Flights",
+  departs: "Departs",
+  lands: "Lands",
   stays: "Where you're staying",
   itinerary: "Itinerary",
   suggestions: "Recommended",
   day: (n: number) => `Day ${n}`,
   builtWith: "Built with",
+  savePdf: "Save as PDF",
   guide: "Your guide",
   whatsappTo: (name: string) => `WhatsApp ${name}`,
   map: "Map",
@@ -52,7 +55,7 @@ export const SUGGESTION_KINDS_EN: Record<string, string> = {
 // the traveller's calendar day, parsed as local.
 export function formatDateEn(date?: string | null) {
   if (!date) return "";
-  return (parseLocalDate(date) ?? new Date(date)).toLocaleDateString("en-GB", {
+  return ((isInstant(date) ? null : parseLocalDate(date)) ?? new Date(date)).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",

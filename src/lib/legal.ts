@@ -22,7 +22,7 @@ export const LEGAL = {
    *  2026-11-09: the encrypted nightly backup in the private repo tripcraft-backups (GitHub
    *  artifacts, retention-days: 30). Supabase Free keeps none. Update if either changes. */
   backupRetention: "30" as string, // widened so the "0" branch on /privacy still type-checks
-  lastUpdated: "9 בנובמבר 2026",
+  lastUpdated: "16 בנובמבר 2026",
 } as const;
 
 export const isPlaceholder = (value: string) => value.startsWith("[");

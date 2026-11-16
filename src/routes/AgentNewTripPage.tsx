@@ -3,18 +3,19 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, CalendarDays, Check, FileUp, PencilLine, Plus, Trash2, Users, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { Button, Field, GroupedList, Input } from "@/components/ui";
+import { Button, Field, GroupedList, Input, Segmented } from "@/components/ui";
 import { ImportBookings, personKey, type BookingsImportResult } from "@/components/ImportBookings";
 import { ImportParticipants } from "@/components/ImportParticipants";
 import type { ParsedParticipant } from "@/lib/import-participants";
 import type { ParsedItem } from "@/lib/import-itinerary";
-import { formatDayHeb } from "@/lib/trip-options";
+import { formatDayHeb, TRIP_TYPES, type TripType } from "@/lib/trip-options";
 import { sanitizeAgenda } from "../../supabase/functions/generate/agenda";
 import { createImportedTrip, uploadSourceDocs } from "@/lib/create-trip";
 import { documentsSource } from "@/lib/agency-import";
 import {
   collectSourceDocs,
   countHe,
+  defaultTripType,
   joinHebrew,
   travellerToDraft,
   type PartDraft,
@@ -26,6 +27,8 @@ import { AGE_RANGES } from "@/lib/trip-options";
 import { normalizePhone } from "@/lib/whatsapp";
 
 const STEP_LABELS = ["מסמכים", "בדיקה", "שליחה"];
+// Labels only: four emoji-prefixed segments don't fit a phone-width row.
+const TRIP_TYPE_OPTIONS = TRIP_TYPES.map(({ value, label }) => ({ value, label }));
 
 /**
  * "New trip from documents" (agency beta, phase 2): 1) the documents, through
@@ -56,6 +59,9 @@ export default function AgentNewTripPage() {
   const [scans, setScans] = useState<BookingsImportResult[]>([]);
   // The programme found in the documents; the agent can drop whole days before creating.
   const [itinerary, setItinerary] = useState<ParsedItem[]>([]);
+  // The trip type follows the travellers until the agent picks one (abada-promises phase 4).
+  const [tripTypePick, setTripTypePick] = useState<TripType | null>(null);
+  const tripType = tripTypePick ?? defaultTripType(travellers);
 
   const phoneInvalid = clientPhone.trim() !== "" && !normalizePhone(clientPhone);
   // A voucher scanned twice counts (and is created) once: dedupeBookings.
@@ -122,7 +128,7 @@ export default function AgentNewTripPage() {
     let savedStays: StayDraft[] = [];
     let clientError = false;
     try {
-      const res = await createImportedTrip(user.id, imp, { trip_type: "family", budget_level: "mid", cover_emoji: "🌴" });
+      const res = await createImportedTrip(user.id, imp, { trip_type: tripType, budget_level: "mid", cover_emoji: "🌴" });
       tripId = res.trip.id;
       failedChildren = res.failedChildren;
       savedStays = res.savedStays;
@@ -321,6 +327,13 @@ export default function AgentNewTripPage() {
               ייבוא נוסעים מקובץ (Excel / PDF)
             </button>
           </GroupedList>
+
+          <Field
+            label="סוג הטיול"
+            hint={tripTypePick ? undefined : "נבחר לפי הנוסעים — אפשר לשנות. ה-AI מתאים את ההמלצות לסוג הטיול."}
+          >
+            <Segmented options={TRIP_TYPE_OPTIONS} value={tripType} onChange={setTripTypePick} />
+          </Field>
 
           {itineraryDays.length > 0 && (
             <div className="flex flex-col gap-2">

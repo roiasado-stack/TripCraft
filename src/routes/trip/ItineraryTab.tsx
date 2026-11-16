@@ -12,7 +12,7 @@ import { directionsUrl, isSafeHttpUrl, mapsUrl, resolveMapUrl } from "@/lib/maps
 import { useToast } from "@/hooks/use-toast";
 import { ambientPhoto } from "@/lib/photos";
 import { FillPhotos } from "@/components/FillPhotos";
-import { aiErrorMessage, generateContent, lookupKosher, searchCoordinates, searchPhoto } from "@/lib/ai";
+import { generateItinerary, itineraryFailureMessage, lookupKosher, searchCoordinates, searchPhoto } from "@/lib/ai";
 import { daysBetween, formatDayHeb, ITINERARY_CATEGORIES, itineraryCategory } from "@/lib/trip-options";
 import { TripMap, type TripMapItem } from "@/components/TripMap";
 import { localDateString, parseLocalDate } from "@/lib/trip-dates";
@@ -73,6 +73,7 @@ export default function ItineraryTab() {
   const [items, setItems] = useState<ItineraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [editing, setEditing] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -214,14 +215,20 @@ export default function ItineraryTab() {
 
   const generate = async () => {
     setGenerating(true);
-    const res = await generateContent(trip, participants, "itinerary");
+    // A long trip is built a few days per call; each saved window shows up right away.
+    const res = await generateItinerary(trip, participants, {
+      plannedDays: items.map((i) => i.day_date),
+      onProgress: setProgress,
+      onWindowDone: load,
+    });
     setGenerating(false);
+    setProgress(null);
     if (res.ok) {
       toast.success(`נוצר מסלול מוצע (${res.inserted} פריטים) ✨`);
-      load();
     } else {
-      toast.error(aiErrorMessage(res.error, "יצירת המסלול נכשלה. נסו שוב."));
+      toast.error(itineraryFailureMessage(res, trip.start_date && trip.end_date ? daysBetween(trip.start_date, trip.end_date) : []));
     }
+    load();
   };
 
   const newItem = (day: string): Draft => ({
@@ -268,6 +275,13 @@ export default function ItineraryTab() {
           )}
         </div>
       </div>
+
+      {generating && progress && (
+        <div role="status" aria-live="polite" className="type-footnote mb-3 flex items-center gap-2 rounded-2xl bg-muted/60 px-4 py-2.5 font-semibold">
+          <Spinner className="size-4" />
+          {progress}
+        </div>
+      )}
 
       {canEdit && (
         <FillPhotos
@@ -415,7 +429,7 @@ export default function ItineraryTab() {
           <SheetRow
             icon={<Sparkles className="size-5" />}
             label="מסלול מוצע עם AI"
-            hint={generating ? "בתהליך… זה לוקח כמה שניות" : "לפי המשתתפים, ההעדפות והתאריכים"}
+            hint={generating ? (progress ?? "בתהליך… זה לוקח כמה שניות") : "לפי המשתתפים, ההעדפות והתאריכים"}
             onClick={() => {
               setAddOpen(false);
               if (!generating) generate();

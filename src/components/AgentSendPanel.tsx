@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronLeft, ChevronRight, Clock, Copy, ExternalLink, Link2Off, MessageCircle, UserCheck } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Clock, Copy, ExternalLink, FileDown, Link2Off, MessageCircle, UserCheck } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -11,6 +11,7 @@ import { Flag } from "@/components/Flag";
 import { clientMessage, normalizePhone, waMeUrl } from "@/lib/whatsapp";
 import { isValidEmail, normalizeEmail, sameLeadEmail } from "@/lib/client-email";
 import { dateRangeHeb } from "@/lib/trip-dates";
+import { sharePrintUrl } from "@/lib/share-print";
 
 /** Shown in the preview until the links exist (they're created on send, never on open). */
 const SHARE_PLACEHOLDER = "[קישור לדף הטיול]";
@@ -170,6 +171,8 @@ export function AgentSendPanel({
     );
 
   const realShareUrl = trip.share_slug ? `${window.location.origin}/share/${trip.share_slug}` : "";
+  // The PDF is the public page printed, so it exists only once the page is shared.
+  const printUrl = trip.is_shared ? sharePrintUrl(window.location.origin, trip.share_slug) : "";
   const emailNow = normalizeEmail(clientEmail);
   const emailInvalid = !!emailNow && !isValidEmail(emailNow);
   // A live link made for another address is replaced on the next send.
@@ -531,28 +534,41 @@ export function AgentSendPanel({
           </Button>
         </div>
 
-        {(!embedded || (trip.is_shared && realShareUrl)) && (
-          <GroupedList>
-            {trip.is_shared && realShareUrl && (
-              <a href={realShareUrl} target="_blank" rel="noopener noreferrer" className={actionRow}>
-                <ExternalLink className="size-5" />
-                מה הנוסעים רואים
-              </a>
-            )}
-            {!embedded && (
-              <>
-                <button type="button" onClick={() => navigate(`/agency/trips/${trip.id}`)} className={actionRow}>
-                  <ChevronLeft className="size-5" />
-                  לטיול
-                </button>
-                <button type="button" onClick={() => navigate("/agency")} className={actionRow}>
-                  <Check className="size-5" />
-                  סיום
-                </button>
-              </>
-            )}
-          </GroupedList>
-        )}
+        <GroupedList>
+          {trip.is_shared && realShareUrl && (
+            <a href={realShareUrl} target="_blank" rel="noopener noreferrer" className={actionRow}>
+              <ExternalLink className="size-5" />
+              מה הנוסעים רואים
+            </a>
+          )}
+          {/* The share page opens in a new tab and prints itself once loaded (?print=1). */}
+          {printUrl ? (
+            <a href={printUrl} target="_blank" rel="noopener noreferrer" className={actionRow}>
+              <FileDown className="size-5" />
+              PDF ללקוח
+            </a>
+          ) : (
+            <div className="flex min-h-12 items-start gap-3 px-4 py-3 text-muted-foreground" aria-disabled="true">
+              <FileDown className="mt-0.5 size-5 shrink-0" aria-hidden />
+              <div className="min-w-0">
+                <div className="type-body">PDF ללקוח</div>
+                <p className="type-footnote">יהיה זמין אחרי ששולחים או מעתיקים את ההודעה, כשדף הטיול נפתח לצפייה.</p>
+              </div>
+            </div>
+          )}
+          {!embedded && (
+            <>
+              <button type="button" onClick={() => navigate(`/agency/trips/${trip.id}`)} className={actionRow}>
+                <ChevronLeft className="size-5" />
+                לטיול
+              </button>
+              <button type="button" onClick={() => navigate("/agency")} className={actionRow}>
+                <Check className="size-5" />
+                סיום
+              </button>
+            </>
+          )}
+        </GroupedList>
       </div>
     </div>
   );

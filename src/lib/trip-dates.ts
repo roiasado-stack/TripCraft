@@ -12,6 +12,15 @@ export function parseLocalDate(value: string | null | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * True for a timestamp that carries an offset ("…T21:05:00+00:00", "…Z"): an instant,
+ * whose date prefix is the UTC day — not the traveller's. Date-only strings and
+ * wall-clock times without an offset ("2026-03-29T00:05:00") are false.
+ */
+export function isInstant(value: string | null | undefined): boolean {
+  return /T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(value ?? "");
+}
+
 function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
