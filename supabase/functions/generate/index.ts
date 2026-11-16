@@ -1469,7 +1469,7 @@ Never answer with the article of the surrounding city, region or country — e.g
         const [stays, flights] = await Promise.all([
           supabase.from("stays").select("hotel_name, address, check_in, check_out").eq("trip_id", body.trip_id).limit(50),
           body.kind === "itinerary"
-            ? supabase.from("flights").select("direction, from_airport, to_airport, depart_at, arrive_at").eq("trip_id", body.trip_id).limit(50)
+            ? supabase.from("flights").select("direction, from_airport, to_airport, depart_at, arrive_at, depart_local, arrive_local").eq("trip_id", body.trip_id).limit(50)
             : Promise.resolve({ data: [] }),
         ]);
         bookings.stays = (stays.data ?? []) as StayRow[];

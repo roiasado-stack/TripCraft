@@ -13,6 +13,8 @@ import {
   type FlightRow,
   type StayRow,
 } from "../../supabase/functions/generate/bookings";
+import { wallToInstant } from "../../supabase/functions/_shared/flight-time";
+import { zoneOf } from "../../supabase/functions/_shared/airport-zones";
 
 // The production case: Krakow 13–16/11, Warsaw 16–19/11, land KRK 13/11 09:30,
 // fly home from WAW 19/11 21:40 — entered in an Israeli browser (IST, UTC+2).
@@ -244,5 +246,77 @@ describe("splitAirportTerminal", () => {
     expect(splitAirportTerminal("TLV", "3")).toEqual({ airport: "TLV", terminal: "3" });
     expect(splitAirportTerminal("Terminal 3", null)).toEqual({ airport: "Terminal 3", terminal: null });
     expect(splitAirportTerminal(null, null)).toEqual({ airport: null, terminal: null });
+  });
+});
+
+// The ABADA case after migration 028: seven legs, each with the ticket's wall clock at its
+// own airport and the instants the trigger derives from them. Domestic legs are saved as
+// "outbound" (CLAUDE.md, #42). LY84 lands in Israel at 00:05 on the next day, and TLV→BKK
+// lands 14:50 Bangkok time — 09:50 on an Israeli clock, which the prompt must never state.
+describe("multi-stop trip with the ticket's local times", () => {
+  const ticket = (direction: string, from: string, to: string, depart: string, arrive: string): FlightRow => ({
+    direction,
+    from_airport: from,
+    to_airport: to,
+    depart_local: `${depart}:00`,
+    arrive_local: `${arrive}:00`,
+    depart_at: wallToInstant(depart, zoneOf(from))!.toISOString(),
+    arrive_at: wallToInstant(arrive, zoneOf(to))!.toISOString(),
+  });
+  const abada: FlightRow[] = [
+    ticket("outbound", "TLV", "BKK", "2026-03-14T22:40", "2026-03-15T14:50"),
+    ticket("outbound", "BKK", "HAN", "2026-03-18T09:00", "2026-03-18T10:55"),
+    ticket("outbound", "HAN", "DAD", "2026-03-21T08:00", "2026-03-21T09:20"),
+    ticket("outbound", "DAD", "BKK", "2026-03-23T19:30", "2026-03-23T21:10"),
+    ticket("outbound", "BKK", "CNX", "2026-03-24T07:00", "2026-03-24T08:15"),
+    ticket("outbound", "CNX", "BKK", "2026-03-27T21:00", "2026-03-27T22:15"),
+    ticket("inbound", "BKK", "TLV", "2026-03-28T17:00", "2026-03-29T00:05"),
+  ];
+  const ZONES = ["Asia/Jerusalem", "America/Los_Angeles", "Asia/Bangkok"];
+
+  it("the fixture's instants are real (TLV→BKK 11h10, LY84 lands 21:05 UTC)", () => {
+    expect(abada[0].arrive_at).toBe("2026-03-15T07:50:00.000Z");
+    expect(abada[6].arrive_at).toBe("2026-03-28T21:05:00.000Z");
+  });
+
+  it.each(ZONES)("lands and takes off on the ticket's clock, viewed from %s", (tz) => {
+    expect(flightWindow(abada, tz)).toEqual({
+      arrival: { day: "2026-03-15", time: "14:50" },
+      departure: { day: "2026-03-28", time: "17:00" },
+    });
+    expect(flightWindow([...abada].reverse(), tz).arrival).toEqual({ day: "2026-03-15", time: "14:50" });
+  });
+
+  it.each(ZONES)("plans every day from landing to the flight home, viewed from %s", (tz) => {
+    const days = tripDays("2026-03-14", "2026-03-29", abada, tz);
+    expect(days[0]).toBe("2026-03-15");
+    expect(days[days.length - 1]).toBe("2026-03-28");
+    expect(days).toHaveLength(14);
+  });
+
+  it.each(ZONES)("writes the ticket times and the return-day rule into the prompt, viewed from %s", (tz) => {
+    const days = tripDays("2026-03-14", "2026-03-29", abada, tz);
+    const text = itineraryBookingLines([], abada, days, tz);
+    expect(text).toContain("- הלוך: TLV → BKK, המראה 2026-03-14 22:40, נחיתה 2026-03-15 14:50");
+    expect(text).toContain("- טיסת פנים: BKK → HAN, המראה 2026-03-18 09:00, נחיתה 2026-03-18 10:55");
+    expect(text).toContain("- טיסת פנים: CNX → BKK, המראה 2026-03-27 21:00, נחיתה 2026-03-27 22:15");
+    expect(text).toContain("- חזור: BKK → TLV, המראה 2026-03-28 17:00, נחיתה 2026-03-29 00:05");
+    expect(text).toContain("ביום ההגעה (2026-03-15) התחל רק אחרי הנחיתה ב-14:50");
+    expect(text).not.toContain("ביום ההגעה (2026-03-24)");
+    // Phase 3's return-day rule: at the airport 3h before take-off, 2h at the latest.
+    expect(text).toContain("ביום החזרה (2026-03-28) הטיסה ב-17:00");
+    expect(text).toContain("עד 14:00 (3 שעות לפני ההמראה, ולכל המאוחר 15:00)");
+    expect(text).not.toContain("09:50");
+  });
+
+  it("drops items before landing and from take-off on, keeps the days between", () => {
+    const tz = "America/Los_Angeles";
+    const days = tripDays("2026-03-14", "2026-03-29", abada, tz);
+    const w = flightWindow(abada, tz);
+    expect(outsideTrip({ day_date: "2026-03-15", start_time: "12:00" }, days, w)).toBe(true);
+    expect(outsideTrip({ day_date: "2026-03-28", start_time: "17:30" }, days, w)).toBe(true);
+    expect(outsideTrip({ day_date: "2026-03-29", start_time: "09:00" }, days, w)).toBe(true);
+    expect(outsideTrip({ day_date: "2026-03-15", start_time: "16:00" }, days, w)).toBe(false);
+    expect(outsideTrip({ day_date: "2026-03-24", start_time: "10:00" }, days, w)).toBe(false);
   });
 });

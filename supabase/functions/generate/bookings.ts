@@ -6,7 +6,7 @@
  * src/lib/generate-bookings.test.ts.
  */
 
-import { formatWallClock } from "../ask/prompt.ts";
+import { flightWallClock } from "../ask/prompt.ts";
 
 export type StayRow = {
   hotel_name: string | null;
@@ -19,8 +19,12 @@ export type FlightRow = {
   direction: string | null;
   from_airport: string | null;
   to_airport: string | null;
+  /** True instants (028 derives them from the locals and zones): ordering and gaps only. */
   depart_at: string | null;
   arrive_at: string | null;
+  /** The ticket's wall clock at each airport (028): every day and time the prompt states. */
+  depart_local?: string | null;
+  arrive_local?: string | null;
 };
 
 export type PartyMember = { age: number | null; age_range: string | null };
@@ -44,9 +48,17 @@ export function dayRange(start: string | null, end: string | null): string[] {
 
 type Clock = { day: string; time: string };
 
-function clock(value: string | null, timeZone?: unknown): Clock | null {
-  const s = formatWallClock(value, timeZone);
+/** A ticket time as a day and HH:MM: the row's local time when it has one, else the instant on the viewer's clock. */
+function clock(local: string | null | undefined, instant: string | null, timeZone?: unknown): Clock | null {
+  const s = flightWallClock(local, instant, timeZone);
   return s ? { day: s.slice(0, 10), time: s.slice(11, 16) } : null;
+}
+
+/** When the leg lands, or when it leaves if the landing time is missing. */
+function landing(f: FlightRow, timeZone?: unknown): Clock | null {
+  return f.arrive_at || f.arrive_local
+    ? clock(f.arrive_local, f.arrive_at, timeZone)
+    : clock(f.depart_local, f.depart_at, timeZone);
 }
 
 // A leg that leaves within this long of the previous leg's landing is a
@@ -96,14 +108,17 @@ function homeLegs(flights: FlightRow[]): { outbound: Leg[]; inbound: Leg[] } {
 /**
  * Landing at the destination (the end of the journey from home, so a connection
  * counts but a later domestic flight doesn't) and take-off for home (the start
- * of the journey back), on the clock the app shows them in.
+ * of the journey back), each on its own airport's clock as printed on the ticket
+ * (rows without local times fall back to the viewer's clock).
  */
 export function flightWindow(flights: FlightRow[], timeZone?: unknown): { arrival: Clock | null; departure: Clock | null } {
   const { outbound, inbound } = homeLegs(flights);
   const last = outbound[outbound.length - 1];
-  const arrivalAt = last ? (last.f.arrive_at ?? last.f.depart_at) : null;
-  const departureAt = inbound.find((l) => l.f.depart_at)?.f.depart_at ?? null;
-  return { arrival: clock(arrivalAt, timeZone), departure: clock(departureAt, timeZone) };
+  const takeoff = inbound.find((l) => l.f.depart_at || l.f.depart_local)?.f;
+  return {
+    arrival: last ? landing(last.f, timeZone) : null,
+    departure: takeoff ? clock(takeoff.depart_local, takeoff.depart_at, timeZone) : null,
+  };
 }
 
 /**
@@ -187,8 +202,8 @@ export function itineraryBookingLines(stays: StayRow[], flights: FlightRow[], da
     const kind = (f: FlightRow) =>
       home.outbound.some((l) => l.f === f) ? "הלוך" : home.inbound.some((l) => l.f === f) ? "חזור" : "טיסת פנים";
     for (const f of [...fl].sort((a, b) => ((a.depart_at ?? "") < (b.depart_at ?? "") ? -1 : 1))) {
-      const dep = formatWallClock(f.depart_at, timeZone);
-      const arr = formatWallClock(f.arrive_at, timeZone);
+      const dep = flightWallClock(f.depart_local, f.depart_at, timeZone);
+      const arr = flightWallClock(f.arrive_local, f.arrive_at, timeZone);
       lines.push(
         `- ${kind(f)}: ${f.from_airport ?? "?"} → ${f.to_airport ?? "?"}` +
           `${dep ? `, המראה ${dep}` : ""}${arr ? `, נחיתה ${arr}` : ""}`,

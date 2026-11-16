@@ -23,15 +23,14 @@ import { LegalLinks } from "@/components/LegalLinks";
 import { ShareEnglishContext } from "@/hooks/use-share-english";
 import {
   formatDateEn,
-  formatDateTimeEn,
   formatDayEn,
   isEnglishShare,
   SHARE_EN,
   SUGGESTION_KINDS_EN,
 } from "@/lib/share-english";
+import { flightStamp } from "@/lib/flight-display";
 import {
   daysBetween,
-  formatDateTimeHeb,
   formatDayHeb,
   formatHeb,
   itineraryCategory,
@@ -276,7 +275,18 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
                   <div dir="ltr" className={cn("type-headline truncate", en ? "text-start" : "text-end")}>
                     <bdi>{f.from_airport || "—"}</bdi> → <bdi>{f.to_airport || "—"}</bdi>
                   </div>
-                  {f.depart_at && <div className="type-footnote text-muted-foreground">{(en ? formatDateTimeEn : formatDateTimeHeb)(f.depart_at)}</div>}
+                  {/* The ticket's wall clock at each airport — never the visitor's zone. */}
+                  {(f.depart_at || f.depart_local) && (
+                    <div className="type-footnote text-muted-foreground">
+                      {en?.departs ?? "המראה"} <bdi className="tabular-nums">{flightStamp(f.depart_local, f.depart_at, en ? "en" : "he")}</bdi>
+                      {(f.arrive_at || f.arrive_local) && (
+                        <>
+                          {" · "}
+                          {en?.lands ?? "נחיתה"} <bdi className="tabular-nums">{flightStamp(f.arrive_local, f.arrive_at, en ? "en" : "he")}</bdi>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {(f.airline || f.flight_number) && (
                   <span dir="auto" className="type-footnote max-w-[40%] shrink-0 truncate text-muted-foreground">

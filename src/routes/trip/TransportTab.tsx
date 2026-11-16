@@ -18,7 +18,8 @@ import {
   stayMapUrl,
   taxiSearchUrl,
 } from "@/lib/maps";
-import { formatDateTimeHeb, formatHeb, formatTimeHeb } from "@/lib/trip-options";
+import { formatDateTimeHeb } from "@/lib/trip-options";
+import { durationHeb, flightDurationMinutes, flightEndHeb } from "@/lib/flight-display";
 import { dateRangeHeb } from "@/lib/trip-dates";
 
 // A native datetime-local input's hour format follows the OS/browser locale,
@@ -260,17 +261,6 @@ function TimeSelect({
   );
 }
 
-/** Minutes between two ISO timestamps, as "5ש 20ד". */
-function duration(from?: string | null, to?: string | null): string | null {
-  if (!from || !to) return null;
-  const ms = new Date(to).getTime() - new Date(from).getTime();
-  if (!isFinite(ms) || ms <= 0) return null;
-  const mins = Math.round(ms / 60000);
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return h ? `${h}ש${m ? ` ${m}ד` : ""}` : `${m}ד`;
-}
-
 type SheetAction = {
   icon: JSX.Element;
   label: string;
@@ -493,7 +483,10 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
           <p className="type-footnote px-4 py-3 text-muted-foreground">לא הוזנו טיסות.</p>
         ) : (
           flights.map((f) => {
-            const dur = duration(f.depart_at, f.arrive_at);
+            // The ticket's own wall clock at each airport, never the viewer's zone.
+            const dur = durationHeb(flightDurationMinutes(f));
+            const dep = flightEndHeb(f.depart_local, f.depart_at);
+            const arr = flightEndHeb(f.arrive_local, f.arrive_at);
             return (
               <div key={f.id} className="px-4 py-3">
                 <div className="flex items-center gap-2">
@@ -542,10 +535,10 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
                     <div className="type-title line-clamp-2 [overflow-wrap:anywhere]">
                       <bdi>{f.from_airport || "—"}</bdi>
                     </div>
-                    <div className="type-footnote font-semibold tabular-nums">{formatTimeHeb(f.depart_at)}</div>
+                    <div className="type-footnote font-semibold tabular-nums">{dep.time}</div>
                     {/* A Hebrew date inside the left-to-right route keeps its own direction. */}
                     <div className="type-footnote text-muted-foreground">
-                      <bdi dir="rtl">{formatHeb(f.depart_at)}</bdi>
+                      <bdi dir="rtl">{dep.date}</bdi>
                     </div>
                     {f.from_terminal && (
                       <div className="type-footnote text-muted-foreground">
@@ -562,9 +555,9 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
                     <div className="type-title line-clamp-2 [overflow-wrap:anywhere]">
                       <bdi>{f.to_airport || "—"}</bdi>
                     </div>
-                    <div className="type-footnote font-semibold tabular-nums">{formatTimeHeb(f.arrive_at)}</div>
+                    <div className="type-footnote font-semibold tabular-nums">{arr.time}</div>
                     <div className="type-footnote text-muted-foreground">
-                      <bdi dir="rtl">{formatHeb(f.arrive_at)}</bdi>
+                      <bdi dir="rtl">{arr.date}</bdi>
                     </div>
                     {f.to_terminal && (
                       <div className="type-footnote text-muted-foreground">

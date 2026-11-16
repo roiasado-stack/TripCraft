@@ -22,7 +22,8 @@ import {
   templateTrip,
 } from "@/lib/trip-template";
 import { isTripLimitError, TRIP_LIMIT_MESSAGE } from "@/lib/trip-drafts";
-import { formatDateTimeHeb, itineraryCategory } from "@/lib/trip-options";
+import { itineraryCategory } from "@/lib/trip-options";
+import { flightStamp, isUpcomingFlight } from "@/lib/flight-display";
 import {
   countdownLabel,
   dateRangeHeb,
@@ -174,7 +175,8 @@ export default function HomeTab() {
   }
 
   // Only a flight still ahead counts — after the trip there is no "next" one.
-  const nextFlight = flights.find((f) => !f.depart_at || new Date(f.depart_at) >= new Date());
+  // Ordering and "still ahead" use the instant; the label below uses the ticket's own clock.
+  const nextFlight = flights.find((f) => isUpcomingFlight(f, new Date()));
   const travelSummary = loading
     ? undefined
     : [
@@ -327,7 +329,7 @@ export default function HomeTab() {
               subtitle={
                 [
                   [nextFlight.airline, nextFlight.flight_number].filter(Boolean).join(" "),
-                  formatDateTimeHeb(nextFlight.depart_at),
+                  flightStamp(nextFlight.depart_local, nextFlight.depart_at, "he"),
                 ]
                   .filter(Boolean)
                   .join(" · ") || undefined

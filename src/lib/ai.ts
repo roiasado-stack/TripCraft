@@ -161,7 +161,7 @@ export async function generateItinerary(
   if (tripDays.length > ITINERARY_WINDOW_DAYS) {
     const { data } = await supabase
       .from("flights")
-      .select("direction, from_airport, to_airport, depart_at, arrive_at")
+      .select("direction, from_airport, to_airport, depart_at, arrive_at, depart_local, arrive_local")
       .eq("trip_id", trip.id);
     flights = (data ?? []) as FlightRow[];
   }
