@@ -2,9 +2,9 @@
 // the wizard (/new) and the agent's "new trip from documents" (/agency/new) — both
 // stage scanned bookings locally and insert them only once the trip is created
 // (see create-trip.ts). Pure: no Supabase, no React.
-import type { BookingsImportResult, BookingTraveller } from "@/components/ImportBookings";
+import type { BookingsImportResult, BookingTraveller, PassengerType } from "@/components/ImportBookings";
 import type { VoucherCarData, VoucherFlightData, VoucherHotelData } from "@/components/ImportVoucher";
-import { AGE_RANGES } from "./trip-options";
+import { AGE_RANGES, type TripType } from "./trip-options";
 
 export type PartDraft = {
   name: string;
@@ -12,6 +12,9 @@ export type PartDraft = {
   age: string;
   age_range: string;
   preferences: string[];
+  /** The booking's passenger marker (adult / child / infant), when a scan found one.
+   *  Never saved: it only tells defaultTripType about a child with no birth date. */
+  type?: PassengerType | null;
 };
 // The optional fields below have no wizard UI: they carry voucher-scanned
 // detail through to the insert as hidden values (manually added drafts simply
@@ -134,13 +137,38 @@ export function transferDraftFromVoucher(d: VoucherCarData, file: File | null): 
  *  mode with an empty age saves as age/age_range null, and the user can fill it
  *  in later (same rule as the passport-scan staging). */
 export function travellerToDraft(t: BookingTraveller): PartDraft {
+  const type = t.type;
   if (t.age != null) {
-    return { name: t.name, ageMode: "age", age: String(t.age), age_range: AGE_RANGES[5], preferences: t.preferences };
+    return { name: t.name, ageMode: "age", age: String(t.age), age_range: AGE_RANGES[5], preferences: t.preferences, type };
   }
   if (t.age_range) {
-    return { name: t.name, ageMode: "range", age: "", age_range: t.age_range, preferences: t.preferences };
+    return { name: t.name, ageMode: "range", age: "", age_range: t.age_range, preferences: t.preferences, type };
   }
-  return { name: t.name, ageMode: "age", age: "", age_range: AGE_RANGES[5], preferences: t.preferences };
+  return { name: t.name, ageMode: "age", age: "", age_range: AGE_RANGES[5], preferences: t.preferences, type };
+}
+
+// Under-18 ranges, as AGE_RANGES lists them ("0-3" … "13-17").
+const KID_RANGES = new Set<string>(AGE_RANGES.slice(0, 4));
+
+/** Under 18 by the age typed in, else the age range, else the booking's child/infant marker. */
+function isKid(p: PartDraft): boolean {
+  if (p.ageMode === "age" && p.age.trim() !== "" && Number.isFinite(Number(p.age))) return Number(p.age) < 18;
+  if (p.ageMode === "range") return KID_RANGES.has(p.age_range);
+  return p.type === "child" || p.type === "infant";
+}
+
+/**
+ * The trip type an agency trip starts on, from its travellers (abada-promises
+ * phase 4): any child or infant → family; exactly two adults → couple; anything
+ * else → friends. That includes no travellers at all: "friends" makes no claim
+ * about kids, where the old hard-coded "family" made the AI plan for children.
+ * Only named travellers count, as only they are saved (participantRows); a
+ * traveller with no age and no child marker counts as an adult.
+ */
+export function defaultTripType(drafts: PartDraft[]): TripType {
+  const named = drafts.filter((p) => p.name.trim());
+  if (named.some(isKid)) return "family";
+  return named.length === 2 ? "couple" : "friends";
 }
 
 /** Reviewed bookings → flight / stay / transfer drafts, each carrying its source file. */

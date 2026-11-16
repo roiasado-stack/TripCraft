@@ -6,6 +6,7 @@ export const TRIP_TYPES = [
   { value: "friends", label: "חברים", emoji: "🎉" },
   { value: "organized", label: "מאורגן", emoji: "🚌" },
 ] as const;
+export type TripType = (typeof TRIP_TYPES)[number]["value"];
 
 export const PREFERENCES = [
   { value: "beach", label: "חוף", emoji: "🏖️" },
