@@ -195,6 +195,13 @@ SELECT pg_temp.check('demo clone: an old-client row keeps its Jerusalem local ti
 SELECT pg_temp.check('demo clone: booking details are still blanked',
   (SELECT booking_ref IS NULL AND seats IS NULL AND notes IS NULL
      FROM flights WHERE trip_id = (SELECT id FROM clone_out) AND flight_number = 'LY81'));
+SELECT pg_temp.check('demo user: can set a flight''s local time and zone on their own clone',
+  pg_temp.try($$UPDATE flights SET depart_local = '2027-03-10 23:00', from_tz = 'Asia/Bangkok'
+               WHERE flight_number = 'LY81' AND trip_id = (SELECT id FROM clone_out)$$) = 1);
+SELECT pg_temp.check('demo user: an unknown zone is rejected on their clone too',
+  pg_temp.try($$UPDATE flights SET from_tz = 'Mars/Olympus' WHERE trip_id = (SELECT id FROM clone_out)$$) = -1);
+SELECT pg_temp.check('demo user: cannot change the real trip''s flight times',
+  pg_temp.try($$UPDATE flights SET depart_local = '2027-03-10 06:00' WHERE trip_id = pg_temp.id('trip')$$) = 0);
 RESET ROLE;
 SELECT set_config('request.jwt.claims', '', true);  -- the demo's sub would trip the owner-only guard
 UPDATE public.trips SET is_showcase = false WHERE id = pg_temp.id('trip');
