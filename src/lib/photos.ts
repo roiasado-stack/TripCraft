@@ -148,7 +148,7 @@ export function useSuggestionPhoto(opts: {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opts.id, opts.placeId, wantsGoogle]);
+  }, [opts.id, opts.placeId, opts.title, wantsGoogle]);
 
   if (isPhotoUrl(opts.imageUrl)) return { url: opts.imageUrl!, illustrative: false, google: null };
   if (google) return { url: google.url, illustrative: false, google };
