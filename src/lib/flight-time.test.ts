@@ -40,11 +40,21 @@ describe("iataOf", () => {
     expect(iataOf(text)).toBe(code);
   });
 
+  it("keeps real hubs whose code is also a country code", () => {
+    expect(iataOf("FRA")).toBe("FRA");
+    expect(iataOf("Frankfurt FRA")).toBe("FRA");
+    expect(iataOf("FRA - Frankfurt")).toBe("FRA");
+    expect(iataOf("Indianapolis (IND)")).toBe("IND");
+    expect(zoneOf(iataOf("Frankfurt (FRA)"))).toBe("Europe/Berlin");
+  });
+
   it.each([
     ["Bangkok"], // two airports — never guessed from a city
     ["Tel Aviv"],
     ["Chiang Mai"],
     ["New York, USA"],
+    ["Los Angeles (USA)"], // a bracketed country is not an airport
+    ["Bangkok (THA)"],
     ["USA"],
     ["Paris CDG or ORY"],
     ["Bangkok (BKK) (DMK)"],
@@ -198,7 +208,7 @@ describe("wallToInstant / instantToWall", () => {
         expect(instantToWall(wallToInstant(wall, zone)!, zone)).toBe(wall);
       }
     }
-  });
+  }, 30_000); // ~17k Intl round trips: ~3.5s alone, more when the whole suite runs in parallel
 });
 
 describe("formatFlightClock", () => {

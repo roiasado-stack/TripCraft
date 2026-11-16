@@ -156,8 +156,10 @@ export function flightMinutes(
 
 // Words the scan and agents write that look like codes but aren't airports (USA is a real
 // IATA code — Concord, NC — which is exactly why a country suffix must not be read as one).
+// Country codes that are also busy airports (FRA Frankfurt, IND Indianapolis) are NOT here:
+// losing a real hub costs more than the rare "Paris, FRA".
 const NOT_AIRPORTS = new Set([
-  "USA", "UAE", "GBR", "ISR", "THA", "VNM", "ITA", "FRA", "ESP", "DEU", "GRC", "TUR", "CHN", "JPN", "IND",
+  "USA", "UAE", "GBR", "ISR", "THA", "VNM", "ITA", "ESP", "DEU", "GRC", "TUR", "CHN", "JPN",
   "INT", "AIR", "NEW", "THE", "AND", "VIA",
 ]);
 
@@ -181,7 +183,9 @@ export function iataOf(text: unknown): string | null {
   // Just a code, any case.
   if (/^[A-Za-z]{3}$/.test(t)) return NOT_AIRPORTS.has(t.toUpperCase()) ? null : t.toUpperCase();
   // A code in brackets wins: "Hangzhou (HGH)".
-  const bracketed = [...t.matchAll(/[([]\s*([A-Za-z]{3})\s*[)\]]/g)].map((m) => m[1].toUpperCase());
+  const bracketed = [...t.matchAll(/[([]\s*([A-Za-z]{3})\s*[)\]]/g)]
+    .map((m) => m[1].toUpperCase())
+    .filter((w) => !NOT_AIRPORTS.has(w)); // "Los Angeles (USA)" is a country, not Concord NC
   if (bracketed.length === 1) return bracketed[0];
   if (bracketed.length > 1) return null;
   // Exactly one standalone upper-case three-letter word: "Tel Aviv TLV", "BKK – Bangkok".
