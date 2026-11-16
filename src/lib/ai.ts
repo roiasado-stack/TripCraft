@@ -1,5 +1,7 @@
 import { supabase } from "./supabase";
 import type { AgentCard, KosherLookup, Participant, PendingAction, Trip } from "./types";
+import { type DayWindow, itineraryCalls, missingDaysText, runItineraryWindows, windowProgressLabel } from "./itinerary-windows";
+import { daysBetween } from "./trip-options";
 
 export type TuneOption = "more_kids" | "calmer" | "cheaper" | "more_active";
 
@@ -73,24 +75,29 @@ export type AiResult = {
   error?: string;
   /** number of rows the edge function inserted */
   inserted?: number;
+  /** The call went through but the model's answer added nothing (the function's "no_items"). */
+  empty?: boolean;
 };
 
 /**
  * Calls the `generate` Supabase Edge Function, which runs the LLM server-side
  * (so the API key stays secret) and writes rows straight into the trip's tables.
- * See supabase/functions/generate/index.ts.
+ * See supabase/functions/generate/index.ts. `days` limits an itinerary call to
+ * those trip days (see generateItinerary).
  */
 export async function generateContent(
   trip: Trip,
   participants: Participant[],
   kind: GenerateKind,
   tune?: TuneOption,
+  days?: DayWindow | null,
 ): Promise<AiResult> {
   try {
     const { data, error } = await supabase.functions.invoke("generate", {
       body: {
         trip_id: trip.id,
         kind,
+        ...(days ? { days } : {}),
         tune: tune ?? null,
         trip: {
           destination: trip.destination,
@@ -110,10 +117,63 @@ export async function generateContent(
       },
     });
     if (error) return { ok: false, error: await mapInvokeError(error) };
-    return { ok: true, inserted: (data as { inserted?: number })?.inserted ?? 0 };
+    const res = data as { inserted?: number; error?: string } | null;
+    return { ok: true, inserted: res?.inserted ?? 0, empty: res?.error === "no_items" };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "unknown" };
   }
+}
+
+export type ItineraryResult = {
+  /** Every call saved its days (or there was nothing to plan). */
+  ok: boolean;
+  inserted: number;
+  /** Windows that saved nothing; empty when the whole press worked. */
+  failed: DayWindow[];
+  error?: string;
+};
+
+/**
+ * The AI itinerary: one call for a trip of up to ITINERARY_WINDOW_DAYS days,
+ * otherwise one call per window of days, in order (see itinerary-windows).
+ * `plannedDays` are the days that already hold items; `onProgress` gets the
+ * Hebrew progress line before each window and `onWindowDone` fires after each,
+ * so the screen can show the days saved so far.
+ */
+export async function generateItinerary(
+  trip: Trip,
+  participants: Participant[],
+  opts: { plannedDays?: Iterable<string>; onProgress?: (label: string) => void; onWindowDone?: () => void } = {},
+): Promise<ItineraryResult> {
+  const tripDays = trip.start_date && trip.end_date ? daysBetween(trip.start_date, trip.end_date) : [];
+  const calls = itineraryCalls(tripDays, opts.plannedDays ?? []);
+  if (calls.length === 1 && calls[0] === null) {
+    const res = await generateContent(trip, participants, "itinerary");
+    return { ok: res.ok, inserted: res.inserted ?? 0, failed: [], error: res.error };
+  }
+  const windows = calls.filter((w): w is DayWindow => w !== null);
+  const run = await runItineraryWindows(
+    windows,
+    (w) => generateContent(trip, participants, "itinerary", undefined, w),
+    (w, phase) => {
+      if (phase === "start") opts.onProgress?.(windowProgressLabel(w, tripDays.length));
+      else opts.onWindowDone?.();
+    },
+  );
+  return { ok: run.failed.length === 0, inserted: run.inserted, failed: run.failed, error: run.error };
+}
+
+/**
+ * The error toast after an AI itinerary press that didn't plan every day. A
+ * windowed run names the missing days ("המסלול לא נבנה לימים 6–10 (16.3–20.3)")
+ * and says the other days were saved; a single call keeps the usual message.
+ */
+export function itineraryFailureMessage(res: ItineraryResult, tripDays: string[]): string {
+  const fallback = "יצירת המסלול נכשלה. נסו שוב.";
+  if (!res.failed.length) return aiErrorMessage(res.error, fallback);
+  const saved = res.inserted > 0 ? " שאר הימים נשמרו." : "";
+  const next = aiErrorMessage(res.error, "אפשר ללחוץ שוב על \"מסלול מוצע עם AI\" כדי להשלים אותם.");
+  return `המסלול לא נבנה ל${missingDaysText(res.failed, tripDays)}.${saved} ${next}`;
 }
 
 /**

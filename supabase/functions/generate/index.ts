@@ -23,6 +23,7 @@ import {
   tripDays,
 } from "./bookings.ts";
 import { AGENDA_ITEM_SHAPE, AGENDA_RULES, sanitizeAgenda } from "./agenda.ts";
+import { type DayWindow, clipToWindow, parseDayWindow } from "./day-window.ts";
 import { extractJson, extractJsonObjects } from "./json-extract.ts";
 
 const MODEL = "claude-sonnet-5";
@@ -134,6 +135,8 @@ type Body = {
   participants: Participant[];
   /** The browser's IANA zone; flight times go into the prompt on that clock (as in `ask`). */
   time_zone?: string;
+  /** For kind: "itinerary" — plan only trip days from..to (1 = start_date); validated by parseDayWindow. */
+  days?: unknown;
 };
 
 /** The trip's stays and flights, read server-side under the caller's RLS. */
@@ -199,9 +202,13 @@ const WIKIPEDIA_TITLE_RULE =
 // Upper bound on existing titles listed in the prompt (the server-side
 // duplicate filter still checks every existing row).
 const MAX_EXISTING_IN_PROMPT = 60;
+// A long trip is planned window by window, so by its last window the earlier
+// ones already hold ~20 items each; all of them have to reach the prompt, or
+// the latest days (last in day order, so cut first) get repeated.
+const MAX_EXISTING_ITINERARY_IN_PROMPT = 150;
 
 /** Existing rows with duplicate titles collapsed, in the given order, capped for the prompt. */
-function uniqueForPrompt(rows: ExistingRow[]): ExistingRow[] {
+function uniqueForPrompt(rows: ExistingRow[], limit = MAX_EXISTING_IN_PROMPT): ExistingRow[] {
   const seen = new Set<string>();
   const out: ExistingRow[] = [];
   for (const r of rows) {
@@ -209,22 +216,29 @@ function uniqueForPrompt(rows: ExistingRow[]): ExistingRow[] {
     if (!key || seen.has(key)) continue;
     seen.add(key);
     out.push(r);
-    if (out.length >= MAX_EXISTING_IN_PROMPT) break;
+    if (out.length >= limit) break;
   }
   return out;
 }
 
-function buildPrompt(body: Body, existing: ExistingRow[] = [], bookings: Bookings = { stays: [], flights: [] }): string {
+function buildPrompt(
+  body: Body,
+  existing: ExistingRow[] = [],
+  bookings: Bookings = { stays: [], flights: [] },
+  window: DayWindow | null = null,
+): string {
   const { trip, participants, kind, tune } = body;
   // Only the days the traveller is actually there: the trip dates clipped to the flights.
-  const days = tripDays(trip.start_date, trip.end_date, bookings.flights, body.time_zone);
+  const allDays = tripDays(trip.start_date, trip.end_date, bookings.flights, body.time_zone);
+  // A long trip's itinerary is asked for a few days at a time (day-window.ts).
+  const days = clipToWindow(allDays, trip.start_date, window);
   const tuneLine = tune && TUNE_HE[tune] ? `\nכיוונון מיוחד: ${TUNE_HE[tune]}` : "";
   const party = partyLine(participants, trip.trip_type);
 
   const context = `יעד: ${trip.destination}
 סוג טיול: ${trip.trip_type}
 תקציב: ${trip.budget_level ?? "לא צוין"}
-תאריכים: ${trip.start_date ?? "?"} עד ${trip.end_date ?? "?"}${days.length ? ` (${days.length} ימים)` : ""}
+תאריכים: ${trip.start_date ?? "?"} עד ${trip.end_date ?? "?"}${allDays.length ? ` (${allDays.length} ימים)` : ""}
 משתתפים:
 ${describeParticipants(participants)}${party ? `\n${party}` : ""}${tuneLine}`;
 
@@ -265,7 +279,7 @@ ${saved.map((r) => r.title).join("; ")}
     let existingLines = "";
     if (existing.length) {
       const byDay = new Map<string, string[]>();
-      for (const r of uniqueForPrompt(existing)) {
+      for (const r of uniqueForPrompt(existing, MAX_EXISTING_ITINERARY_IN_PROMPT)) {
         const day = r.day_date ?? "?";
         const time = r.start_time ? `${r.start_time.slice(0, 5)} ` : "";
         byDay.set(day, [...(byDay.get(day) ?? []), `${time}${r.title}`]);
@@ -284,9 +298,13 @@ ${scope}
 - לעולם אל תחזור על פעילות או מקום שכבר קיימים במסלול — גם לא בשם אחר, בכתיב אחר או ביום אחר.`;
     }
     const bookingBlock = itineraryBookingLines(bookings.stays, bookings.flights, days, body.time_zone);
+    const windowLine =
+      days.length && days.length < allDays.length
+        ? `\nהטיול ארוך ומתוכנן בחלקים: עכשיו תכנן רק את הימים ${days[0]} עד ${days[days.length - 1]}. שאר הימים מתוכננים בנפרד.`
+        : "";
     return `${context}${bookingBlock ? `\n${bookingBlock}` : ""}
 
-צור מסלול יומי מוצע. הימים: ${dayList}
+צור מסלול יומי מוצע. הימים: ${dayList}${windowLine}
 החזר JSON בלבד במבנה:
 {"items":[{"day_date":"YYYY-MM-DD","start_time":"HH:MM","title":"שם הפעילות בעברית","description":"פרטים קצרים","category":"activity|food|transport|free","location":"שם מקום","wikipedia_title":"כותרת הערך בוויקיפדיה האנגלית או null","lat":32.0853,"lng":34.7818}]}
 
@@ -1148,6 +1166,25 @@ ${AGENDA_RULES}`,
       });
     }
 
+    // The itinerary plans the trip's real dates (read here under RLS, not taken
+    // from the request), optionally one `days` window of them at a time. A bad
+    // window is refused before any model call (the reservation is released in
+    // finally), so it can't widen what one capped call plans.
+    let dayWindow: DayWindow | null = null;
+    if (body.kind === "itinerary") {
+      const { data: dates } = await supabase.from("trips").select("start_date, end_date").eq("id", body.trip_id).maybeSingle();
+      const tripDates = (dates ?? null) as { start_date: string | null; end_date: string | null } | null;
+      if (tripDates) body.trip = { ...body.trip, start_date: tripDates.start_date, end_date: tripDates.end_date };
+      const parsedWindow = parseDayWindow(body.days, body.trip?.start_date ?? null, body.trip?.end_date ?? null);
+      if (!parsedWindow.ok) {
+        return new Response(JSON.stringify({ error: "bad_window" }), {
+          status: 400,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+      dayWindow = parsedWindow.window;
+    }
+
     // Used by kind:"geocode" (Nominatim lookup), which needs a Latin-script
     // query — manually-typed titles / destinations are Hebrew. AI-generated
     // items never go through it (their lat/lng come straight from the model —
@@ -1431,6 +1468,17 @@ Never answer with the article of the surrounding city, region or country — e.g
       }
     }
 
+    // A window that falls wholly outside the days the traveller is there
+    // (before landing, after flying home) has nothing to plan: no model call.
+    if (
+      dayWindow &&
+      !clipToWindow(tripDays(body.trip.start_date, body.trip.end_date, bookings.flights, body.time_zone), body.trip.start_date, dayWindow).length
+    ) {
+      return new Response(JSON.stringify({ ok: true, inserted: 0, skipped: "no_days" }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
     const runStart = Date.now();
     const llm = await fetch(ANTHROPIC_URL, {
       method: "POST",
@@ -1442,7 +1490,7 @@ Never answer with the article of the surrounding city, region or country — e.g
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        messages: [{ role: "user", content: buildPrompt(body, existing, bookings) }],
+        messages: [{ role: "user", content: buildPrompt(body, existing, bookings, dayWindow) }],
       }),
     });
     const latencyMs = Date.now() - runStart;
@@ -1633,7 +1681,12 @@ Never answer with the article of the surrounding city, region or country — e.g
       inserted = rows.length;
       dupStats = `dup_dropped=${dupDropped} photo_dup_cleared=${cleared} existing=${existing.length}`;
     } else if (body.kind === "itinerary") {
-      const tripDayList = tripDays(body.trip.start_date, body.trip.end_date, bookings.flights, body.time_zone);
+      // Rows outside this call's window are dropped like rows outside the trip.
+      const tripDayList = clipToWindow(
+        tripDays(body.trip.start_date, body.trip.end_date, bookings.flights, body.time_zone),
+        body.trip.start_date,
+        dayWindow,
+      );
       const flightTimes = flightWindow(bookings.flights, body.time_zone);
       const built = items.map((raw, idx) => {
         const i = raw as Record<string, unknown>;

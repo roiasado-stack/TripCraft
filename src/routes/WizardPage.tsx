@@ -7,7 +7,7 @@ import { Button, Card, Checkbox, Chip, Field, Input, Label, Segmented, Spinner }
 import { ImportParticipants } from "@/components/ImportParticipants";
 import { ImportBookings, personKey, type BookingsImportResult } from "@/components/ImportBookings";
 import { ImportVoucher, type VoucherResult } from "@/components/ImportVoucher";
-import { generateContent } from "@/lib/ai";
+import { generateContent, generateItinerary } from "@/lib/ai";
 import { insertTripWithDrafts, uploadSourceDocs } from "@/lib/create-trip";
 import {
   bookingsToDrafts,
@@ -166,7 +166,11 @@ export default function WizardPage() {
       ? inserted
       : partRows.map((r) => ({ ...r, id: "", trip_id: createdTrip.id, notes: null, created_at: "" }));
     const runAi = async (kind: "suggestions" | "itinerary"): Promise<boolean> => {
-      const res = await generateContent(createdTrip, aiParticipants, kind);
+      // A long trip's itinerary is built a few days per call (generateItinerary).
+      const res =
+        kind === "itinerary"
+          ? await generateItinerary(createdTrip, aiParticipants)
+          : await generateContent(createdTrip, aiParticipants, kind);
       mark(kind, res.ok ? "done" : "failed");
       return res.ok;
     };

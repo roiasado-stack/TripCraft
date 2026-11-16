@@ -96,7 +96,10 @@ describe("booking lines for the itinerary prompt", () => {
     expect(text).toContain("ביום ההגעה (2026-11-13) התחל רק אחרי הנחיתה ב-09:30");
     expect(text).toContain("ביום החזרה (2026-11-19) הטיסה ב-21:40");
     expect(text).toContain("המראה 2026-11-19 21:40");
-    expect(text).not.toContain("19:40");
+    // 19:40 is the take-off in UTC; it must never be given as a flight time. (The
+    // return-day rule's "at the latest 19:40" — 2h before 21:40 — is fine.)
+    expect(text).not.toContain("המראה 2026-11-19 19:40");
+    expect(text).not.toContain("הטיסה ב-19:40");
   });
 
   it("is empty when the trip has no bookings", () => {

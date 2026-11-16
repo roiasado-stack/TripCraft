@@ -206,12 +206,37 @@ export function itineraryBookingLines(stays: StayRow[], flights: FlightRow[], da
   if (arrival && days.includes(arrival.day)) {
     rules.push(`- ביום ההגעה (${arrival.day}) התחל רק אחרי הנחיתה ב-${arrival.time} והגעה למלון.`);
   }
-  if (departure && days.includes(departure.day)) {
-    rules.push(
-      `- ביום החזרה (${departure.day}) הטיסה ב-${departure.time}: סיים כ-3 שעות לפני (נסיעה לשדה), בלי שום פריט אחרי ההמראה ובלי ימים אחריה.`,
-    );
-  }
+  if (departure && days.includes(departure.day)) rules.push(departureDayRule(departure));
   return [...lines, ...rules].join("\n");
+}
+
+const hhmm = (minutes: number): string =>
+  `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+
+/**
+ * The return day's prompt rule. The day used to come back nearly empty (only
+ * "finish ~3h before"), so it now asks for what that morning really holds:
+ * breakfast and check-out, then a transfer that reaches the airport 3 hours
+ * before take-off (2 at the latest). An early flight leaves no time for
+ * breakfast; one before 03:00 means leaving the evening before.
+ */
+export function departureDayRule(departure: Clock): string {
+  const [h, m] = departure.time.split(":").map(Number);
+  const takeoff = h * 60 + m;
+  const airportBy = takeoff - 180;
+  const latest = takeoff - 120;
+  const head = `- ביום החזרה (${departure.day}) הטיסה ב-${departure.time}:`;
+  const tail = "בלי שום פריט אחרי ההמראה ובלי ימים אחריה.";
+  const transfer = (by: number, last: number) =>
+    `פריט transport של נסיעה לשדה התעופה שמגיעה לשדה עד ${hhmm(by)} (3 שעות לפני ההמראה, ולכל המאוחר ${hhmm(last)}) — כתוב בתיאור שלו את שעת ההגעה לשדה`;
+  if (airportBy < 0) {
+    return `${head} אחרי חצות. את הצ'ק-אאוט והנסיעה לשדה תכנן בערב של ${addDays(departure.day, -1)}: ${transfer(airportBy + 1440, latest < 0 ? latest + 1440 : latest)}. ביום ${departure.day} עצמו אל תתכנן פריטים. ${tail}`;
+  }
+  if (airportBy < 8 * 60) {
+    return `${head} טיסה מוקדמת — רק צ'ק-אאוט מהמלון ו${transfer(airportBy, latest)}. בלי ארוחת בוקר ובלי פעילויות. ${tail}`;
+  }
+  const extra = airportBy >= 12 * 60 ? " אם נשאר זמן לפני היציאה לשדה — פעילות קצרה וקרובה למלון בלבד." : "";
+  return `${head} ארוחת בוקר וצ'ק-אאוט מהמלון, ואחריהם ${transfer(airportBy, latest)}.${extra} ${tail}`;
 }
 
 /**
