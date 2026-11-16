@@ -165,12 +165,15 @@ export default function WizardPage() {
     const aiParticipants: Participant[] = inserted.length
       ? inserted
       : partRows.map((r) => ({ ...r, id: "", trip_id: createdTrip.id, notes: null, created_at: "" }));
+    // Some itinerary days saved but not all: say so instead of "not created".
+    let itineraryPartial = false;
     const runAi = async (kind: "suggestions" | "itinerary"): Promise<boolean> => {
       // A long trip's itinerary is built a few days per call (generateItinerary).
       const res =
         kind === "itinerary"
           ? await generateItinerary(createdTrip, aiParticipants)
           : await generateContent(createdTrip, aiParticipants, kind);
+      if (kind === "itinerary" && !res.ok && (res.inserted ?? 0) > 0) itineraryPartial = true;
       mark(kind, res.ok ? "done" : "failed");
       return res.ok;
     };
@@ -194,7 +197,11 @@ export default function WizardPage() {
     } else if (!suggestionsOk) {
       toast.error("ההמלצות לא נוצרו — אפשר ליצור אותן בלשונית \"מומלצים\" עם כפתור ה-AI.");
     } else if (!itineraryOk) {
-      toast.error("המסלול לא נוצר — אפשר ליצור אותו בלשונית \"מסלול\" עם כפתור ה-AI.");
+      toast.error(
+        itineraryPartial
+          ? "חלק מימי המסלול לא נבנו (השאר נשמרו) — אפשר להשלים אותם בלשונית \"מסלול\" עם כפתור ה-AI."
+          : "המסלול לא נוצר — אפשר ליצור אותו בלשונית \"מסלול\" עם כפתור ה-AI.",
+      );
     }
   };
 
