@@ -119,6 +119,13 @@ describe("shareOgTags", () => {
     expect(none).not.toContain("og:image");
     expect(none).toContain(`<meta name="twitter:card" content="summary" />`);
   });
+
+  it("names the image type, so WhatsApp knows the logo is PNG/JPEG", () => {
+    const png = shareOgTags(shareOgMeta(payload({ image_url: null }, ABADA), opts));
+    expect(png).toContain(`<meta property="og:image:type" content="image/png" />`);
+    const jpg = shareOgTags(shareOgMeta(payload({ image_url: null }, { ...ABADA, logo_path: `${UID}/logo-9.jpg` }), opts));
+    expect(jpg).toContain(`<meta property="og:image:type" content="image/jpeg" />`);
+  });
 });
 
 describe("injectShareOg (on the real index.html)", () => {

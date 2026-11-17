@@ -9,6 +9,7 @@ import {
   LOGO_MAX_BYTES,
   fitWithin,
   isAgencyLogoUrl,
+  logoEncoding,
   logoFileProblem,
   logoObjectPath,
   logoPathFromUrl,
@@ -22,7 +23,8 @@ export function agencyLogoPrefix(): string {
 
 /**
  * Shrinks a picked image to at most 512px on its longest side and re-encodes
- * it (WebP, or PNG where the browser can't write WebP), keeping transparency.
+ * it as PNG (keeps transparency), or as JPEG on white when the PNG would be too
+ * heavy for a WhatsApp link card. Not WebP: WhatsApp's preview never shows it.
  * Re-encoding also drops whatever else the file carried (EXIF, location).
  */
 async function shrinkLogo(file: File): Promise<Blob> {
@@ -34,10 +36,23 @@ async function shrinkLogo(file: File): Promise<Blob> {
   const ctx = canvas.getContext("2d");
   if (!ctx || width === 0) throw new Error("no_canvas");
   ctx.drawImage(bitmap, 0, 0, width, height);
+  const encode = (type: string, quality?: number) =>
+    new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+  const png = await encode("image/png");
+  if (!png) throw new Error("encode_failed");
+  if (logoEncoding(png.size) === "image/png") {
+    bitmap.close();
+    return png;
+  }
+  // JPEG has no transparency: draw the logo on white first.
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
-  if (!blob) throw new Error("encode_failed");
-  return blob;
+  const jpeg = await encode("image/jpeg", 0.88);
+  if (!jpeg) throw new Error("encode_failed");
+  return jpeg;
 }
 
 /**

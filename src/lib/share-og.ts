@@ -6,7 +6,7 @@
 //
 // Imported by the Vercel function too (Node ESM), hence the explicit .js
 // extensions and no "@/" alias.
-import { AGENCY_LOGO_BUCKET, isAgencyLogoPath } from "./agency-brand.js";
+import { AGENCY_LOGO_BUCKET, imageMimeOf, isAgencyLogoPath } from "./agency-brand.js";
 import { isTripPhotoUrl } from "./photo-url.js";
 import type { SharedTripPayload } from "./types";
 
@@ -202,7 +202,11 @@ export function shareOgTags(meta: ShareOgMeta): string {
   prop("og:title", meta.title);
   prop("og:description", meta.description);
   if (meta.siteName) prop("og:site_name", meta.siteName);
-  if (meta.image) prop("og:image", meta.image);
+  if (meta.image) {
+    prop("og:image", meta.image);
+    const type = imageMimeOf(meta.image);
+    if (type) prop("og:image:type", type);
+  }
   name("twitter:card", meta.largeImage ? "summary_large_image" : "summary");
   name("twitter:title", meta.title);
   name("twitter:description", meta.description);
