@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  LOGO_CARD_MAX_BYTES,
   fitWithin,
+  imageMimeOf,
   isAgencyLogoPath,
   isAgencyLogoUrl,
+  logoEncoding,
   logoFileProblem,
   logoObjectPath,
   logoPathFromUrl,
@@ -112,5 +115,21 @@ describe("fitWithin", () => {
   });
   it("handles a broken size", () => {
     expect(fitWithin(0, 50)).toEqual({ width: 0, height: 0 });
+  });
+});
+
+describe("logo encoding for the WhatsApp card", () => {
+  it("keeps PNG while it is light enough, JPEG above that — never WebP", () => {
+    expect(logoEncoding(30_000)).toBe("image/png");
+    expect(logoEncoding(LOGO_CARD_MAX_BYTES)).toBe("image/png");
+    expect(logoEncoding(LOGO_CARD_MAX_BYTES + 1)).toBe("image/jpeg");
+  });
+
+  it("reads the image type from the URL extension", () => {
+    expect(imageMimeOf("https://x/a/logo-1.png")).toBe("image/png");
+    expect(imageMimeOf("https://x/a/logo-1.JPG")).toBe("image/jpeg");
+    expect(imageMimeOf("https://x/a/logo-1.webp")).toBe("image/webp");
+    expect(imageMimeOf("https://upload.wikimedia.org/x/Photo.jpeg?width=800")).toBe("image/jpeg");
+    expect(imageMimeOf("https://x/a/icon")).toBeNull();
   });
 });
