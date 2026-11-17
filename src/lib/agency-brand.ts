@@ -9,6 +9,22 @@ export const AGENCY_LOGO_BUCKET = "agency-logos";
 /** What the bucket accepts (023: allowed_mime_types / file_size_limit). No SVG — it can carry script. */
 export const LOGO_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
 export const LOGO_MAX_BYTES = 1024 * 1024;
+/**
+ * A PNG logo above this size is saved as JPEG instead. WhatsApp's link preview
+ * shows only JPEG/PNG (never WebP) and drops images above roughly 300 KB.
+ */
+export const LOGO_CARD_MAX_BYTES = 280 * 1024;
+
+/** PNG keeps transparency; a PNG too heavy for the WhatsApp card becomes JPEG. */
+export function logoEncoding(pngBytes: number): "image/png" | "image/jpeg" {
+  return pngBytes <= LOGO_CARD_MAX_BYTES ? "image/png" : "image/jpeg";
+}
+
+/** og:image:type for a logo or photo URL, by its extension (null when unknown). */
+export function imageMimeOf(url: string): string | null {
+  const ext = /\.([a-z0-9]+)(?:[?#]|$)/i.exec(url)?.[1]?.toLowerCase();
+  return ext === "png" ? "image/png" : ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : null;
+}
 /** A picked file larger than this is refused before we even try to shrink it. */
 export const LOGO_MAX_INPUT_BYTES = 10 * 1024 * 1024;
 /** Longest side after resizing; the brochure shows it at about 48px. */
