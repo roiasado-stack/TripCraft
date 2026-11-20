@@ -10,9 +10,11 @@ import { AdminRoute } from "@/components/AdminRoute";
 import { AgentRoute, TravelerRoute } from "@/components/AgentRoute";
 import { SetupNeeded } from "@/components/SetupNeeded";
 import { FullSpinner } from "@/components/ui";
-// First paint stays in the main bundle: the login screen, the trips list and
-// the public share page (anonymous visitors). Everything else loads per route.
+// First paint stays in the main bundle: the public landing page, the login
+// screen, the trips list and the public share page (anonymous visitors).
+// Everything else loads per route.
 import AuthPage from "@/routes/AuthPage";
+import LandingPage from "@/routes/LandingPage";
 import TripsListPage from "@/routes/TripsListPage";
 import SharePage from "@/routes/SharePage";
 
@@ -80,10 +82,12 @@ export default function App() {
                 <Route path="/credits" element={<CreditsPage />} />
                 <Route path="/accessibility" element={<AccessibilityPage />} />
 
+                {/* Signed out, / is the public landing page: Google's OAuth branding review
+                    needs a homepage that explains the app before asking anyone to sign in. */}
                 <Route
                   path="/"
                   element={
-                    <TravelerRoute agentTo="/agency">
+                    <TravelerRoute agentTo="/agency" guest={<LandingPage />}>
                       <TripsListPage />
                     </TravelerRoute>
                   }
