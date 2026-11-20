@@ -37,6 +37,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { ANTHROPIC_URL, buildSnapshot, INSTRUCTIONS, matchKnowledgeDestination, MODEL, TOOLS, type Participant } from "./prompt.ts";
+import { capVerdict } from "../_shared/ai-caps.ts";
 import {
   type CuratedItem,
   geocodeDestination,
@@ -73,23 +74,10 @@ const MAX_TOOL_ITERATIONS = 4;
 const PRICE_PER_MTOK_INPUT_USD = 0.1;
 const PRICE_PER_MTOK_OUTPUT_USD = 0.5;
 
-// Per-user, per-day. Protects the single shared ANTHROPIC_API_KEY from a
-// runaway bug or one user's abuse — this is the guard the double-send bug
-// (fixed in a previous commit) should have had from day one. Only gates the
-// LLM-conversation branch below, not confirm_action (a free DB write, no
-// model call).
-const DAILY_CAP_USD = 2.0;
-
-// App-wide, per-day (migration 014): the per-user cap alone doesn't bound
-// total spend while signup is open. Shared with the other Edge Function —
-// both read the same agent_runs total.
-const APP_DAILY_CAP_USD = 15.0;
-
-// "Try it yourself" visitors (anonymous sessions, migration 016): a taste of
-// the AI, not a free tier — a few questions each, and a hard ceiling for all
-// of them together.
-const DEMO_DAILY_CAP_USD = 0.1;
-const DEMO_APP_DAILY_CAP_USD = 1.0;
+// The daily caps (per user, app-wide, demo, private pool, an agent's own budget)
+// live in _shared/ai-caps.ts, shared with `generate` — both read the same
+// agent_runs totals. They gate only the LLM-conversation branch below, not
+// confirm_action (a free DB write, no model call).
 
 // Google Places kosher search, approved budget $20/month (approvals #18). A
 // Text Search Pro call is about $0.032, so 600 calls ≈ $19 even if the monthly
@@ -129,28 +117,16 @@ async function reserveGoogleCall(userId: string, tripId: string): Promise<boolea
  */
 // deno-lint-ignore no-explicit-any
 async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<"day" | "month" | null> {
-  const [mine, app, demo, agent] = await Promise.all([
+  const [mine, app, demo, privatePool, agent] = await Promise.all([
     supabase.rpc("my_agent_daily_cost_usd"),
     supabase.rpc("app_agent_daily_cost_usd"),
-    isAnonymous ? supabase.rpc("anon_agent_daily_cost_usd") : Promise.resolve({ data: 0 }),
+    isAnonymous ? supabase.rpc("anon_agent_daily_cost_usd") : Promise.resolve({ data: 0, error: null }),
+    // Everyone who isn't an active agent, demo visitors included (migration 030).
+    supabase.rpc("private_daily_cost_usd"),
     // An active travel agent (migration 022): their own day and month caps, or NULL.
-    isAnonymous ? Promise.resolve({ data: null }) : supabase.rpc("my_agent_limits"),
+    isAnonymous ? Promise.resolve({ data: null, error: null }) : supabase.rpc("my_agent_limits"),
   ]);
-  // The app-wide cap is the last line of defence: an unreadable total counts as reached.
-  if (app.error || (app.data ?? 0) >= APP_DAILY_CAP_USD) return "day";
-  // An unreadable personal spend counts as reached too, for every kind of caller.
-  if (mine.error) return "day";
-  if (isAnonymous) {
-    return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD ? "day" : null;
-  }
-  // Can't tell whether the caller is an agent, or can't read an agent's spend: fail closed.
-  if (agent.error) return "day";
-  if (agent.data) {
-    // The month goes first: it won't clear tomorrow, and the message has to say so.
-    if (!(Number(agent.data.ai_monthly_usd) > Number(agent.data.month_cost_usd))) return "month";
-    return !(Number(agent.data.ai_daily_usd) > (mine.data ?? 0)) ? "day" : null;
-  }
-  return (mine.data ?? 0) >= DAILY_CAP_USD ? "day" : null;
+  return capVerdict({ isAnonymous, mine, app, demo, privatePool, agent });
 }
 
 // Service-role client for agent_runs writes, which users can't do themselves (018).

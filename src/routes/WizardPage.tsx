@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, CircleAlert, CircleCheck, Plus, ScanLine, Ticket, Trash2, Users, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { Button, Card, Checkbox, Chip, Field, Input, Label, Segmented, Spinner } from "@/components/ui";
+import { Button, Card, Checkbox, Chip, Field, FullSpinner, Input, Label, Segmented, Spinner } from "@/components/ui";
 import { ImportParticipants } from "@/components/ImportParticipants";
 import { ImportBookings, personKey, type BookingsImportResult } from "@/components/ImportBookings";
 import { ImportVoucher, type VoucherResult } from "@/components/ImportVoucher";
@@ -23,9 +23,10 @@ import {
   type PartDraft,
   type StayDraft,
   type TransferDraft,
-  isTripLimitError,
-  TRIP_LIMIT_MESSAGE,
 } from "@/lib/trip-drafts";
+import { useTripQuota } from "@/hooks/use-trip-quota";
+import { atTripLimit, tripLimitMessage } from "@/lib/trip-quota";
+import { TripLimitNotice } from "@/components/TripLimitNotice";
 import { Flag } from "@/components/Flag";
 import type { Participant, Trip } from "@/lib/types";
 import { localDateString } from "@/lib/trip-dates";
@@ -56,6 +57,9 @@ export default function WizardPage() {
   // has been seeded from bookings, OFF for the manual flow.
   const [autoGenerate, setAutoGenerate] = useState(false);
   const [building, setBuilding] = useState<BuildState | null>(null);
+  // A private account that already owns its one trip (migration 029) never reaches a
+  // document scan here; the trips trigger still has the last word on save.
+  const { quota } = useTripQuota();
 
   // step 0
   const [destination, setDestination] = useState("");
@@ -120,7 +124,7 @@ export default function WizardPage() {
       navigate(`/trip/${trip.id}`, { replace: true });
     } catch (e) {
       console.error(e);
-      toast.error(isTripLimitError(e) ? TRIP_LIMIT_MESSAGE : "משהו השתבש ביצירת הטיול. נסה שוב.");
+      toast.error(tripLimitMessage(e) ?? "משהו השתבש ביצירת הטיול. נסה שוב.");
     } finally {
       setSaving(false);
     }
@@ -246,6 +250,27 @@ export default function WizardPage() {
   // The trip already exists while this shows — no back/cancel/create controls,
   // so it can't be created twice.
   if (building) return <BuildingView state={building} />;
+  if (quota === undefined) return <FullSpinner label="רגע, טוענים…" />;
+  if (atTripLimit(quota)) {
+    return (
+      <div className="mx-auto min-h-screen max-w-lg px-4 pt-4">
+        <div className="mb-4 flex items-center">
+          <button
+            onClick={() => navigate("/")}
+            className="-ms-2 grid size-11 place-items-center rounded-full text-primary transition-colors active:bg-muted/70"
+            aria-label="חזרה"
+          >
+            <ArrowRight className="size-6" />
+          </button>
+        </div>
+        <h1 className="type-large-title mb-4 px-1">טיול חדש</h1>
+        <TripLimitNotice />
+        <Button size="lg" className="pressable mt-6 w-full" onClick={() => navigate("/")}>
+          לטיולים שלי
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto min-h-screen max-w-lg px-4 pb-28 pt-4">

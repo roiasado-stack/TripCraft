@@ -60,6 +60,8 @@ export async function createDemoTrip(userId: string): Promise<string> {
       cover_emoji: "🏝️",
       notes: "טיול לדוגמה — אפשר לערוך או למחוק הכל.",
       photos_album_url: "https://photos.app.goo.gl/example-shared-album",
+      // Not counted against a private account's one trip (migration 029); one per account.
+      is_sample: true,
     })
     .select()
     .single();
