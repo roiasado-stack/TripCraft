@@ -223,6 +223,9 @@ export default function AuthPage() {
           </Link>
           .
         </p>
+        <Link to="/" className="mt-3 text-center text-sm font-semibold text-primary underline-offset-2 hover:underline">
+          מה זה TripCraft?
+        </Link>
         <LegalLinks className="mt-3" />
       </div>
     </div>
