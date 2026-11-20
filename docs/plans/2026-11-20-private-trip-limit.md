@@ -23,7 +23,7 @@ the screens say so *before* the user spends time or AI on a second trip.
 ## Decisions for Roi (recommendation first)
 1. **What "one trip" means.** **A: one at a time.** To open a new trip, delete the old one. B: one ever. B needs a counter that never goes down. A failed creation (the wizard deletes a half-built trip) would then use up the trial, so B needs extra repair logic.
 2. **The "trip for example" button (Rhodes sample).** **It does not count, max one per account.** Otherwise a new user who taps it to look around has used their trial on a fake trip.
-3. **"Try it yourself" copy of a showcase.** **It does not count.** It is limited already, to one copy per showcase per user.
+3. **"Try it yourself" copy of a showcase.** **It does not count when an agency or an admin published the showcase.** It is limited already, to one copy per showcase per user. A copy of a *private* user's showcase counts as an ordinary trip. Any owner can switch "try it yourself" on, so without this, share → try it → share the copy → try it would mint trips without end (found in the security review).
 4. **Override for a specific person** (a friend, a pilot traveller of an agency). **Yes, as one SQL line Roi runs in the SQL Editor:** `user_trip_limits(user_id, max_trips)`, writable only by `service_role`. An admin screen comes later if it's used.
 5. **Message when blocked.**
    - Proposed: "בחשבון פרטי אפשר לנהל טיול אחד. כדי לפתוח טיול חדש, מחקו את הקודם או כתבו לנו ל-tripcraft26@gmail.com".

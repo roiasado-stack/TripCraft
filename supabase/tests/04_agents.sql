@@ -399,11 +399,11 @@ SELECT pg_temp.check('agent at the trip limit: cloning a showcase is blocked',
   pg_temp.try($$SELECT public.clone_showcase_trip('test-slug-0123456789')$$) = -1);
 RESET ROLE;
 SELECT pg_temp.login(pg_temp.id('participant'));
-SELECT public.clone_showcase_trip('test-slug-0123456789');
+CREATE TEMP TABLE clone04 ON COMMIT DROP AS SELECT public.clone_showcase_trip('test-slug-0123456789') AS id;
 RESET ROLE;
 SELECT pg_temp.check('clone_showcase_trip never copies trip_clients',
-  EXISTS (SELECT 1 FROM trips WHERE demo_source_id = pg_temp.id('trip') AND user_id = pg_temp.id('participant'))
-  AND NOT EXISTS (SELECT 1 FROM trips t JOIN trip_clients c ON c.trip_id = t.id WHERE t.demo_source_id = pg_temp.id('trip')));
+  EXISTS (SELECT 1 FROM trips WHERE id = (SELECT id FROM clone04) AND user_id = pg_temp.id('participant'))
+  AND NOT EXISTS (SELECT 1 FROM trip_clients c WHERE c.trip_id = (SELECT id FROM clone04)));
 
 -- Approving a user who never asked for access raises and grants no role
 SELECT pg_temp.login(pg_temp.id('admin'));

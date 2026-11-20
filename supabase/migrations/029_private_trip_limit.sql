@@ -7,8 +7,11 @@
 --
 -- Not counted:
 --   * the sample trip ("צור טיול לדוגמה"), marked is_sample — at most one per user;
---   * a "try it yourself" copy of a showcase (demo_source_id) — clone_showcase_trip
---     already makes at most one per showcase per user.
+--   * a "try it yourself" copy (demo_source_id) of a showcase published by an active
+--     agent or an admin — clone_showcase_trip makes at most one per showcase per user.
+--     Any owner can switch "try it yourself" on, so a copy of a PRIVATE user's showcase
+--     is an ordinary, counted trip (the marker is dropped); otherwise share → try it →
+--     share the copy → try it … would mint trips without end (security review, 20.11).
 -- Templates DO count for a private user: nothing in the app makes one for them,
 -- and an uncounted template is still a full trip by URL.
 --
@@ -73,7 +76,7 @@ $$;
 -- Trigger ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.enforce_private_trip_limit()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE lim INT; used INT;
+DECLARE lim INT; used INT; src_owner UUID;
 BEGIN
   -- SQL Editor / service_role scripts: no signed-in caller, no app limit.
   IF auth.uid() IS NULL THEN RETURN NEW; END IF;
@@ -92,7 +95,11 @@ BEGIN
       RAISE EXCEPTION 'sample_flag_locked' USING ERRCODE = '42501';
     END IF;
     IF NEW.is_sample = OLD.is_sample THEN RETURN NEW; END IF;
-    -- A sample turning into a real trip: counted from now on, checked below.
+    -- A sample turning into a real trip: counted from now on, checked below. Only the
+    -- owner may spend their own slot that way, not an editor of their trip.
+    IF OLD.user_id <> auth.uid() THEN
+      RAISE EXCEPTION 'sample_flag_locked' USING ERRCODE = '42501';
+    END IF;
   END IF;
 
   -- Serialise one user's concurrent inserts (same key as 022's agent trigger).
@@ -100,13 +107,19 @@ BEGIN
 
   IF NEW.demo_source_id IS NOT NULL THEN
     -- Only a real showcase copy, and only one per showcase (what clone_showcase_trip makes).
-    IF NEW.is_sample
-       OR NOT EXISTS (SELECT 1 FROM public.trips s WHERE s.id = NEW.demo_source_id AND s.is_showcase AND s.is_shared)
+    SELECT s.user_id INTO src_owner FROM public.trips s
+     WHERE s.id = NEW.demo_source_id AND s.is_showcase AND s.is_shared;
+    IF NEW.is_sample OR src_owner IS NULL
        OR EXISTS (SELECT 1 FROM public.trips t
                   WHERE t.user_id = NEW.user_id AND t.demo_source_id = NEW.demo_source_id AND t.id <> NEW.id) THEN
       RAISE EXCEPTION 'invalid_demo_copy' USING ERRCODE = '42501';
     END IF;
-    RETURN NEW;
+    -- Free only when an agency or an admin published the showcase. A copy of a private
+    -- user's showcase is an ordinary trip: drop the marker so it counts now and on every
+    -- later check (clone_showcase_trip then can't find it again, so a second click makes
+    -- a second copy — which the count below stops at the limit).
+    IF lim IS NULL OR public.private_trip_limit(src_owner) IS NULL THEN RETURN NEW; END IF;
+    NEW.demo_source_id := NULL;
   END IF;
 
   IF NEW.is_sample THEN

@@ -17,9 +17,9 @@ INSERT INTO ids VALUES
 INSERT INTO public.user_roles (user_id, role) VALUES (pg_temp.id('agent'), 'agent'), (pg_temp.id('admin'), 'admin');
 INSERT INTO public.agent_accounts (user_id, status, agency_name) VALUES (pg_temp.id('agent'), 'active', 'Agency C');
 -- The fixture trip becomes a showcase; 'plain' is somebody's ordinary shared trip.
-UPDATE public.trips SET is_showcase = true WHERE id = pg_temp.id('trip');
 INSERT INTO public.trips (id, user_id, title, destination, is_shared, share_slug)
 VALUES (pg_temp.id('plain'), pg_temp.id('agent'), 'Plain', 'Oslo', true, 'plain-slug-0123456789');
+UPDATE public.trips SET is_showcase = true WHERE id = pg_temp.id('plain');
 
 -- A new private user ---------------------------------------------------------------------
 SELECT pg_temp.login(pg_temp.id('private'));
@@ -48,21 +48,21 @@ SELECT pg_temp.check('private: a second sample is blocked',
 
 -- A showcase copy is free, once per showcase, and only a real one
 SELECT pg_temp.check('private: "try it yourself" copy of a showcase works at the limit',
-  public.clone_showcase_trip('test-slug-0123456789') IS NOT NULL);
+  public.clone_showcase_trip('plain-slug-0123456789') IS NOT NULL);
 SELECT pg_temp.check('private: asking again returns the same copy',
-  public.clone_showcase_trip('test-slug-0123456789') = (SELECT id FROM trips WHERE user_id = pg_temp.id('private') AND demo_source_id IS NOT NULL));
+  public.clone_showcase_trip('plain-slug-0123456789') = (SELECT id FROM trips WHERE user_id = pg_temp.id('private') AND demo_source_id IS NOT NULL));
 SELECT pg_temp.check('private: a forged copy of a non-showcase trip is rejected',
   pg_temp.try(format('INSERT INTO trips (user_id, title, destination, demo_source_id) VALUES (%L, %L, %L, %L)',
-    pg_temp.id('private'), 'forged', 'x', pg_temp.id('plain'))) = -1);
+    pg_temp.id('private'), 'forged', 'x', pg_temp.id('trip'))) = -1);
 SELECT pg_temp.check('private: a forged copy of a random id is rejected',
   pg_temp.try(format('INSERT INTO trips (user_id, title, destination, demo_source_id) VALUES (%L, %L, %L, gen_random_uuid())',
     pg_temp.id('private'), 'forged', 'x')) = -1);
 SELECT pg_temp.check('private: a second copy of the same showcase is rejected',
   pg_temp.try(format('INSERT INTO trips (user_id, title, destination, demo_source_id) VALUES (%L, %L, %L, %L)',
-    pg_temp.id('private'), 'copy2', 'x', pg_temp.id('trip'))) = -1);
+    pg_temp.id('private'), 'copy2', 'x', pg_temp.id('plain'))) = -1);
 SELECT pg_temp.check('private: a sample that claims to be a copy is rejected',
   pg_temp.try(format('INSERT INTO trips (user_id, title, destination, is_sample, demo_source_id) VALUES (%L, %L, %L, true, %L)',
-    pg_temp.id('private'), 'both', 'x', pg_temp.id('trip'))) = -1);
+    pg_temp.id('private'), 'both', 'x', pg_temp.id('plain'))) = -1);
 
 SELECT pg_temp.check('private: quota now shows 1 used and the sample',
   public.my_trip_quota() = '{"limit": 1, "used": 1, "has_sample": true}'::jsonb);
@@ -201,3 +201,99 @@ RESET ROLE;
 -- SQL Editor (no signed-in caller) is not limited ------------------------------------------------
 SELECT pg_temp.check('SQL Editor: can add a trip for a private user at the limit',
   pg_temp.try(format('INSERT INTO trips (user_id, title, destination) VALUES (%L, %L, %L)', pg_temp.id('owner'), 'by hand', 'x')) = 1);
+
+-- Showcase copies: free only from an agency's (or admin's) showcase -------------------------
+-- Any owner can switch "try it yourself" on (ShareSheet), so a copy of a private
+-- user's own showcase must count, or share -> try it -> share the copy -> try it ...
+-- mints trips without end.
+INSERT INTO auth.users (id, email, aud, role, is_anonymous) VALUES
+  ('00000000-0000-0000-0000-0000000000e7', 'chain@test.local',  'authenticated', 'authenticated', false),
+  ('00000000-0000-0000-0000-0000000000e8', 'friend@test.local', 'authenticated', 'authenticated', false),
+  ('00000000-0000-0000-0000-0000000000e9', 'shop@test.local',   'authenticated', 'authenticated', false);
+INSERT INTO ids VALUES
+  ('chain',  '00000000-0000-0000-0000-0000000000e7'),
+  ('friend', '00000000-0000-0000-0000-0000000000e8'),
+  ('shop',   '00000000-0000-0000-0000-0000000000e9'),
+  ('chain_trip', '10000000-0000-0000-0000-0000000000e7'),
+  ('shop_show',  '10000000-0000-0000-0000-0000000000e9');
+INSERT INTO public.user_roles (user_id, role) VALUES (pg_temp.id('shop'), 'agent');
+INSERT INTO public.agent_accounts (user_id, status, agency_name) VALUES (pg_temp.id('shop'), 'active', 'Shop');
+INSERT INTO public.trips (id, user_id, title, destination, is_shared, is_showcase, share_slug) VALUES
+  (pg_temp.id('shop_show'), pg_temp.id('shop'), 'Agency demo', 'Rome', true, true, 'shop-show-0123456789');
+
+SELECT pg_temp.login(pg_temp.id('chain'));
+INSERT INTO trips (id, user_id, title, destination) VALUES (pg_temp.id('chain_trip'), pg_temp.id('chain'), 'mine', 'Rome');
+UPDATE trips SET is_shared = true, share_slug = 'chain-slug-0123456789' WHERE id = pg_temp.id('chain_trip');
+UPDATE trips SET is_showcase = true WHERE id = pg_temp.id('chain_trip');
+SELECT pg_temp.check('private: "try it" on the own showcase is blocked at the limit (no trip minting)',
+  pg_temp.try($$SELECT public.clone_showcase_trip('chain-slug-0123456789')$$) = -1);
+SELECT pg_temp.check('private: a direct insert copying the own showcase is blocked at the limit',
+  pg_temp.try(format('INSERT INTO trips (user_id, title, destination, demo_source_id) VALUES (%L, %L, %L, %L)',
+    pg_temp.id('chain'), 'copy of mine', 'x', pg_temp.id('chain_trip'))) = -1);
+SELECT pg_temp.check('private: an agency showcase copy is still free at the limit',
+  public.clone_showcase_trip('shop-show-0123456789') IS NOT NULL);
+SELECT pg_temp.check('private: ...and does not count',
+  (public.my_trip_quota() ->> 'used')::int = 1);
+-- The free copy, re-shared as a showcase, must not be a free source for anyone.
+UPDATE trips SET is_shared = true, share_slug = 'chain-copy-0123456789', is_showcase = true
+ WHERE user_id = pg_temp.id('chain') AND demo_source_id = pg_temp.id('shop_show');
+RESET ROLE;
+
+SELECT pg_temp.login(pg_temp.id('friend'));
+SELECT pg_temp.check('private friend: "try it" on another private user''s showcase works while there is room',
+  public.clone_showcase_trip('chain-slug-0123456789') IS NOT NULL);
+SELECT pg_temp.check('private friend: ...and that copy is a counted trip',
+  (public.my_trip_quota() ->> 'used')::int = 1);
+SELECT pg_temp.check('private friend: at the limit, a copy of a private user''s re-shared copy is blocked',
+  pg_temp.try($$SELECT public.clone_showcase_trip('chain-copy-0123456789')$$) = -1);
+RESET ROLE;
+
+-- A demo visitor's "try it" on a private user's showcase is unchanged: works, second click returns the same copy.
+SELECT set_config('request.jwt.claims', '', true);
+DELETE FROM public.trips WHERE user_id = pg_temp.id('demo') AND id <> pg_temp.id('demo_trip');  -- room under 016's 3 trips
+SELECT pg_temp.login(pg_temp.id('demo'), true);
+CREATE TEMP TABLE demo_copy ON COMMIT DROP AS SELECT public.clone_showcase_trip('chain-slug-0123456789') AS id;
+SELECT pg_temp.check('demo: "try it" on a private user''s showcase works and is idempotent',
+  (SELECT id FROM demo_copy) IS NOT NULL
+  AND public.clone_showcase_trip('chain-slug-0123456789') = (SELECT id FROM demo_copy));
+RESET ROLE;
+
+-- One statement, two rows (a PostgREST bulk insert)
+SELECT pg_temp.login(pg_temp.id('stranger'));
+SELECT pg_temp.check('private: two trips in one INSERT statement are blocked',
+  pg_temp.try(format('INSERT INTO trips (user_id, title, destination) VALUES (%L, %L, %L), (%L, %L, %L)',
+    pg_temp.id('stranger'), 'a', 'x', pg_temp.id('stranger'), 'b', 'x')) = -1);
+RESET ROLE;
+
+-- Editors of someone else's trip
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('editor: cannot mark the owner''s trip as the sample',
+  pg_temp.try(format('UPDATE trips SET is_sample = true WHERE id = %L', pg_temp.id('trip'))) = -1);
+SELECT pg_temp.check('editor: cannot attach demo_source_id to the owner''s trip',
+  pg_temp.try(format('UPDATE trips SET demo_source_id = %L WHERE id = %L', pg_temp.id('shop_show'), pg_temp.id('trip'))) = -1);
+RESET ROLE;
+
+-- The showcase owner is never stuck because someone copied it (no FK on demo_source_id; an
+-- ON DELETE SET NULL added later would trip demo_source_locked)
+SELECT pg_temp.login(pg_temp.id('shop'));
+SELECT pg_temp.check('showcase owner: can unshare and delete a showcase that has copies',
+  pg_temp.try(format('UPDATE trips SET is_shared = false WHERE id = %L', pg_temp.id('shop_show'))) = 1
+  AND pg_temp.try(format('DELETE FROM trips WHERE id = %L', pg_temp.id('shop_show'))) = 1);
+RESET ROLE;
+
+-- An editor can't spend the owner's slot by turning the owner's sample into a real trip
+RESET ROLE;
+SELECT set_config('request.jwt.claims', '', true);
+INSERT INTO public.trips (id, user_id, title, destination, is_sample)
+VALUES ('10000000-0000-0000-0000-0000000000ea', pg_temp.id('friend'), 'friend sample', 'Rhodes', true);
+DELETE FROM public.trips WHERE user_id = pg_temp.id('friend') AND NOT is_sample;  -- the friend has room again
+INSERT INTO public.trip_members (trip_id, user_id, role, status)
+VALUES ('10000000-0000-0000-0000-0000000000ea', pg_temp.id('editor'), 'editor', 'active');
+SELECT pg_temp.login(pg_temp.id('editor'));
+SELECT pg_temp.check('editor: cannot turn the owner''s sample into a real trip (spending the owner''s slot)',
+  pg_temp.try($$UPDATE trips SET is_sample = false WHERE id = '10000000-0000-0000-0000-0000000000ea'$$) = -1);
+RESET ROLE;
+SELECT pg_temp.login(pg_temp.id('friend'));
+SELECT pg_temp.check('owner: can turn their own sample into their one trip while there is room',
+  pg_temp.try($$UPDATE trips SET is_sample = false WHERE id = '10000000-0000-0000-0000-0000000000ea'$$) = 1);
+RESET ROLE;
