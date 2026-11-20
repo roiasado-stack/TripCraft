@@ -33,6 +33,10 @@ runs Vite on :5174 against it via `.env.localstack`. Test accounts belong there,
   that fails before the fix. Anything limited to agent trips (or any other kind of trip/user) also gets
   a case proving it does nothing on an ordinary user's trip — the lead client shipped without one and
   reached regular trips (caught only in final review, #13).
+- Every exemption from a limit ("doesn't count", "is free") names in the plan who can create the
+  exempt thing, and gets a case where the *limited* user creates it themselves. The private one-trip
+  limit (029) exempted showcase copies, but any owner can switch "try it yourself" on, so a private
+  user could copy their own trip without end (caught only in security review, #59).
 - Unit tests only for pure logic in `src/lib` (parsers, permissions, URL builders). No component tests,
   no mocking Supabase — RLS is tested against the real database instead.
 - Logic that reads flights or trip days (`supabase/functions/generate/bookings.ts`, the itinerary, the
