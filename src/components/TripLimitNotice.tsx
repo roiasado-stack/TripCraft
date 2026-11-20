@@ -12,7 +12,7 @@ export function TripLimitNotice({ className }: { className?: string }) {
       <div className="min-w-0">
         <p className="type-headline">{PRIVATE_TRIP_LIMIT_TITLE}</p>
         <p className="type-footnote mt-1 text-muted-foreground">
-          כדי לפתוח טיול חדש, מחקו את הקודם (בתפריט ⋯ שבכרטיס הטיול) או כתבו לנו:{" "}
+          כדי לפתוח טיול חדש, מחקו את הטיול הקיים או כתבו לנו:{" "}
           <a href={`mailto:${LEGAL.contactEmail}`} className="font-semibold text-primary underline underline-offset-2">
             <bdi>{LEGAL.contactEmail}</bdi>
           </a>
