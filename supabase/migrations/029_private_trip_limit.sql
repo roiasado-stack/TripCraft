@@ -77,8 +77,10 @@ DECLARE lim INT; used INT;
 BEGIN
   -- SQL Editor / service_role scripts: no signed-in caller, no app limit.
   IF auth.uid() IS NULL THEN RETURN NEW; END IF;
+  -- NULL for agents, admins and demo users: they skip the count below, but not the
+  -- is_sample / demo_source_id rules — an account can later become private (a demo
+  -- account upgraded, an agent suspended) and must not bring uncounted trips along.
   lim := public.private_trip_limit(NEW.user_id);
-  IF lim IS NULL THEN RETURN NEW; END IF;
 
   IF TG_OP = 'UPDATE' THEN
     -- Nothing in the app changes these after insert; changing them is the only way
@@ -114,6 +116,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  IF lim IS NULL THEN RETURN NEW; END IF;
   SELECT count(*) INTO used FROM public.trips t
   WHERE t.user_id = NEW.user_id AND t.id <> NEW.id AND NOT t.is_sample AND t.demo_source_id IS NULL;
   IF used >= lim THEN

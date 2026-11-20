@@ -150,6 +150,8 @@ SELECT pg_temp.check('agent: no private limit in the quota',
   public.my_trip_quota() ->> 'limit' IS NULL);
 INSERT INTO trips (user_id, title, destination) VALUES (pg_temp.id('agent'), 'client 1', 'x');
 INSERT INTO trips (user_id, title, destination) VALUES (pg_temp.id('agent'), 'client 2', 'x');
+SELECT pg_temp.check('agent: cannot mark a client trip as the sample (would stay uncounted after a suspension)',
+  pg_temp.try(format('UPDATE trips SET is_sample = true WHERE user_id = %L AND title = %L', pg_temp.id('agent'), 'client 1')) = -1);
 SELECT pg_temp.check('agent: opens many trips (3 owned so far, a 4th works)',
   pg_temp.try(format('INSERT INTO trips (user_id, title, destination) VALUES (%L, %L, %L)', pg_temp.id('agent'), 'client 3', 'x')) = 1);
 RESET ROLE;
@@ -167,6 +169,11 @@ SELECT pg_temp.check('demo: no private limit in the quota',
 INSERT INTO trips (user_id, title, destination) VALUES (pg_temp.id('demo'), 'demo 2', 'x');
 SELECT pg_temp.check('demo: a third trip still works (016 allows 3)',
   pg_temp.try(format('INSERT INTO trips (user_id, title, destination) VALUES (%L, %L, %L)', pg_temp.id('demo'), 'demo 3', 'x')) = 1);
+SELECT pg_temp.check('demo: cannot forge a showcase copy either (an upgraded account would keep it uncounted)',
+  pg_temp.try(format('INSERT INTO trips (user_id, title, destination, demo_source_id) VALUES (%L, %L, %L, gen_random_uuid())',
+    pg_temp.id('demo'), 'forged', 'x')) = -1);
+SELECT pg_temp.check('demo: cannot turn a trip into the sample',
+  pg_temp.try(format('UPDATE trips SET is_sample = true WHERE id = %L', pg_temp.id('demo_trip'))) = -1);
 INSERT INTO trips (user_id, title, destination) VALUES (pg_temp.id('demo'), 'demo 3', 'x');
 SELECT pg_temp.check('demo: the fourth is blocked by 016',
   pg_temp.try(format('INSERT INTO trips (user_id, title, destination) VALUES (%L, %L, %L)', pg_temp.id('demo'), 'demo 4', 'x')) = -1);

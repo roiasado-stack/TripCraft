@@ -39,7 +39,7 @@ the screens say so *before* the user spends time or AI on a second trip.
   - `user_trip_limits` table, with RLS on, no grants to `anon` or `authenticated`, and `service_role` only.
   - `private_trip_limit(uid)`: the override, else 1; NULL for an active agent or an admin.
   - `my_trip_quota()`: `{limit, used, has_sample}` for the caller. Used by the screens only; the trigger is the gate.
-  - Trigger `trips_private_limit`, BEFORE INSERT OR UPDATE OF `is_template, is_sample, demo_source_id`, with `pg_advisory_xact_lock` per user (copying `enforce_agent_trip_limit`).
+  - Trigger `trips_private_limit`, BEFORE INSERT OR UPDATE OF `is_sample, demo_source_id`, with `pg_advisory_xact_lock` per user (copying `enforce_agent_trip_limit`). Templates count for private users, so `is_template` needs no watching. The sample / showcase-copy rules apply to every signed-in caller (an agent or a demo account can later become private); only the count is private-only.
     - **Counts:** owned trips that are not templates, not samples and not showcase copies.
     - **Exempt:** anonymous users, who are left to the existing 016 rule.
     - **Raises:** `private_trip_limit_reached` (23514).
