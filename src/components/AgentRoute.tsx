@@ -33,12 +33,21 @@ export function AgentRoute({ children }: { children: ReactNode }) {
 
 /** The traveller's own screens (trip list, new-trip wizard). An agent account lives only in
  *  /agency: it never gets a private trip list, so these screens send it to `agentTo`.
- *  Trip screens (/trip/:id) stay open — the agency board opens client trips there. */
-export function TravelerRoute({ children, agentTo }: { children: ReactNode; agentTo: string }) {
+ *  Trip screens (/trip/:id) stay open — the agency board opens client trips there.
+ *  `guest` is shown to a signed-out visitor instead of the login redirect (the public landing on /). */
+export function TravelerRoute({
+  children,
+  agentTo,
+  guest,
+}: {
+  children: ReactNode;
+  agentTo: string;
+  guest?: ReactNode;
+}) {
   const { session, loading, rolesReady, rolesError, isAgent } = useAuth();
   if (session && rolesError && !rolesReady) return <RolesLoadError />;
   if (loading || (session && !rolesReady)) return <FullSpinner label="רגע, טוענים…" />;
-  if (!session) return <Navigate to="/auth" replace />;
+  if (!session) return guest ? <>{guest}</> : <Navigate to="/auth" replace />;
   if (isAgent) return <Navigate to={agentTo} replace />;
   return <>{children}</>;
 }
