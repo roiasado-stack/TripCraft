@@ -83,7 +83,7 @@ the screens say so *before* the user spends time or AI on a second trip.
 **Touches:** traveller screens, `/terms`; no change to the public share page payload.
 
 ### Phase 3 (decision 7): private AI pool
-- Migration 030 adds `private_daily_cost_usd()`: today's spend of users who are not active agents, including demo users. `service_role` only, plus the check query.
+- Migration 030 adds `private_daily_cost_usd()`: today's spend of users who are not active agents, including demo users. One number, like `app_agent_daily_cost_usd()`. It is granted to `authenticated`, not `anon`, because the functions call it with the caller's JWT. The migration ends with the check query.
 - **`ask` and `generate`:**
   - **When the caller isn't an active agent:** they're also blocked once the private pool reaches `PRIVATE_APP_DAILY_CAP_USD = 5`.
   - **On a failed read:** it counts as over (fail closed), like the app pool.
