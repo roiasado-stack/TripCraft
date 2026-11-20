@@ -21,7 +21,8 @@ import {
   templateSuggestions,
   templateTrip,
 } from "@/lib/trip-template";
-import { isTripLimitError, TRIP_LIMIT_MESSAGE } from "@/lib/trip-drafts";
+import { atTripLimit, tripLimitMessage } from "@/lib/trip-quota";
+import { useTripQuota } from "@/hooks/use-trip-quota";
 import { itineraryCategory } from "@/lib/trip-options";
 import { flightStamp, isUpcomingFlight } from "@/lib/flight-display";
 import {
@@ -50,6 +51,9 @@ export default function HomeTab() {
   const [composeRequest, setComposeRequest] = useState(0);
   const { user, isAnonymous, isAgent } = useAuth();
   const toast = useToast();
+  // Duplicating makes a new trip the current user owns: hidden for a private account
+  // that already has its one trip (migration 029).
+  const { quota } = useTripQuota();
   const navigate = useNavigate();
 
   /**
@@ -102,7 +106,7 @@ export default function HomeTab() {
       console.error(e);
       // Don't leave a half-built trip behind (its child rows cascade).
       if (newId) await supabase.from("trips").delete().eq("id", newId);
-      toast.error(isTripLimitError(e) ? TRIP_LIMIT_MESSAGE : "השכפול נכשל. נסה שוב.");
+      toast.error(tripLimitMessage(e) ?? "השכפול נכשל. נסה שוב.");
     } finally {
       setDuplicating(false);
     }
@@ -358,7 +362,7 @@ export default function HomeTab() {
 
       <div className="mt-6 divide-y divide-separator overflow-hidden rounded-2xl bg-card">
         <TripMuteRow tripId={trip.id} />
-        {canEdit && !isAnonymous && (
+        {canEdit && !isAnonymous && !atTripLimit(quota) && (
           <button
             type="button"
             onClick={() => {

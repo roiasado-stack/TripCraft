@@ -5,6 +5,9 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { createDemoTrip } from "@/lib/demo-trip";
+import { useTripQuota } from "@/hooks/use-trip-quota";
+import { atTripLimit, tripLimitMessage } from "@/lib/trip-quota";
+import { TripLimitNotice } from "@/components/TripLimitNotice";
 import type { MemberRole, Trip, TripRole } from "@/lib/types";
 import { Button, EmptyState, FullSpinner, GroupedList, ListRow } from "@/components/ui";
 import { TripCard } from "@/components/TripCard";
@@ -19,6 +22,9 @@ export default function TripsListPage() {
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
+  // A private account owns one trip (migration 029): say so instead of opening the wizard.
+  const { quota, reload: reloadQuota } = useTripQuota();
+  const full = atTripLimit(quota);
 
   const seedDemo = async () => {
     if (!user) return;
@@ -29,7 +35,7 @@ export default function TripsListPage() {
       navigate(`/trip/${id}`);
     } catch (e) {
       console.error(e);
-      toast.error("יצירת הדוגמה נכשלה. נסה שוב.");
+      toast.error(tripLimitMessage(e) ?? "יצירת הדוגמה נכשלה. נסה שוב.");
     } finally {
       setSeeding(false);
     }
@@ -144,14 +150,20 @@ export default function TripsListPage() {
             description="בוא ניצור את הטיול הראשון שלך — האשף החכם ידריך אותך שלב-אחר-שלב."
             action={
               <div className="flex flex-col items-center gap-2">
-                <Button size="lg" onClick={() => navigate("/new")}>
-                  <Sparkles className="size-5" />
-                  יצירת טיול חדש
-                </Button>
-                <Button variant="ghost" loading={seeding} onClick={seedDemo}>
-                  <Wand2 className="size-4" />
-                  צור טיול לדוגמה (להתרשמות)
-                </Button>
+                {full ? (
+                  <TripLimitNotice />
+                ) : (
+                  <Button size="lg" onClick={() => navigate("/new")}>
+                    <Sparkles className="size-5" />
+                    יצירת טיול חדש
+                  </Button>
+                )}
+                {!quota?.has_sample && (
+                  <Button variant="ghost" loading={seeding} onClick={seedDemo}>
+                    <Wand2 className="size-4" />
+                    צור טיול לדוגמה (להתרשמות)
+                  </Button>
+                )}
               </div>
             }
           />
@@ -168,7 +180,10 @@ export default function TripsListPage() {
                       trip={trip}
                       role={role}
                       today={today}
-                      onDeleted={(id) => setTrips((prev) => prev.filter((t) => t.id !== id))}
+                      onDeleted={(id) => {
+                        setTrips((prev) => prev.filter((t) => t.id !== id));
+                        void reloadQuota();
+                      }}
                     />
                   ))}
                 </GroupedList>
@@ -180,10 +195,14 @@ export default function TripsListPage() {
       {hasTrips && (
         <div className="material safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-separator">
           <div className="mx-auto max-w-lg px-4 pt-3">
-            <Button size="lg" className="pressable w-full" onClick={() => navigate("/new")}>
-              <Plus className="size-5" />
-              טיול חדש
-            </Button>
+            {full ? (
+              <TripLimitNotice className="mb-3 bg-transparent p-0" />
+            ) : (
+              <Button size="lg" className="pressable w-full" onClick={() => navigate("/new")}>
+                <Plus className="size-5" />
+                טיול חדש
+              </Button>
+            )}
           </div>
         </div>
       )}

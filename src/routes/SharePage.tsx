@@ -29,6 +29,7 @@ import {
   SUGGESTION_KINDS_EN,
 } from "@/lib/share-english";
 import { flightStamp } from "@/lib/flight-display";
+import { tripLimitMessage } from "@/lib/trip-quota";
 import {
   daysBetween,
   formatDayHeb,
@@ -75,7 +76,8 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
       navigate(`/trip/${data as string}`);
     } catch (e) {
       console.error(e);
-      toast.error("לא הצלחנו לפתוח עותק לניסיון. נסו שוב בעוד רגע.");
+      // A signed-in private account at its one trip, copying a private user's showcase (029).
+      toast.error(tripLimitMessage(e) ?? "לא הצלחנו לפתוח עותק לניסיון. נסו שוב בעוד רגע.");
       setTrying(false);
     }
   };

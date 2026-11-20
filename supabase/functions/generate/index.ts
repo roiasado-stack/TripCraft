@@ -25,6 +25,7 @@ import { AGENDA_ITEM_SHAPE, AGENDA_RULES, sanitizeAgenda } from "./agenda.ts";
 import { type DayWindow, clipToWindow, parseDayWindow } from "./day-window.ts";
 import { extractJson, extractJsonObjects } from "./json-extract.ts";
 import { sanitizeScannedFlight } from "./scan-flight.ts";
+import { capVerdict } from "../_shared/ai-caps.ts";
 
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -44,22 +45,13 @@ const VOUCHER_OUTPUT_CONFIG = { effort: "medium" } as const;
 const PRICE_PER_MTOK_INPUT_USD = 2.0;
 const PRICE_PER_MTOK_OUTPUT_USD = 10.0;
 
-// Per-user, per-day, shared with the `ask` function's cap (both write to the
-// same agent_runs table, so my_agent_daily_cost_usd() sums across both).
-const DAILY_CAP_USD = 2.0;
+// The daily caps (per user, app-wide, demo, private pool, an agent's own budget)
+// live in _shared/ai-caps.ts, shared with `ask` — both write to the same
+// agent_runs table, so the totals sum across both.
 
-// App-wide, per-day (migration 014): the per-user cap alone doesn't bound
-// total spend while signup is open. Shared with the other Edge Function —
-// both read the same agent_runs total.
-const APP_DAILY_CAP_USD = 15.0;
-
-// "Try it yourself" visitors (anonymous sessions, migration 016): a taste of
-// the AI, not a free tier. Same numbers as the ask function.
-const DEMO_DAILY_CAP_USD = 0.1;
 // Google place photos per signed-up user per day (the shared Google quota is about 100/day).
 // Also an agent's floor (max(google_daily, this)); mirrored as AGENT_MIN_PHOTOS_PER_DAY in src/lib/agent-admin.ts.
 const PLACE_PHOTOS_PER_USER_PER_DAY = 30;
-const DEMO_APP_DAILY_CAP_USD = 1.0;
 
 /**
  * Which cap the caller, the demo pool (for anonymous callers) or the whole app
@@ -68,28 +60,16 @@ const DEMO_APP_DAILY_CAP_USD = 1.0;
  */
 // deno-lint-ignore no-explicit-any
 async function overDailyCap(supabase: any, isAnonymous: boolean): Promise<"day" | "month" | null> {
-  const [mine, app, demo, agent] = await Promise.all([
+  const [mine, app, demo, privatePool, agent] = await Promise.all([
     supabase.rpc("my_agent_daily_cost_usd"),
     supabase.rpc("app_agent_daily_cost_usd"),
-    isAnonymous ? supabase.rpc("anon_agent_daily_cost_usd") : Promise.resolve({ data: 0 }),
+    isAnonymous ? supabase.rpc("anon_agent_daily_cost_usd") : Promise.resolve({ data: 0, error: null }),
+    // Everyone who isn't an active agent, demo visitors included (migration 030).
+    supabase.rpc("private_daily_cost_usd"),
     // An active travel agent (migration 022): their own day and month caps, or NULL.
-    isAnonymous ? Promise.resolve({ data: null }) : supabase.rpc("my_agent_limits"),
+    isAnonymous ? Promise.resolve({ data: null, error: null }) : supabase.rpc("my_agent_limits"),
   ]);
-  // The app-wide cap is the last line of defence: an unreadable total counts as reached.
-  if (app.error || (app.data ?? 0) >= APP_DAILY_CAP_USD) return "day";
-  // An unreadable personal spend counts as reached too, for every kind of caller.
-  if (mine.error) return "day";
-  if (isAnonymous) {
-    return (mine.data ?? 0) >= DEMO_DAILY_CAP_USD || (demo.data ?? 0) >= DEMO_APP_DAILY_CAP_USD ? "day" : null;
-  }
-  // Can't tell whether the caller is an agent, or can't read an agent's spend: fail closed.
-  if (agent.error) return "day";
-  if (agent.data) {
-    // The month goes first: it won't clear tomorrow, and the message has to say so.
-    if (!(Number(agent.data.ai_monthly_usd) > Number(agent.data.month_cost_usd))) return "month";
-    return !(Number(agent.data.ai_daily_usd) > (mine.data ?? 0)) ? "day" : null;
-  }
-  return (mine.data ?? 0) >= DAILY_CAP_USD ? "day" : null;
+  return capVerdict({ isAnonymous, mine, app, demo, privatePool, agent });
 }
 
 const cors = {
