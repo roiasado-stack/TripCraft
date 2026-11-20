@@ -37,6 +37,9 @@ export interface Trip {
   is_showcase: boolean;
   /** Set on demo copies: the showcase this trip was cloned from. */
   demo_source_id: string | null;
+  /** The "trip for example" (migration 029): one per account, not counted against a
+   *  private account's one trip. Set on insert only. */
+  is_sample: boolean;
   created_at: string;
   updated_at: string;
 }
