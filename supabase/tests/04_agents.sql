@@ -199,8 +199,19 @@ SELECT pg_temp.check('suspended: the agent role is gone',
 SELECT pg_temp.login(pg_temp.id('stranger'));
 SELECT pg_temp.check('suspended: no agent limits and an empty board',
   public.my_agent_limits() IS NULL AND (SELECT count(*) FROM public.agent_trip_board()) = 0);
-SELECT pg_temp.check('suspended: the trip limit no longer applies (back to a regular user)',
+-- Back to a regular user: the agent's limit (2) is gone, and the private one-trip
+-- rule (029) applies instead. With a personal override above their 3 trips, the
+-- agent limit's absence shows; without it, the private rule blocks.
+RESET ROLE;
+INSERT INTO public.user_trip_limits (user_id, max_trips) VALUES (pg_temp.id('stranger'), 10);
+SELECT pg_temp.login(pg_temp.id('stranger'));
+SELECT pg_temp.check('suspended: the agent trip limit no longer applies (back to a regular user)',
   pg_temp.try(format('INSERT INTO trips (user_id, title, destination) VALUES (%L, %L, %L)', pg_temp.id('stranger'), 'three', 'x')) = 1);
+RESET ROLE;
+DELETE FROM public.user_trip_limits WHERE user_id = pg_temp.id('stranger');
+SELECT pg_temp.login(pg_temp.id('stranger'));
+SELECT pg_temp.check('suspended: the private one-trip rule applies instead',
+  pg_temp.try(format('INSERT INTO trips (user_id, title, destination) VALUES (%L, %L, %L)', pg_temp.id('stranger'), 'three', 'x')) = -1);
 SELECT pg_temp.check('suspended: asking again returns suspended',
   public.request_agent_access('Again', null) = 'suspended');
 SELECT pg_temp.check('suspended: asking again does not reopen the account',
