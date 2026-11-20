@@ -29,6 +29,19 @@
 -- Columns / table ----------------------------------------------------------------------
 ALTER TABLE public.trips ADD COLUMN IF NOT EXISTS is_sample BOOLEAN NOT NULL DEFAULT false;
 
+-- Sample trips made before this column existed (src/lib/demo-trip.ts: this exact title
+-- and notes; edited notes = the user made it their own). One per user, the oldest.
+-- Safe to re-run — e.g. right after the site deploy, for samples an old browser tab
+-- created in between.
+UPDATE public.trips t SET is_sample = true
+FROM (
+  SELECT DISTINCT ON (user_id) id FROM public.trips
+  WHERE title = 'חופשה משפחתית ברודוס (דוגמה)' AND notes = 'טיול לדוגמה — אפשר לערוך או למחוק הכל.'
+    AND NOT EXISTS (SELECT 1 FROM public.trips o WHERE o.user_id = trips.user_id AND o.is_sample)
+  ORDER BY user_id, created_at
+) s
+WHERE t.id = s.id;
+
 CREATE TABLE IF NOT EXISTS public.user_trip_limits (
   user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   max_trips INT NOT NULL CHECK (max_trips BETWEEN 0 AND 100),
