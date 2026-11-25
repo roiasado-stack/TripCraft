@@ -147,6 +147,20 @@ describe("injectShareOg (on the real index.html)", () => {
     expect(html).toContain(`<script type="module" src="/src/main.tsx"></script>`);
   });
 
+  it("drops the landing page's own link-preview card: every og:/twitter: tag appears once, the trip's", () => {
+    // Starts from a page that carries the landing card (image + title), or the checks mean nothing.
+    expect(INDEX).toContain('<meta property="og:image" content="https://tripcraft.co.il/og-rome.jpg" />');
+    expect(INDEX).toContain('<meta name="twitter:card" content="summary_large_image" />');
+    for (const meta of [payload({}, ABADA), payload({ title: "החופשה שלנו" })]) {
+      const html = injectShareOg(INDEX, shareOgMeta(meta, opts));
+      const names = [...html.matchAll(/<meta\s+(?:name|property)="((?:og|twitter):[^"]+)"/g)].map((m) => m[1]);
+      expect(names.length).toBeGreaterThan(0);
+      expect(new Set(names).size).toBe(names.length);
+      expect(html).not.toContain("og-rome.jpg");
+      expect(html).not.toContain('property="og:image:width"');
+    }
+  });
+
   it("uses the trip title as the home-screen label of a logo-only agency", () => {
     const html = injectShareOg(INDEX, shareOgMeta(payload({}, { name: null, color: null, logo_path: `${UID}/l.png` }), opts));
     expect(html).not.toContain("TripCraft");
