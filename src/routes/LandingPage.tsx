@@ -70,7 +70,7 @@ const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
 const HERO_VIDEO_SRC = "";
 const HERO_VIDEO_POSTER = "";
 /* Until a self-hosted file exists, the demo plays from YouTube (privacy-enhanced domain, loaded only on click). */
-const HERO_YOUTUBE_ID = "ttd5gtI_jbU";
+const HERO_YOUTUBE_ID = "BxaGWvhj1cY";
 
 /* Where the main CTAs go. Sign in / sign up first, then straight into the new-trip wizard. */
 const CREATE_TRIP_HREF = "/auth?next=/new";
