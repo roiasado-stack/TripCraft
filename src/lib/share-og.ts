@@ -215,13 +215,17 @@ export function shareOgTags(meta: ShareOgMeta): string {
 }
 
 /**
- * index.html with its <title> and description replaced by the card's tags, and
+ * index.html with its <title>, description and og:/twitter: tags replaced by the card's tags, and
  * on an agency trip its home-screen label too. Functions are used as
  * replacements so a "$&" in a trip title stays literal text.
  */
 export function injectShareOg(html: string, meta: ShareOgMeta): string {
   const tags = shareOgTags(meta);
-  let out = html.replace(/[ \t]*<meta\s+name=["']description["'][^>]*>\r?\n?/i, () => "");
+  // The landing page's own card (description + og:/twitter: tags) goes; the trip's replaces it.
+  let out = html.replace(
+    /[ \t]*<meta\s+(?:name|property)=["'](?:description|og:[^"']*|twitter:[^"']*)["'][^>]*>\r?\n?/gi,
+    () => "",
+  );
   if (meta.appTitle) {
     const label = `<meta name="apple-mobile-web-app-title" content="${escapeHtml(meta.appTitle)}" />`;
     out = out.replace(/<meta\s+name=["']apple-mobile-web-app-title["'][^>]*>/i, () => label);
