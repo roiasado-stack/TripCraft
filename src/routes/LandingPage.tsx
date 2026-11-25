@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -68,6 +69,8 @@ const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
  */
 const HERO_VIDEO_SRC = "";
 const HERO_VIDEO_POSTER = "";
+/* Until a self-hosted file exists, the demo plays from YouTube (privacy-enhanced domain, loaded only on click). */
+const HERO_YOUTUBE_ID = "ttd5gtI_jbU";
 
 /* Where the main CTAs go. Sign in / sign up first, then straight into the new-trip wizard. */
 const CREATE_TRIP_HREF = "/auth?next=/new";
@@ -337,16 +340,36 @@ function HeroVideo() {
           preload="metadata"
         />
       ) : (
-        <div
-          className="grid aspect-video w-full place-items-center rounded-3xl border border-border bg-card shadow-pop"
-          role="img"
-          aria-label="סרטון הדגמה"
-        >
-          <span className="grid size-16 place-items-center rounded-full bg-primary text-primary-foreground">
-            <Play className="size-7" />
-          </span>
-        </div>
+        <YouTubeDemo />
       )}
     </div>
+  );
+}
+
+/** Nothing is requested from YouTube until the visitor presses play. */
+function YouTubeDemo() {
+  const [playing, setPlaying] = useState(false);
+  if (playing) {
+    return (
+      <iframe
+        className="aspect-video w-full rounded-3xl border border-border bg-card shadow-pop"
+        src={`https://www.youtube-nocookie.com/embed/${HERO_YOUTUBE_ID}?autoplay=1&rel=0`}
+        title="סרטון הדגמה של TripCraft"
+        allow="autoplay; encrypted-media; picture-in-picture"
+        allowFullScreen
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setPlaying(true)}
+      className="grid aspect-video w-full place-items-center rounded-3xl border border-border bg-card shadow-pop transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label="הפעלת סרטון ההדגמה"
+    >
+      <span className="grid size-16 place-items-center rounded-full bg-primary text-primary-foreground">
+        <Play className="size-7" />
+      </span>
+    </button>
   );
 }
