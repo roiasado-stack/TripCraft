@@ -11,9 +11,9 @@ export const LEGAL = {
   /** Postal address for legal notices. */
   address: "ירושלים",
   /** Contact address for privacy requests, account questions and legal notices.
-   *  TODO: switch to "hello@tripcraft.co.il" (and the supabase/templates footers) once that mailbox
-   *  receives mail — tripcraft.co.il had no MX record on 2026-11-24, so mail to it would bounce. */
-  contactEmail: "Tripcraft26@gmail.com",
+   *  Switched to hello@ once the ImprovMX forward delivered mail (2026-11-25).
+   */
+  contactEmail: "hello@tripcraft.co.il",
   /** Accessibility coordinator — name, and a phone or email to reach them. */
   accessibilityContact: "רועי אסדו",
   /** City whose courts have jurisdiction. */
