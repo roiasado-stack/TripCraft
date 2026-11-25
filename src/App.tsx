@@ -5,6 +5,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { ToastProvider } from "@/hooks/use-toast";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { AnalyticsRouteGuard } from "@/components/AnalyticsRouteGuard";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 import { AgentRoute, TravelerRoute } from "@/components/AgentRoute";
@@ -36,6 +37,8 @@ const PrivacyPage = lazy(() => import("@/routes/LegalPages").then((m) => ({ defa
 const CreditsPage = lazy(() => import("@/routes/LegalPages").then((m) => ({ default: m.CreditsPage })));
 const AccessibilityPage = lazy(() => import("@/routes/LegalPages").then((m) => ({ default: m.AccessibilityPage })));
 const TripLayout = lazy(() => import("@/routes/trip/TripLayout"));
+const SampleTripPage = lazy(() => import("@/routes/SampleTripPage"));
+const TripCreatedPage = lazy(() => import("@/routes/trip/TripCreatedPage"));
 const HomeTab = lazy(() => import("@/routes/trip/HomeTab"));
 const PeopleTab = lazy(() => import("@/routes/trip/PeopleTab"));
 const TransportTab = lazy(() => import("@/routes/trip/TransportTab"));
@@ -71,10 +74,13 @@ export default function App() {
           <ErrorBoundary>
             <AuthProvider>
               <BrowserRouter>
+              <AnalyticsRouteGuard />
               <Suspense fallback={<FullSpinner label="טוען…" />}>
               <Routes>
                 <Route path="/auth" element={<AuthPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/agents" element={<LandingPage agentsPage />} />
+                <Route path="/sample-trip" element={<SampleTripPage />} />
                 <Route path="/share/:slug" element={<SharePage />} />
                 <Route path="/join/:token" element={<JoinPage />} />
                 <Route path="/terms" element={<TermsPage />} />
@@ -154,6 +160,7 @@ export default function App() {
                   }
                 >
                   <Route index element={<HomeTab />} />
+                  <Route path="created" element={<TripCreatedPage />} />
                   <Route path="people" element={<PeopleTab />} />
                   <Route path="transport" element={<TransportTab />} />
                   <Route path="itinerary" element={<ItineraryTab />} />

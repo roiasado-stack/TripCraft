@@ -25,6 +25,7 @@ import {
   type TransferDraft,
 } from "@/lib/trip-drafts";
 import { useTripQuota } from "@/hooks/use-trip-quota";
+import { track } from "@/lib/analytics";
 import { atTripLimit, tripLimitMessage } from "@/lib/trip-quota";
 import { TripLimitNotice } from "@/components/TripLimitNotice";
 import { Flag } from "@/components/Flag";
@@ -45,7 +46,7 @@ type BuildState = { suggestions: TaskStatus | null; itinerary: TaskStatus | null
 const STEPS = ["יעד", "משתתפים", "לוגיסטיקה", "סיכום"];
 
 export default function WizardPage() {
-  const { user, isAgent } = useAuth();
+  const { user, isAgent, isAnonymous } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
@@ -97,6 +98,9 @@ export default function WizardPage() {
       setStep(0);
       return;
     }
+    // The first trip of an account ends on the "trip created" screen (share with co-travellers).
+    // Unknown quota (still loading / failed call) or a demo visitor, who can't share, skips it.
+    const firstTrip = !isAnonymous && quota?.used === 0;
     setSaving(true);
     try {
       const { trip, participants: insertedParticipants, partRows, savedStays } = await insertTripWithDrafts({
@@ -121,7 +125,7 @@ export default function WizardPage() {
       // ---- The trip exists from here on. Nothing below may throw: a failure
       // must never land in the catch below and invite a second "create". ----
       await afterCreate(trip, insertedParticipants, partRows, savedStays);
-      navigate(`/trip/${trip.id}`, { replace: true });
+      navigate(firstTrip ? `/trip/${trip.id}/created` : `/trip/${trip.id}`, { replace: true });
     } catch (e) {
       console.error(e);
       toast.error(tripLimitMessage(e) ?? "משהו השתבש ביצירת הטיול. נסה שוב.");
@@ -314,7 +318,10 @@ export default function WizardPage() {
             tripType, setTripType, budget, setBudget, emoji, setEmoji, duration,
             isAgent, guideName, setGuideName, guidePhone, setGuidePhone,
           }}
-          onImportBookings={() => setBookingsOpen(true)}
+          onImportBookings={() => {
+            track("click_upload_booking", { location: "wizard_bookings" });
+            setBookingsOpen(true);
+          }}
         />
       )}
       {step === 1 && (
@@ -332,7 +339,10 @@ export default function WizardPage() {
           setStays={setStays}
           transfers={transfers}
           setTransfers={setTransfers}
-          onScanVoucher={() => setVoucherOpen(true)}
+          onScanVoucher={() => {
+            track("click_upload_booking", { location: "wizard_voucher" });
+            setVoucherOpen(true);
+          }}
         />
       )}
       {step === 3 && (

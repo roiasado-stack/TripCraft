@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { LEGAL } from "./legal";
 import {
   atTripLimit,
   parseTripQuota,
@@ -50,6 +51,6 @@ describe("tripLimitMessage", () => {
     expect(tripLimitMessage(null)).toBeNull();
   });
   it("the private message names the contact email", () => {
-    expect(PRIVATE_TRIP_LIMIT_MESSAGE).toContain("@gmail.com");
+    expect(PRIVATE_TRIP_LIMIT_MESSAGE).toContain(LEGAL.contactEmail);
   });
 });
