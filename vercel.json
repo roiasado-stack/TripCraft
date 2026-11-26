@@ -1,4 +1,7 @@
 {
+  "redirects": [
+    { "source": "/share/a0d83622e0a9559c0a", "destination": "/share/tripcraft-italy-demo", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/share/:slug", "destination": "/api/share-og/:slug" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
