@@ -36,7 +36,7 @@
  */
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { ANTHROPIC_URL, buildSnapshot, INSTRUCTIONS, matchKnowledgeDestination, MODEL, TOOLS, type Participant } from "./prompt.ts";
+import { ANTHROPIC_URL, buildSnapshot, INSTRUCTIONS, matchKnowledgeDestination, MODEL, todayLine, TOOLS, type Participant } from "./prompt.ts";
 import { capVerdict } from "../_shared/ai-caps.ts";
 import {
   type CuratedItem,
@@ -738,6 +738,8 @@ Deno.serve(async (req) => {
               text: `${INSTRUCTIONS}\n\n--- פרטי הטיול ---\n${snapshot}`,
               cache_control: { type: "ephemeral" },
             },
+            // After the cached block, so the date changing at midnight doesn't break the cache.
+            { type: "text", text: todayLine(new Date(), body.time_zone) },
           ],
           // Participants can't write the itinerary, so the agent isn't offered
           // a card they could never approve.

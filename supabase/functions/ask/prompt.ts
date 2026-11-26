@@ -173,6 +173,30 @@ export function flightWallClock(local: unknown, instant: unknown, timeZone?: unk
   return `${String(w.year).padStart(4, "0")}-${p(w.month)}-${p(w.day)} ${p(w.hour)}:${p(w.minute)}`;
 }
 
+const HEBREW_WEEKDAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+
+/**
+ * Today's date on the traveller's calendar (the zone the client sent, Israel by default), so the
+ * agent can resolve "tomorrow" (#58: it guessed a date). Never the server's UTC day — just after
+ * Israeli midnight that is still yesterday.
+ */
+export function todayLine(now: Date, timeZone?: unknown): string {
+  const zone = validTimeZone(timeZone);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  );
+  const y = Number(parts.year);
+  const m = Number(parts.month);
+  const d = Number(parts.day);
+  const weekday = HEBREW_WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return (
+    `היום: יום ${weekday}, ${parts.year}-${parts.month}-${parts.day} (לפי שעון ${zone}). ` +
+    `השתמש בתאריך הזה כדי לפרש "היום", "מחר", "אתמול" ו"השבוע", ואל תנחש תאריך אחר.`
+  );
+}
+
 /** Compact Hebrew snapshot of the trip, used as the agent's system context. */
 export function buildSnapshot(
   trip: Record<string, unknown>,
