@@ -93,10 +93,10 @@ const TRAVELER_BULLETS = [
 ];
 
 const AGENT_BULLETS = [
-  "העלאת הזמנה קיימת ← טיול מוכן בדקה",
-  "מיתוג מלא עם לוגו הסוכנות",
-  "הלקוח רואה הכל במקום אחד - פחות שאלות אליכם",
-  "סוכן AI שעונה על שאלות לפי הטיול הספציפי",
+  "העלאת אישורי הזמנה ← הטיסות והמלונות נקלטים, ואתם בודקים",
+  "דף טיול עם השם והלוגו של הסוכנות",
+  "הלקוח רואה טיסות, מלונות ומסלול בקישור אחד, בלי הרשמה",
+  "לקוח שמצטרף לטיול מקבל גם סוכן AI בעברית שעונה לפי הטיול",
 ];
 
 /** An installed app (home-screen icon) opens straight on the login screen, not on the brochure. */
@@ -281,11 +281,11 @@ function AudienceSection({ agentsPage }: { agentsPage: boolean }) {
           ) : (
             <>
               <h2 className="font-display text-2xl font-extrabold leading-tight tracking-tight sm:text-3xl">
-                הפכו כל הזמנה לטיול ממותג של הסוכנות שלכם, בלחיצת כפתור.
+                הפכו כל הזמנה לדף טיול ממותג של הסוכנות שלכם.
               </h2>
               <p className="mt-3 text-[16px] leading-relaxed text-muted-foreground">
-                הלקוח שלכם מקבל אפליקציה עם הלוגו שלכם, עם כל הטיול, המסמכים, הצ׳קליסט וסוכן AI שעונה בשמכם. פחות
-                טלפונים, יותר רושם מקצועי.
+                מעלים את אישורי ההזמנה, בודקים את הפרטים ושולחים ללקוח קישור. הוא פותח אותו בטלפון, בלי להוריד
+                כלום, ורואה את הטיול עם השם והלוגו שלכם.
               </p>
               <BulletList items={AGENT_BULLETS} />
               <div className="mt-6 flex flex-col gap-3 sm:flex-row">
