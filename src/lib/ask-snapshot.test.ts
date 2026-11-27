@@ -1,5 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { buildSnapshot, flightWallClock, formatWallClock } from "../../supabase/functions/ask/prompt";
+import { buildSnapshot, flightWallClock, formatWallClock, todayLine } from "../../supabase/functions/ask/prompt";
+
+// #58: the agent didn't know today's date and guessed "tomorrow".
+describe("agent's today line", () => {
+  // 22:30 UTC on Tuesday 24.11 is already Wednesday 25.11 in Israel (UTC+2).
+  const lateNight = new Date("2026-11-24T22:30:00Z");
+
+  it("uses the traveller's calendar day, not the UTC day", () => {
+    const s = todayLine(lateNight, "Asia/Jerusalem");
+    expect(s).toContain("יום רביעי, 2026-11-25");
+    expect(s).not.toContain("2026-11-24");
+  });
+
+  it("follows the zone the client sent", () => {
+    expect(todayLine(lateNight, "America/New_York")).toContain("יום שלישי, 2026-11-24");
+  });
+
+  it("falls back to Israel for a missing or invalid zone", () => {
+    expect(todayLine(lateNight)).toContain("יום רביעי, 2026-11-25");
+    expect(todayLine(lateNight, "Not/AZone")).toContain("2026-11-25 (לפי שעון Asia/Jerusalem)");
+  });
+
+  it("names Saturday as שבת", () => {
+    expect(todayLine(new Date("2026-11-28T10:00:00Z"), "Asia/Jerusalem")).toContain("יום שבת, 2026-11-28");
+  });
+});
 
 // A voucher's 07:40 departure, saved from an Israeli browser, is stored as UTC.
 const SUMMER = "2026-10-04T04:40:00+00:00"; // IDT, UTC+3
