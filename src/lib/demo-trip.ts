@@ -36,14 +36,7 @@ export async function createDemoTrip(userId: string): Promise<string> {
     d.setDate(d.getDate() + n);
     return iso(d);
   };
-  const at = (dayOffset: number, time: string) => {
-    const d = new Date(start);
-    d.setDate(d.getDate() + dayOffset);
-    const [h, m] = time.split(":").map(Number);
-    d.setHours(h, m, 0, 0);
-    return d.toISOString();
-  };
-  /** A flight's ticket time: the wall clock at its own airport, no zone. */
+  /** A ticket / voucher time: the wall clock where it happens, no zone. */
   const wall = (dayOffset: number, time: string) => `${dayN(dayOffset)}T${time}`;
   const ZONES: Record<string, string> = { TLV: "Asia/Jerusalem", RHO: "Europe/Athens" };
 
@@ -211,8 +204,9 @@ export async function createDemoTrip(userId: string): Promise<string> {
       provider: "Hertz",
       pickup_location: "נמל התעופה רודוס",
       dropoff_location: "נמל התעופה רודוס",
-      pickup_at: at(0, "10:00"),
-      return_at: at(5, "18:00"),
+      // The voucher's wall clock; the trigger (032) derives pickup_at / return_at.
+      pickup_local: wall(0, "10:00"),
+      return_local: wall(5, "18:00"),
       booking_ref: "HZ-99120",
       notes: "רכב משפחתי, כיסא בטיחות לילד.",
       phone: "+302241111111",

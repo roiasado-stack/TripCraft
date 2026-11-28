@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { FileDown, Plane, Wand2 } from "lucide-react";
+import { Car, FileDown, Plane, Route, Wand2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
@@ -29,6 +29,7 @@ import {
   SUGGESTION_KINDS_EN,
 } from "@/lib/share-english";
 import { flightStamp } from "@/lib/flight-display";
+import { transferKind, transferStamp } from "@/lib/transfer-times";
 import { tripLimitMessage } from "@/lib/trip-quota";
 import {
   daysBetween,
@@ -153,6 +154,8 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
     );
 
   const { trip, agency, flights, stays, suggestions, updates } = shared;
+  // Absent from a payload served by a database before 032.
+  const transfers = shared.transfers ?? [];
   // The RPC returns day_date, sort_order; the page shows the same order as the app.
   const itinerary = sortItinerary(shared.itinerary);
   // 023 already filters these server-side; checked again because they reach
@@ -325,6 +328,56 @@ function SharedTrip({ en }: { en: typeof SHARE_EN | null }) {
                 <MapLink url={stayMapUrl(st, trip.destination)} className="print:hidden" />
               </div>
             ))}
+          </GroupedList>
+        </Section>
+      )}
+
+      {/* transfers — boats, ferries and seaplanes included (032). Only the kind, the
+          provider and the voucher's wall clock reach this page: never the place, phone,
+          link, booking number or notes. */}
+      {transfers.length > 0 && (
+        <Section title={en?.transfers ?? "העברות"}>
+          <GroupedList>
+            {transfers.map((x) => {
+              const rental = transferKind(x.kind) === "car_rental";
+              const pickup = transferStamp(x.pickup_local, null, en ? "en" : "he");
+              const back = rental ? transferStamp(x.return_local, null, en ? "en" : "he") : "";
+              const Icon = rental ? Car : Route;
+              return (
+                <div key={x.id} className="flex items-center gap-3 px-4 py-3 print:break-inside-avoid">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+                    <Icon className="size-5" aria-hidden />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="type-headline [overflow-wrap:anywhere]">
+                      {rental ? (en?.carRental ?? "רכב שכור") : (en?.transfer ?? "העברה")}
+                      {x.provider && (
+                        <span className="font-normal text-muted-foreground">
+                          {" · "}
+                          <bdi>{x.provider}</bdi>
+                        </span>
+                      )}
+                    </div>
+                    {/* The voucher's wall clock — never the visitor's zone. */}
+                    {(pickup || back) && (
+                      <div className="type-footnote text-muted-foreground">
+                        {pickup && (
+                          <>
+                            {en?.pickup ?? "איסוף"} <bdi className="tabular-nums">{pickup}</bdi>
+                          </>
+                        )}
+                        {pickup && back && " · "}
+                        {back && (
+                          <>
+                            {en?.carReturn ?? "החזרה"} <bdi className="tabular-nums">{back}</bdi>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </GroupedList>
         </Section>
       )}

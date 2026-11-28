@@ -28,27 +28,7 @@ function fileToBase64(file: File): Promise<{ media_type: string; data: string }>
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
 
-function isoToDatePart(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-function isoToHour(iso: string | null): string {
-  const d = iso ? new Date(iso) : null;
-  return d && !isNaN(d.getTime()) ? String(d.getHours()).padStart(2, "0") : "";
-}
-function isoToMinute(iso: string | null): string {
-  const d = iso ? new Date(iso) : null;
-  return d && !isNaN(d.getTime()) ? String(d.getMinutes()).padStart(2, "0") : "";
-}
-function partsToIso(date: string, hour: string, minute: string): string | null {
-  if (!date) return null;
-  const d = new Date(`${date}T${hour || "00"}:${minute || "00"}:00`);
-  return isNaN(d.getTime()) ? null : d.toISOString();
-}
-/** A flight's ticket time stays a wall clock ("YYYY-MM-DDTHH:MM"), never read in the browser's zone. */
+/** A ticket / voucher time stays a wall clock ("YYYY-MM-DDTHH:MM"), never read in the browser's zone. */
 function wallParts(value: string | null): { date: string; hour: string; minute: string } {
   const wall = wallOf(value);
   return wall ? { date: wall.slice(0, 10), hour: wall.slice(11, 13), minute: wall.slice(14, 16) } : { date: "", hour: "", minute: "" };
@@ -97,8 +77,9 @@ export interface VoucherCarData {
   provider: string | null;
   pickup_location: string | null;
   dropoff_location: string | null;
-  pickup_at: string | null; // ISO
-  return_at: string | null; // ISO
+  /** The voucher's wall clock ("YYYY-MM-DDTHH:MM[:SS]", no offset), like a flight's. */
+  pickup_at: string | null;
+  return_at: string | null;
   booking_ref: string | null;
   phone: string | null;
   url: string | null;
@@ -162,24 +143,21 @@ export const blankCar: VoucherCarData = {
 };
 
 /** A date + 24h-time pair of controls, matching TransportTab's departure fields.
- *  `wall`: the value is a ticket wall clock (flights), kept as typed with no zone;
- *  otherwise an instant in the browser's zone (cars, unchanged). */
+ *  The value is the voucher's wall clock (flights since 028, cars / transfers since 032),
+ *  kept as typed with no zone — never read in the browser's zone. */
 function DateTimeFields({
   dateLabel,
   timeLabel,
   iso,
   onChange,
-  wall = false,
 }: {
   dateLabel: string;
   timeLabel: string;
   iso: string | null;
   onChange: (iso: string | null) => void;
-  wall?: boolean;
 }) {
-  const parts = wall ? wallParts(iso) : { date: isoToDatePart(iso), hour: isoToHour(iso), minute: isoToMinute(iso) };
-  const { date, hour, minute } = parts;
-  const set = (d: string, h: string, m: string) => onChange(wall ? partsToWall(d, h, m) : partsToIso(d, h, m));
+  const { date, hour, minute } = wallParts(iso);
+  const set = (d: string, h: string, m: string) => onChange(partsToWall(d, h, m));
   return (
     <div className="grid grid-cols-2 gap-2">
       <Field label={dateLabel}>
@@ -264,14 +242,12 @@ function FlightFields({
         timeLabel="שעת המראה (24 שעות)"
         iso={data.depart_at}
         onChange={(iso) => patch({ depart_at: iso })}
-        wall
       />
       <DateTimeFields
         dateLabel="תאריך נחיתה"
         timeLabel="שעת נחיתה (24 שעות)"
         iso={data.arrive_at}
         onChange={(iso) => patch({ arrive_at: iso })}
-        wall
       />
       <div className="grid grid-cols-2 gap-2">
         <Field label="טרמינל יציאה">
