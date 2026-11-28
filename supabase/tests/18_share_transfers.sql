@@ -155,3 +155,28 @@ SELECT pg_temp.check('demo user: cannot change the real trip''s transfer times',
 RESET ROLE;
 SELECT set_config('request.jwt.claims', '', true);  -- the demo's sub would trip the owner-only guard
 UPDATE public.trips SET is_showcase = false WHERE id = pg_temp.id('trip');
+
+-- Provider filter (review fix): digits are counted, not matched as a run --------------------
+-- Every separator a phone number can hide behind, other digit scripts, and an email are
+-- dropped; a provider with a few digits of its own ("24/7") is kept as entered.
+INSERT INTO transfers (trip_id, provider, pickup_local) VALUES
+  (pg_temp.id('trip'), 'PF-EN-DASH 050–123–4567', '2027-04-01 10:00'),
+  (pg_temp.id('trip'), E'PF-NBSP 050 123 4567', '2027-04-01 10:01'),
+  (pg_temp.id('trip'), 'PF-SLASH 050/123/4567', '2027-04-01 10:02'),
+  (pg_temp.id('trip'), 'PF-UNDERSCORE 050_123_4567', '2027-04-01 10:03'),
+  (pg_temp.id('trip'), 'PF-ARABIC ٠٥٠١٢٣٤٥٦٧', '2027-04-01 10:04'),
+  (pg_temp.id('trip'), 'PF-PERSIAN ۰۵۰۱۲۳۴۵۶۷', '2027-04-01 10:05'),
+  (pg_temp.id('trip'), 'PF-EMAIL driver@example.com', '2027-04-01 10:06'),
+  (pg_temp.id('trip'), 'Europcar 24/7', '2027-04-01 10:07');
+SELECT pg_temp.login_anon();
+SELECT pg_temp.check('anon: provider dropped (' || leak || ')',
+  position(leak in public.get_shared_trip('test-slug-0123456789')::text) = 0)
+FROM unnest(ARRAY['PF-EN-DASH', 'PF-NBSP', 'PF-SLASH', 'PF-UNDERSCORE', 'PF-ARABIC', 'PF-PERSIAN', 'PF-EMAIL',
+                  '4567', '٤٥٦٧', '۴۵۶۷', 'driver@example.com']) AS leak;
+SELECT pg_temp.check('anon: the dropped providers'' transfers still show, with their times',
+  (SELECT count(*) FROM jsonb_array_elements(public.get_shared_trip('test-slug-0123456789') -> 'transfers') x
+    WHERE x ->> 'pickup_local' LIKE '2027-04-01T10:0%' AND x -> 'provider' = 'null'::jsonb) = 7);
+SELECT pg_temp.check('anon: a provider with a few digits of its own is kept as entered (Europcar 24/7)',
+  EXISTS (SELECT 1 FROM jsonb_array_elements(public.get_shared_trip('test-slug-0123456789') -> 'transfers') x
+           WHERE x ->> 'provider' = 'Europcar 24/7' AND x ->> 'pickup_local' = '2027-04-01T10:07:00'));
+RESET ROLE;

@@ -35,8 +35,11 @@
 --    car rental. Left out on purpose: pickup / drop-off place (free text — for a
 --    transfer from home it is the client's home address), the phone (can be a
 --    private driver's mobile), the link (booking-management links carry tokens),
---    the booking number and the notes. A provider that contains a phone-number-
---    like run of digits is dropped too. Nothing else in the function changes.
+--    the booking number and the notes. The provider is shown as entered, except
+--    that it is dropped when it holds 7 or more digits in total (Latin, Arabic-
+--    Indic or Persian; counted, not matched as a run, so dashes, spaces, slashes
+--    or underscores between them don't hide a phone number) or an '@' (an email).
+--    Nothing else in the function changes.
 --
 -- clone_showcase_trip (019) copies transfers column by column through
 -- jsonb_populate_record, so the new columns come along and the trigger derives
@@ -139,7 +142,8 @@ RETURNS JSONB LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $
       SELECT jsonb_agg(jsonb_build_object(
         'id', x.id,
         'kind', CASE WHEN x.kind = 'car_rental' THEN 'car_rental' ELSE 'transfer' END,
-        'provider', CASE WHEN x.provider ~ '[0-9][0-9 ().+-]{5,}[0-9]' THEN NULL ELSE NULLIF(btrim(x.provider), '') END,
+        'provider', CASE WHEN length(regexp_replace(x.provider, '[^0-9٠-٩۰-۹]', '', 'g')) >= 7 OR x.provider ~ '@'
+                         THEN NULL ELSE NULLIF(btrim(x.provider), '') END,
         'pickup_local', x.pickup_local,
         'return_local', CASE WHEN x.kind = 'car_rental' THEN x.return_local END
       ) ORDER BY x.pickup_local NULLS LAST, x.created_at)

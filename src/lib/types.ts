@@ -126,7 +126,7 @@ export interface SharedTripPayload {
   stays: Pick<Stay, "id" | "hotel_name" | "address" | "check_in" | "check_out" | "map_url">[];
   /**
    * Since 032 (optional: an old payload lacks it). `kind` is only "transfer" or "car_rental";
-   * `provider` is null when it held a phone number; `return_local` only for a car rental. Never
+   * `provider` is shown as entered, but null when it holds 7+ digits in total or an "@" (a phone or email); `return_local` only for a car rental. Never
    * the pickup / drop-off place, phone, link, booking number or notes.
    */
   transfers?: (Pick<Transfer, "id" | "kind" | "provider"> & Partial<Pick<Transfer, "pickup_local" | "return_local">>)[];

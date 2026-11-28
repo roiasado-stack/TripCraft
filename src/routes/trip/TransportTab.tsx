@@ -965,7 +965,10 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
               value={editingTransfer.kind}
               onChange={(v) => setEditingTransfer({ ...editingTransfer, kind: v as TransferDraft["kind"] })}
             />
-            <Field label={editingTransfer.kind === "car_rental" ? "חברת ההשכרה" : "חברת ההסעות"}>
+            <Field
+              label={editingTransfer.kind === "car_rental" ? "חברת ההשכרה" : "חברת ההסעות"}
+              hint="השם יופיע גם בקישור הציבורי של הטיול. טלפון ומספר הזמנה כתבו בשדות שלהם."
+            >
               <Input
                 value={editingTransfer.provider}
                 onChange={(e) => setEditingTransfer({ ...editingTransfer, provider: e.target.value })}

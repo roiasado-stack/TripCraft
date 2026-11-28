@@ -45,7 +45,7 @@ Approved by Roi 2026-11-27. Source: `business/product/spirit-claims-audit-2026-1
   (same for return). Instants are not touched.
 - `get_shared_trip` = 028's definition plus `transfers`, ordered by pickup time:
   `id`, `kind` (normalised to `transfer` / `car_rental`), `provider` (dropped when it holds
-  something that looks like a phone number), `pickup_local`, `return_local` (car rentals only).
+  7+ digits in total or an "@"), `pickup_local`, `return_local` (car rentals only).
 - Ends with the zero-rows check.
 
 ### Old rows (stated, not guessed)
@@ -64,7 +64,7 @@ them back in Israel time:
 | column | public? | why |
 |---|---|---|
 | `kind` | yes, normalised | fixed vocabulary |
-| `provider` | yes, unless it contains a phone-number-like run of digits | a company name ("Hertz", "Sun Boats"); the filter drops a typed-in driver mobile |
+| `provider` | yes, as entered, unless it holds 7+ digits in total (Latin / Arabic-Indic / Persian, counted so separators can't hide them) or an "@" | a company name ("Hertz", "Sun Boats"); the filter drops a typed-in driver mobile or email; the transport tab says the name appears on the public link |
 | `pickup_local`, `return_local` | yes | the whole point; `return_local` only for car rentals |
 | `pickup_location`, `dropoff_location` | **no** | free text; for a transfer from home to the airport it is the client's home address. Not clearly safe, so left out (one-line change in a later migration if Roi decides otherwise) |
 | `phone` | no | can be a private driver's mobile |
@@ -73,7 +73,7 @@ them back in Israel time:
 | `pickup_at`, `return_at` | no | the page renders the locals; instants add nothing |
 
 No new category of personal data becomes public (a company name and a time). Both legal pages
-list exactly what the public link shows, so that list gains "העברות (סוג, ספק ושעה בלבד…)" in
+list exactly what the public link shows, so that list gains "העברות (סוג, שעה ושם הספק כפי שהוזן…)" in
 `/privacy` §4 and the terms §5 — the list stays accurate; nothing else in them changes.
 
 ### Client
