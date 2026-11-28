@@ -64,7 +64,7 @@ them back in Israel time:
 | column | public? | why |
 |---|---|---|
 | `kind` | yes, normalised | fixed vocabulary |
-| `provider` | yes, as entered, unless it holds 7+ digits in total (Latin / Arabic-Indic / Persian, counted so separators can't hide them) or an "@" | a company name ("Hertz", "Sun Boats"); the filter drops a typed-in driver mobile or email; the transport tab says the name appears on the public link |
+| `provider` | yes, as entered, unless it holds 7+ digits in total (any script, after NFKC so full-width forms count; counted so separators do not hide them) or an "@" | a company name ("Hertz", "Sun Boats"); the filter drops a typed-in driver mobile or email; the transport tab says the name appears on the public link |
 | `pickup_local`, `return_local` | yes | the whole point; `return_local` only for car rentals |
 | `pickup_location`, `dropoff_location` | **no** | free text; for a transfer from home to the airport it is the client's home address. Not clearly safe, so left out (one-line change in a later migration if Roi decides otherwise) |
 | `phone` | no | can be a private driver's mobile |

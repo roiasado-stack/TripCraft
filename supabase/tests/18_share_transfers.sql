@@ -167,15 +167,19 @@ INSERT INTO transfers (trip_id, provider, pickup_local) VALUES
   (pg_temp.id('trip'), 'PF-ARABIC ٠٥٠١٢٣٤٥٦٧', '2027-04-01 10:04'),
   (pg_temp.id('trip'), 'PF-PERSIAN ۰۵۰۱۲۳۴۵۶۷', '2027-04-01 10:05'),
   (pg_temp.id('trip'), 'PF-EMAIL driver@example.com', '2027-04-01 10:06'),
-  (pg_temp.id('trip'), 'Europcar 24/7', '2027-04-01 10:07');
+  (pg_temp.id('trip'), 'Europcar 24/7', '2027-04-01 10:07'),
+  (pg_temp.id('trip'), 'PF-FULLWIDTH ０５０１２３４５６７', '2027-04-01 10:08'),
+  (pg_temp.id('trip'), 'PF-FWAT driver＠example.com', '2027-04-01 10:09'),
+  (pg_temp.id('trip'), 'PF-DEVANAGARI ०५०१२३४५६७', '2027-04-01 10:10');
 SELECT pg_temp.login_anon();
 SELECT pg_temp.check('anon: provider dropped (' || leak || ')',
   position(leak in public.get_shared_trip('test-slug-0123456789')::text) = 0)
 FROM unnest(ARRAY['PF-EN-DASH', 'PF-NBSP', 'PF-SLASH', 'PF-UNDERSCORE', 'PF-ARABIC', 'PF-PERSIAN', 'PF-EMAIL',
-                  '4567', '٤٥٦٧', '۴۵۶۷', 'driver@example.com']) AS leak;
+                  '4567', '٤٥٦٧', '۴۵۶۷', 'driver@example.com',
+                  'PF-FULLWIDTH', 'PF-FWAT', 'PF-DEVANAGARI', '４５６７', '＠example', '४५६७']) AS leak;
 SELECT pg_temp.check('anon: the dropped providers'' transfers still show, with their times',
   (SELECT count(*) FROM jsonb_array_elements(public.get_shared_trip('test-slug-0123456789') -> 'transfers') x
-    WHERE x ->> 'pickup_local' LIKE '2027-04-01T10:0%' AND x -> 'provider' = 'null'::jsonb) = 7);
+    WHERE x ->> 'pickup_local' LIKE '2027-04-01T10:%' AND x -> 'provider' = 'null'::jsonb) = 10);
 SELECT pg_temp.check('anon: a provider with a few digits of its own is kept as entered (Europcar 24/7)',
   EXISTS (SELECT 1 FROM jsonb_array_elements(public.get_shared_trip('test-slug-0123456789') -> 'transfers') x
            WHERE x ->> 'provider' = 'Europcar 24/7' AND x ->> 'pickup_local' = '2027-04-01T10:07:00'));
