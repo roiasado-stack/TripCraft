@@ -18,7 +18,7 @@ import {
   stayMapUrl,
   taxiSearchUrl,
 } from "@/lib/maps";
-import { formatDateTimeHeb } from "@/lib/trip-options";
+import { joinTransferWall, transferFormParts, transferKind, transferStamp } from "@/lib/transfer-times";
 import { durationHeb, flightDurationMinutes, flightEndHeb } from "@/lib/flight-display";
 import { dateRangeHeb } from "@/lib/trip-dates";
 import {
@@ -44,26 +44,6 @@ const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
 const DURATION_HOURS = Array.from({ length: 21 }, (_, i) => String(i));
 
-function isoToDatePart(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-function isoToHour(iso: string | null): string {
-  const d = iso ? new Date(iso) : null;
-  return d && !isNaN(d.getTime()) ? String(d.getHours()).padStart(2, "0") : "";
-}
-function isoToMinute(iso: string | null): string {
-  const d = iso ? new Date(iso) : null;
-  return d && !isNaN(d.getTime()) ? String(d.getMinutes()).padStart(2, "0") : "";
-}
-function partsToIso(date: string, hour: string, minute: string): string | null {
-  if (!date) return null;
-  const d = new Date(`${date}T${hour || "00"}:${minute || "00"}:00`);
-  return isNaN(d.getTime()) ? null : d.toISOString();
-}
 type StayDraft = {
   id?: string;
   hotel_name: string;
@@ -124,19 +104,22 @@ const blankTransfer: TransferDraft = {
   notes: "",
 };
 
+/** Row → form, at the voucher's wall clock (032) — the same in every device zone. */
 function transferToDraft(t: Transfer): TransferDraft {
+  const pickup = transferFormParts(t.pickup_local, t.pickup_at);
+  const ret = transferFormParts(t.return_local, t.return_at);
   return {
     id: t.id,
-    kind: t.kind === "car_rental" ? "car_rental" : "transfer",
+    kind: transferKind(t.kind),
     provider: t.provider ?? "",
     pickup_location: t.pickup_location ?? "",
-    pickup_date: isoToDatePart(t.pickup_at),
-    pickup_hour: isoToHour(t.pickup_at),
-    pickup_minute: isoToMinute(t.pickup_at),
+    pickup_date: pickup.date,
+    pickup_hour: pickup.hour,
+    pickup_minute: pickup.minute,
     dropoff_location: t.dropoff_location ?? "",
-    return_date: isoToDatePart(t.return_at),
-    return_hour: isoToHour(t.return_at),
-    return_minute: isoToMinute(t.return_at),
+    return_date: ret.date,
+    return_hour: ret.hour,
+    return_minute: ret.minute,
     booking_ref: t.booking_ref ?? "",
     phone: t.phone ?? "",
     notes: t.notes ?? "",
@@ -322,7 +305,7 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
   const saveTransfer = async () => {
     if (!editingTransfer) return;
     const d = editingTransfer;
-    // A time without its date would be dropped silently (partsToIso needs the date).
+    // A time without its date would be dropped silently (joinTransferWall needs the date).
     if ((d.pickup_hour || d.pickup_minute) && !d.pickup_date) {
       toast.error("בחרו גם תאריך איסוף");
       return;
@@ -331,9 +314,11 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
       toast.error("בחרו גם תאריך החזרה");
       return;
     }
-    const pickup_at = partsToIso(d.pickup_date, d.pickup_hour, d.pickup_minute);
-    const return_at = d.kind === "car_rental" ? partsToIso(d.return_date, d.return_hour, d.return_minute) : null;
-    if (pickup_at && return_at && return_at < pickup_at) {
+    // The voucher's wall clock, never read in this device's zone; the trigger (032) derives
+    // pickup_at / return_at. Both are "YYYY-MM-DDTHH:MM", so string order is time order.
+    const pickup_local = joinTransferWall(d.pickup_date, d.pickup_hour, d.pickup_minute);
+    const return_local = d.kind === "car_rental" ? joinTransferWall(d.return_date, d.return_hour, d.return_minute) : null;
+    if (pickup_local && return_local && return_local < pickup_local) {
       toast.error("מועד ההחזרה לפני מועד האיסוף");
       return;
     }
@@ -343,9 +328,9 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
       kind: d.kind,
       provider: d.provider.trim() || null,
       pickup_location: d.pickup_location.trim() || null,
-      pickup_at,
+      pickup_local,
       dropoff_location: d.dropoff_location.trim() || null,
-      return_at,
+      return_local,
       booking_ref: d.booking_ref.trim() || null,
       phone: d.phone.trim() || null,
       notes: d.notes.trim() || null,
@@ -586,6 +571,9 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
         ) : (
           transfers.map((t) => {
             const pickupMap = resolveMapUrl(null, t.pickup_location, trip.destination);
+            // As printed on the voucher, whatever this device's zone (032).
+            const pickupWhen = transferStamp(t.pickup_local, t.pickup_at, "he");
+            const returnWhen = transferStamp(t.return_local, t.return_at, "he");
             return (
               <div key={t.id} className="flex items-start gap-3 py-3 ps-4 pe-1">
                 <Car className="mt-0.5 size-5 shrink-0 text-primary" />
@@ -594,11 +582,11 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
                     {t.kind === "car_rental" ? "רכב שכור" : "העברה"}
                     {t.provider && <span className="font-normal text-muted-foreground"> · {t.provider}</span>}
                   </div>
-                  {t.pickup_location && (
+                  {(t.pickup_location || pickupWhen) && (
                     <div className="type-footnote text-muted-foreground [overflow-wrap:anywhere]">
                       {/* The place is often English: isolate it so the Hebrew line keeps its order. */}
-                      איסוף: <bdi>{t.pickup_location}</bdi>
-                      {t.pickup_at && <> · <bdi>{formatDateTimeHeb(t.pickup_at)}</bdi></>}
+                      איסוף:{t.pickup_location && <> <bdi>{t.pickup_location}</bdi></>}
+                      {pickupWhen && <>{t.pickup_location ? " ·" : ""} <bdi className="tabular-nums">{pickupWhen}</bdi></>}
                     </div>
                   )}
                   {t.dropoff_location && (
@@ -606,7 +594,11 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
                       החזרה: <bdi>{t.dropoff_location}</bdi>
                     </div>
                   )}
-                  {t.return_at && <div className="type-footnote text-muted-foreground">מועד החזרה: {formatDateTimeHeb(t.return_at)}</div>}
+                  {returnWhen && (
+                    <div className="type-footnote text-muted-foreground">
+                      מועד החזרה: <bdi className="tabular-nums">{returnWhen}</bdi>
+                    </div>
+                  )}
                   {t.booking_ref && (
                     <div className="type-footnote text-muted-foreground">
                       אסמכתה <bdi className="font-semibold tracking-wide text-foreground">{t.booking_ref}</bdi>
@@ -973,7 +965,10 @@ export default function TransportTab({ embedded = false }: { embedded?: boolean 
               value={editingTransfer.kind}
               onChange={(v) => setEditingTransfer({ ...editingTransfer, kind: v as TransferDraft["kind"] })}
             />
-            <Field label={editingTransfer.kind === "car_rental" ? "חברת ההשכרה" : "חברת ההסעות"}>
+            <Field
+              label={editingTransfer.kind === "car_rental" ? "חברת ההשכרה" : "חברת ההסעות"}
+              hint="השם יופיע גם בקישור הציבורי של הטיול. טלפון ומספר הזמנה כתבו בשדות שלהם."
+            >
               <Input
                 value={editingTransfer.provider}
                 onChange={(e) => setEditingTransfer({ ...editingTransfer, provider: e.target.value })}

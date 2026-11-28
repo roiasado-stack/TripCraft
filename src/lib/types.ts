@@ -124,6 +124,12 @@ export interface SharedTripPayload {
   flights: (Pick<Flight, "id" | "from_airport" | "to_airport" | "airline" | "flight_number" | "depart_at"> &
     Partial<Pick<Flight, "arrive_at" | "depart_local" | "arrive_local" | "from_tz" | "to_tz">>)[];
   stays: Pick<Stay, "id" | "hotel_name" | "address" | "check_in" | "check_out" | "map_url">[];
+  /**
+   * Since 032 (optional: an old payload lacks it). `kind` is only "transfer" or "car_rental";
+   * `provider` is shown as entered, but null when it holds 7+ digits in total or an "@" (a phone or email); `return_local` only for a car rental. Never
+   * the pickup / drop-off place, phone, link, booking number or notes.
+   */
+  transfers?: (Pick<Transfer, "id" | "kind" | "provider"> & Partial<Pick<Transfer, "pickup_local" | "return_local">>)[];
   itinerary: Pick<
     ItineraryItem,
     "id" | "day_date" | "start_time" | "title" | "description" | "category" | "location" | "map_url"
@@ -194,8 +200,15 @@ export interface Transfer {
   provider: string | null;
   pickup_location: string | null;
   dropoff_location: string | null;
+  /** Ordering keys only: the transfers_local_times trigger (032) derives them from the locals, read as Israel time. */
   pickup_at: string | null;
   return_at: string | null;
+  /**
+   * The voucher's wall-clock times, "YYYY-MM-DDTHH:MM:SS" with no offset (032). Display these as
+   * strings (`@/lib/transfer-times`) — never through Date in the viewer's zone.
+   */
+  pickup_local?: string | null;
+  return_local?: string | null;
   booking_ref: string | null;
   notes: string | null;
   phone: string | null;

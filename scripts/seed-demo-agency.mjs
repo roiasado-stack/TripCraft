@@ -134,14 +134,8 @@ const dayAt = (offset) => {
   return d;
 };
 const day = (offset) => ymd(dayAt(offset));
-/** An instant: that day at this wall-clock time on the machine running the seed (Israel, for Roi). */
-const at = (offset, hhmm) => {
-  const [h, m] = hhmm.split(":").map(Number);
-  const d = dayAt(offset);
-  d.setHours(h, m, 0, 0);
-  return d.toISOString(); // a full instant, not a calendar day
-};
-/** A flight's ticket time: that day's wall clock at its own airport, no zone (migration 028). */
+/** A ticket / voucher time: that day's wall clock where it happens, no zone (flights 028,
+ *  transfers 032 — the triggers derive depart_at / pickup_at). */
 const wall = (offset, hhmm) => `${day(offset)}T${hhmm}`;
 /** The seeded airports' zones; the flights_local_times trigger derives depart_at / arrive_at. */
 const AIRPORT_TZ = {
@@ -218,7 +212,7 @@ function buildTrips() {
         { hotel_name: "Albergo Esempio Trastevere", address: "Trastevere, Roma", check_in: day(21), check_out: day(26), booking_ref: "DEMO-H1", notes: "חדר משפחתי, ארוחת בוקר כלולה (דמו)" },
       ],
       transfers: [
-        { kind: "transfer", provider: "הסעות דמו", pickup_location: "FCO", dropoff_location: "Albergo Esempio Trastevere", pickup_at: at(21, "10:45"), booking_ref: "DEMO-T1" },
+        { kind: "transfer", provider: "הסעות דמו", pickup_location: "FCO", dropoff_location: "Albergo Esempio Trastevere", pickup_local: wall(21, "10:45"), booking_ref: "DEMO-T1" },
       ],
       itinerary: [
         { offset: 22, start_time: "09:30", title: "הקולוסיאום והפורום הרומי", category: "activity", location: "Colosseo, Roma" },
@@ -249,7 +243,7 @@ function buildTrips() {
         { hotel_name: "Hotel Příklad Old Town", address: "Staré Město, Praha", check_in: day(pragueStart), check_out: day(pragueStart + 4), booking_ref: "DEMO-H2", notes: "18 חדרים, קומה שלמה (דמו)" },
       ],
       transfers: [
-        { kind: "transfer", provider: "אוטובוס דמו 50 מקומות", pickup_location: "PRG", dropoff_location: "Hotel Příklad Old Town", pickup_at: at(pragueStart, "10:15"), booking_ref: "DEMO-T2" },
+        { kind: "transfer", provider: "אוטובוס דמו 50 מקומות", pickup_location: "PRG", dropoff_location: "Hotel Příklad Old Town", pickup_local: wall(pragueStart, "10:15"), booking_ref: "DEMO-T2" },
       ],
       itinerary: [
         { offset: pragueStart + 1, start_time: "09:00", title: "עלייה לתורה בבית הכנסת הספרדי", category: "activity", location: "Španělská synagoga, Praha" },
@@ -320,7 +314,7 @@ function buildTrips() {
         { hotel_name: "Hotel Ejemplo Eixample", address: "Eixample, Barcelona", check_in: day(-3), check_out: day(4), booking_ref: "DEMO-H4", notes: "חצי פנסיון (דמו)" },
       ],
       transfers: [
-        { kind: "transfer", provider: "אוטובוס דמו", pickup_location: "Hotel Ejemplo Eixample", dropoff_location: "Montserrat", pickup_at: at(1, "08:30"), booking_ref: "DEMO-T4" },
+        { kind: "transfer", provider: "אוטובוס דמו", pickup_location: "Hotel Ejemplo Eixample", dropoff_location: "Montserrat", pickup_local: wall(1, "08:30"), booking_ref: "DEMO-T4" },
       ],
       itinerary: [
         { offset: 0, start_time: "09:30", title: "סגרדה פמיליה", category: "activity", location: "Sagrada Família, Barcelona" },

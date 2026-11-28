@@ -14,6 +14,7 @@ import { DOCS_BUCKET as BUCKET, uploadTripDocument } from "@/lib/documents";
 import { isSafeHttpUrl } from "@/lib/maps";
 import { canEditDocument, documentTravellerProblem, PASSPORT_CATEGORY, type TravellerProblem } from "@/lib/document-rules";
 import { flightTimesRow, loadZoneOf } from "@/lib/flight-form";
+import { scannedTransferKind, transferTimesRow } from "@/lib/transfer-times";
 
 const TRAVELLER_PROBLEM_TEXT: Record<TravellerProblem, string> = {
   no_travellers: "כדי לשמור דרכון צריך קודם להוסיף נוסע לטיול",
@@ -68,18 +69,6 @@ function DocCategoryFields({
       {problem && <p className="text-xs text-muted-foreground">{TRAVELLER_PROBLEM_TEXT[problem]}</p>}
     </>
   );
-}
-
-/**
- * A scanned voucher's times come back as local wall-clock time with no zone
- * ("2026-10-04T07:40:00"). Postgres would read that as UTC and the trip would
- * show the flight 2-3 hours late, so convert it the same way manual entry
- * does: read as local time, store as UTC.
- */
-function localToIso(value: string | null): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 /** `embedded`: shown inside another screen (the agency trip screen) — no trip header, no side padding. */
@@ -243,12 +232,13 @@ export default function DocumentsTab({ embedded = false }: { embedded?: boolean 
         const d = result.data;
         const { error } = await supabase.from("transfers").insert({
           trip_id: trip.id,
-          kind: "car_rental",
+          // A ferry / seaplane / shuttle voucher has no return time; only a rental does.
+          kind: scannedTransferKind(d),
           provider: d.provider,
           pickup_location: d.pickup_location,
           dropoff_location: d.dropoff_location,
-          pickup_at: localToIso(d.pickup_at),
-          return_at: localToIso(d.return_at),
+          // The voucher's wall clock; the trigger (032) derives pickup_at / return_at.
+          ...transferTimesRow(d),
           booking_ref: d.booking_ref,
           phone: d.phone,
           url: d.url,

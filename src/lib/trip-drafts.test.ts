@@ -126,7 +126,11 @@ describe("bookingsToDrafts", () => {
     const f = file("all.pdf");
     const bookings: ImportedBooking[] = [
       { docType: "hotel", sourceFile: f, data: { hotel_name: "Hotel Roma" } as never },
-      { docType: "car", sourceFile: f, data: { provider: "Hertz" } as never },
+      {
+        docType: "car",
+        sourceFile: f,
+        data: { provider: "Hertz", pickup_at: "2027-03-14T10:00:00", return_at: "2027-03-17T09:00:00" } as never,
+      },
     ];
     const { flights, stays, transfers } = bookingsToDrafts({ bookings });
     expect(flights).toHaveLength(0);
@@ -134,6 +138,18 @@ describe("bookingsToDrafts", () => {
     expect(stays[0].source_file).toBe(f);
     expect(transfers[0].kind).toBe("car_rental");
     expect(transfers[0].provider).toBe("Hertz");
+    expect(transfers[0].pickup_at).toBe("2027-03-14T10:00");
+    expect(transfers[0].return_at).toBe("2027-03-17T09:00");
+  });
+
+  it("a scanned ferry (no return time) is a transfer at the voucher's time, not a car rental", () => {
+    const bookings: ImportedBooking[] = [
+      { docType: "car", sourceFile: file("ferry.pdf"), data: { provider: "Cat Cocos", pickup_at: "2027-03-12T07:30:00", return_at: null } as never },
+    ];
+    const [ferry] = bookingsToDrafts({ bookings }).transfers;
+    expect(ferry.kind).toBe("transfer");
+    expect(ferry.pickup_at).toBe("2027-03-12T07:30");
+    expect(ferry.return_at).toBeNull();
   });
 });
 

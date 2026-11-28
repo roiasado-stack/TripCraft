@@ -6,9 +6,9 @@ import { clientRow, type BookingImport } from "./agency-import";
 import type { Participant, Trip } from "./types";
 import type { ParsedItem } from "./import-itinerary";
 import { flightTimesRow, loadZoneOf } from "./flight-form";
+import { transferTimesRow } from "./transfer-times";
 import {
   participantRows,
-  toIso,
   type FlightDraft,
   type ParticipantInsert,
   type PartDraft,
@@ -127,9 +127,9 @@ export async function insertTripWithDrafts(input: {
           kind: t.kind,
           provider: t.provider || null,
           pickup_location: t.pickup_location || null,
-          pickup_at: t.pickup_at ? new Date(t.pickup_at).toISOString() : null,
+          // The voucher's wall clock; the trigger (032) derives pickup_at / return_at.
+          ...transferTimesRow(t),
           dropoff_location: t.dropoff_location || null,
-          return_at: toIso(t.return_at),
           booking_ref: t.booking_ref || null,
           phone: t.phone || null,
           url: t.url || null,

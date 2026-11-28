@@ -6,6 +6,7 @@ import type { BookingsImportResult, BookingTraveller, PassengerType } from "@/co
 import type { VoucherCarData, VoucherFlightData, VoucherHotelData } from "@/components/ImportVoucher";
 import { AGE_RANGES, type TripType } from "./trip-options";
 import { wallOf } from "./flight-form";
+import { scannedTransferKind } from "./transfer-times";
 
 export type PartDraft = {
   name: string;
@@ -56,9 +57,10 @@ export type TransferDraft = {
   kind: string;
   provider: string;
   pickup_location: string;
+  /** The voucher's wall clock, "YYYY-MM-DDTHH:MM" (a datetime-local value); saved as pickup_local. */
   pickup_at: string;
   dropoff_location?: string | null;
-  return_at?: string | null; // ISO / wall-clock datetime
+  return_at?: string | null; // wall clock, as pickup_at
   booking_ref?: string | null;
   phone?: string | null;
   url?: string | null;
@@ -68,25 +70,6 @@ export type TransferDraft = {
 
 /** A participant row as inserted (minus trip_id). */
 export type ParticipantInsert = { name: string; age: number | null; age_range: string | null; preferences: string[] };
-
-/** Hidden datetime field → ISO for insert; null when empty or unparsable. */
-export function toIso(v: string | null | undefined): string | null {
-  if (!v) return null;
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-/** ISO timestamp → the "YYYY-MM-DDTHH:MM" shape a native datetime-local input
- *  expects. Reads local wall-clock fields off the Date object rather than
- *  slicing the ISO string, so it round-trips correctly regardless of the
- *  timezone offset baked into the ISO value. */
-export function isoToDatetimeLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export function flightDraftFromVoucher(d: VoucherFlightData, file: File | null): FlightDraft {
   return {
@@ -122,12 +105,14 @@ export function stayDraftFromVoucher(d: VoucherHotelData, file: File | null): St
 }
 export function transferDraftFromVoucher(d: VoucherCarData, file: File | null): TransferDraft {
   return {
-    kind: "car_rental",
+    // A ferry / seaplane / shuttle voucher has no return time; only a rental does.
+    kind: scannedTransferKind(d),
     provider: d.provider ?? "",
     pickup_location: d.pickup_location ?? "",
-    pickup_at: isoToDatetimeLocalInput(d.pickup_at),
+    // Kept as printed on the voucher — never read in the browser's zone.
+    pickup_at: wallOf(d.pickup_at) ?? "",
     dropoff_location: d.dropoff_location,
-    return_at: d.return_at,
+    return_at: wallOf(d.return_at),
     booking_ref: d.booking_ref,
     phone: d.phone,
     url: d.url,
